@@ -7,9 +7,54 @@ namespace GeminiNuGetAuditor;
 
 public class Program
 {
+    private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
+
     public static void Main()
     {
         Console.WriteLine("Hello, World!");
+    }
+
+    public static Task<GeminiResponse?> AnalyzeWithGemini(string packageText)
+    {
+        return AnalyzeWithGemini(GetGeminiApiKey(), packageText);
+    }
+
+    public static string GetGeminiApiKey()
+    {
+        var apiKey = Environment.GetEnvironmentVariable(GeminiApiKeyEnvironmentVariableName);
+
+        if (!string.IsNullOrWhiteSpace(apiKey))
+        {
+            return apiKey;
+        }
+
+        foreach (var appSettingsPath in GetAppSettingsPaths())
+        {
+            if (!File.Exists(appSettingsPath))
+            {
+                continue;
+            }
+
+            using var stream = File.OpenRead(appSettingsPath);
+            using var document = JsonDocument.Parse(stream);
+
+            if (!document.RootElement.TryGetProperty("Gemini", out var geminiSection) ||
+                geminiSection.ValueKind != JsonValueKind.Object ||
+                !geminiSection.TryGetProperty("ApiKey", out var apiKeyProperty))
+            {
+                continue;
+            }
+
+            var appSettingsApiKey = apiKeyProperty.GetString();
+
+            if (!string.IsNullOrWhiteSpace(appSettingsApiKey))
+            {
+                return appSettingsApiKey;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "Gemini API key was not found. Set the 'GEMINI_API_KEY' environment variable or add 'Gemini:ApiKey' to appsettings.json.");
     }
 
     public static async Task<GeminiResponse?> AnalyzeWithGemini(string apiKey, string packageText)
@@ -86,6 +131,19 @@ Analyze these NuGet packages:
         }
 
         return JsonSerializer.Deserialize<GeminiResponse>(json);
+    }
+
+    private static IEnumerable<string> GetAppSettingsPaths()
+    {
+        var baseDirectoryPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        yield return baseDirectoryPath;
+
+        var currentDirectoryPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
+
+        if (!string.Equals(baseDirectoryPath, currentDirectoryPath, StringComparison.OrdinalIgnoreCase))
+        {
+            yield return currentDirectoryPath;
+        }
     }
 
     private sealed class GeminiApiResponse
