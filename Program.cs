@@ -11,7 +11,7 @@ public class Program
 {
     private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
     private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
-    private const string DefaultGeminiModelName = "gemini-1.5-flash";
+    private const string DefaultGeminiModelName = "gemini-flash-latest";
     private static readonly TimeSpan GeminiRequestTimeout = TimeSpan.FromSeconds(60);
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
