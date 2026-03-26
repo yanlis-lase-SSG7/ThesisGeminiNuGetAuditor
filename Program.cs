@@ -1,4 +1,6 @@
-﻿using System.Net.Http.Headers;
+﻿using System.Diagnostics;
+using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -9,6 +11,7 @@ public class Program
 {
     private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
     private const string GeminiModelName = "gemini-pro";
+    private static readonly TimeSpan GeminiRequestTimeout = TimeSpan.FromSeconds(60);
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -17,31 +20,67 @@ public class Program
 
     public static async Task<int> Main(string[] args)
     {
+        var totalStopwatch = Stopwatch.StartNew();
+
         try
         {
             var csprojPath = ResolveCsprojPath(args);
+            Console.WriteLine($"Target project: {csprojPath}");
+            Console.WriteLine("Extracting NuGet packages...");
+
+            var extractionStopwatch = Stopwatch.StartNew();
             var packageReferences = CsprojPackageExtractor.ExtractPackageReferences(csprojPath);
+            extractionStopwatch.Stop();
+
+            Console.WriteLine($"Extraction completed in {FormatElapsed(extractionStopwatch.Elapsed)}.");
 
             if (packageReferences.Count == 0)
             {
-                Console.WriteLine("Tidak ada PackageReference yang ditemukan pada file .csproj target.");
+                Console.WriteLine("No PackageReference entries were found in the target .csproj file.");
+                Console.WriteLine("Gemini request was skipped because there are no NuGet packages to analyze.");
                 return 0;
             }
 
+            Console.WriteLine($"Found {packageReferences.Count} package(s) to analyze.");
             var packageText = BuildPackagePrompt(packageReferences);
-            var geminiResponse = await AnalyzeWithGemini(packageText);
-            var normalizedResponse = NormalizeResponse(packageReferences, geminiResponse);
-            var outputPath = SaveAuditResult(csprojPath, packageReferences, normalizedResponse);
-            var vulnerableCount = normalizedResponse.VulnerabilityReports.Count(x => x.IsVulnerable);
+            Console.WriteLine("Sending package list to Gemini for security analysis...");
 
-            Console.WriteLine($"Audit selesai. {packageReferences.Count} package dianalisis.");
-            Console.WriteLine($"Package rentan terdeteksi: {vulnerableCount}.");
-            Console.WriteLine($"Hasil tersimpan di: {outputPath}");
+            var analysisStopwatch = Stopwatch.StartNew();
+            var geminiResponse = await AnalyzeWithGemini(packageText);
+            analysisStopwatch.Stop();
+
+            Console.WriteLine($"Gemini analysis completed in {FormatElapsed(analysisStopwatch.Elapsed)}.");
+            Console.WriteLine("Gemini response received. Normalizing audit results...");
+
+            var postProcessingStopwatch = Stopwatch.StartNew();
+            var normalizedResponse = NormalizeResponse(packageReferences, geminiResponse);
+            Console.WriteLine("Saving audit dataset to local JSON file...");
+            var outputPath = SaveAuditResult(csprojPath, packageReferences, normalizedResponse);
+            postProcessingStopwatch.Stop();
+
+            var vulnerableCount = normalizedResponse.VulnerabilityReports.Count(x => x.IsVulnerable);
+            totalStopwatch.Stop();
+
+            Console.WriteLine($"Audit completed. {packageReferences.Count} package(s) were analyzed.");
+            Console.WriteLine($"Potentially vulnerable packages detected: {vulnerableCount}.");
+            Console.WriteLine($"Post-processing completed in {FormatElapsed(postProcessingStopwatch.Elapsed)}.");
+            Console.WriteLine($"Total execution time: {FormatElapsed(totalStopwatch.Elapsed)}.");
+            Console.WriteLine($"Audit result saved to: {outputPath}");
             return 0;
+        }
+        catch (GeminiConfigurationException ex)
+        {
+            Console.Error.WriteLine($"Gemini configuration error: {ex.Message}");
+            return 1;
+        }
+        catch (TimeoutException ex)
+        {
+            Console.Error.WriteLine($"Gemini request timeout: {ex.Message}");
+            return 1;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Audit gagal: {ex.Message}");
+            Console.Error.WriteLine($"Audit failed: {ex.Message}");
             return 1;
         }
     }
@@ -85,7 +124,7 @@ public class Program
             }
         }
 
-        throw new InvalidOperationException(
+        throw new GeminiConfigurationException(
             "Gemini API key tidak ditemukan. Set environment variable 'GEMINI_API_KEY' atau isi 'Gemini:ApiKey' pada appsettings.local.json/appsettings.json dengan nilai valid.");
     }
 
@@ -95,6 +134,7 @@ public class Program
         ArgumentException.ThrowIfNullOrWhiteSpace(packageText);
 
         using var httpClient = new HttpClient();
+        httpClient.Timeout = GeminiRequestTimeout;
         httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         httpClient.DefaultRequestHeaders.Add("X-Goog-Api-Key", apiKey);
 
@@ -150,19 +190,32 @@ Analyze these NuGet packages:
         };
 
         using var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-        using var response = await httpClient.PostAsync($"https://generativelanguage.googleapis.com/v1beta/models/{GeminiModelName}:generateContent", content);
-        response.EnsureSuccessStatusCode();
-
-        var responseContent = await response.Content.ReadAsStringAsync();
-        var geminiApiResponse = JsonSerializer.Deserialize<GeminiApiResponse>(responseContent, SerializerOptions);
-        var json = geminiApiResponse?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text;
-
-        if (string.IsNullOrWhiteSpace(json))
+        try
         {
-            return null;
-        }
+            using var response = await httpClient.PostAsync($"https://generativelanguage.googleapis.com/v1beta/models/{GeminiModelName}:generateContent", content);
 
-        return JsonSerializer.Deserialize<GeminiResponse>(ExtractJsonPayload(json), SerializerOptions);
+            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            {
+                throw new GeminiConfigurationException("API key Gemini tidak valid atau tidak memiliki akses ke model yang dipakai.");
+            }
+
+            response.EnsureSuccessStatusCode();
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var geminiApiResponse = JsonSerializer.Deserialize<GeminiApiResponse>(responseContent, SerializerOptions);
+            var json = geminiApiResponse?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text;
+
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return null;
+            }
+
+            return JsonSerializer.Deserialize<GeminiResponse>(ExtractJsonPayload(json), SerializerOptions);
+        }
+        catch (TaskCanceledException ex)
+        {
+            throw new TimeoutException($"Permintaan ke Gemini melebihi batas waktu {GeminiRequestTimeout.TotalSeconds:0} detik.", ex);
+        }
     }
 
     private static IEnumerable<string> GetAppSettingsPaths()
@@ -203,14 +256,49 @@ Analyze these NuGet packages:
             throw new InvalidOperationException("Path file .csproj wajib diisi.");
         }
 
-        var fullPath = Path.GetFullPath(providedPath);
+        var fullPath = TryResolveExistingPath(providedPath);
 
         if (!File.Exists(fullPath))
         {
-            throw new FileNotFoundException("File .csproj tidak ditemukan.", fullPath);
+            throw new FileNotFoundException(
+                "File .csproj tidak ditemukan. Gunakan path absolut atau path relatif dari folder project/solution.",
+                fullPath);
         }
 
         return fullPath;
+    }
+
+    private static string TryResolveExistingPath(string providedPath)
+    {
+        if (Path.IsPathRooted(providedPath))
+        {
+            return Path.GetFullPath(providedPath);
+        }
+
+        var candidatePaths = new List<string>
+        {
+            Path.GetFullPath(providedPath, Directory.GetCurrentDirectory()),
+            Path.GetFullPath(providedPath, AppContext.BaseDirectory)
+        };
+
+        candidatePaths.AddRange(GetParentDirectoryCandidates(Directory.GetCurrentDirectory(), providedPath));
+        candidatePaths.AddRange(GetParentDirectoryCandidates(AppContext.BaseDirectory, providedPath));
+
+        return candidatePaths
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(File.Exists)
+            ?? Path.GetFullPath(providedPath, Directory.GetCurrentDirectory());
+    }
+
+    private static IEnumerable<string> GetParentDirectoryCandidates(string startDirectory, string providedPath)
+    {
+        var directory = new DirectoryInfo(Path.GetFullPath(startDirectory));
+
+        while (directory is not null)
+        {
+            yield return Path.Combine(directory.FullName, providedPath);
+            directory = directory.Parent;
+        }
     }
 
     private static string BuildPackagePrompt(IEnumerable<NuGetPackageReference> packageReferences)
@@ -326,6 +414,15 @@ Analyze these NuGet packages:
         }
 
         return trimmedResponse;
+    }
+
+    private static string FormatElapsed(TimeSpan elapsed)
+    {
+        return $"{elapsed.TotalSeconds:F2}s";
+    }
+
+    private sealed class GeminiConfigurationException(string message) : Exception(message)
+    {
     }
 
     private sealed class GeminiApiResponse

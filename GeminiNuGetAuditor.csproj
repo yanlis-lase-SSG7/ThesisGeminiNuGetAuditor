@@ -8,6 +8,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="samples\DummyAuditTarget\DummyAuditTarget.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="samples\**\*.cs" />
+    <None Remove="samples\**\*" />
+    <Content Remove="samples\**\*" />
+    <EmbeddedResource Remove="samples\**\*" />
     <None Update="appsettings.local.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
