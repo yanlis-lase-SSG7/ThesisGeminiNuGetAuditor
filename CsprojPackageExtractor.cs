@@ -5,22 +5,27 @@ namespace GeminiNuGetAuditor;
 
 public static class CsprojPackageExtractor
 {
-    public static string ExtractPackagesFromCsproj(string filePath)
+    public static IReadOnlyList<NuGetPackageReference> ExtractPackageReferences(string filePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
         var document = XDocument.Load(filePath);
 
-        var packages = document
+        return document
             .Descendants()
             .Where(x => x.Name.LocalName == "PackageReference")
-            .Select(x => new
+            .Select(x => new NuGetPackageReference
             {
-                Name = x.Attribute("Include")?.Value ?? x.Attribute("Update")?.Value ?? string.Empty,
-                Version = x.Attribute("Version")?.Value ?? x.Elements().FirstOrDefault(e => e.Name.LocalName == "Version")?.Value ?? "Not specified"
+                PackageName = x.Attribute("Include")?.Value ?? x.Attribute("Update")?.Value ?? string.Empty,
+                CurrentVersion = x.Attribute("Version")?.Value ?? x.Elements().FirstOrDefault(e => e.Name.LocalName == "Version")?.Value ?? "Not specified"
             })
-            .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+            .Where(x => !string.IsNullOrWhiteSpace(x.PackageName))
             .ToList();
+    }
+
+    public static string ExtractPackagesFromCsproj(string filePath)
+    {
+        var packages = ExtractPackageReferences(filePath);
 
         if (packages.Count == 0)
         {
@@ -32,7 +37,7 @@ public static class CsprojPackageExtractor
 
         foreach (var package in packages)
         {
-            builder.AppendLine($"- {package.Name}: {package.Version}");
+            builder.AppendLine($"- {package.PackageName}: {package.CurrentVersion}");
         }
 
         return builder.ToString().TrimEnd();

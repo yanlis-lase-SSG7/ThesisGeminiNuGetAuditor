@@ -47,7 +47,7 @@ Berikut alur bisnis utama project ini:
 4. Aplikasi mengirim prompt audit ke Gemini Pro API.
 5. Gemini diminta mengembalikan **JSON murni** yang sesuai dengan model `GeminiResponse`.
 6. Aplikasi membaca hasil JSON dan mengubahnya menjadi objek C#.
-7. Hasil audit dapat ditampilkan, disimpan, atau dipakai untuk tindak lanjut remediation.
+7. Hasil audit disimpan ke file JSON lokal agar dapat dipakai sebagai dataset penelitian atau tindak lanjut remediation.
 
 ## Detail Alur dari Sudut Pandang User
 
@@ -75,6 +75,8 @@ Setiap package akan memiliki hasil seperti:
 - `Severity`
 - `MitigationPlan`
 
+Selain ditampilkan ringkas di console, hasil audit lengkap juga disimpan ke folder `audit-results` sebagai file JSON bertimestamp.
+
 ### Langkah 5 - User mengambil keputusan
 Berdasarkan hasil tersebut, user dapat:
 
@@ -90,6 +92,7 @@ File `CsprojPackageExtractor.cs` menangani proses parsing XML menggunakan `Syste
 
 Method utama:
 
+- `ExtractPackageReferences(string filePath)`
 - `ExtractPackagesFromCsproj(string filePath)`
 
 Tanggung jawab method ini:
@@ -98,6 +101,7 @@ Tanggung jawab method ini:
 - mencari seluruh node `PackageReference`
 - membaca atribut `Include` atau `Update` sebagai nama package
 - membaca atribut `Version` atau elemen `<Version>` sebagai versi package
+- menghasilkan koleksi package terstruktur untuk logging dataset
 - menghasilkan string terformat untuk prompt Gemini
 
 Jika tidak ada package, method akan mengembalikan pesan bahwa tidak ada `PackageReference` yang ditemukan.
@@ -126,9 +130,12 @@ Tanggung jawab method ini:
 Urutan pembacaan key:
 
 1. `Environment.GetEnvironmentVariable("GEMINI_API_KEY")`
-2. fallback ke `appsettings.json` pada path `Gemini:ApiKey`
+2. fallback ke `appsettings.local.json` pada path `Gemini:ApiKey`
+3. fallback ke `appsettings.json` pada path `Gemini:ApiKey`
 
 Dengan pendekatan ini, penggunaan environment variable menjadi prioritas utama untuk keamanan yang lebih baik.
+
+Nilai placeholder default tidak dianggap sebagai API key valid sehingga aplikasi tidak akan melanjutkan audit jika key belum benar-benar diisi.
 
 ## Struktur Model Data
 
@@ -152,6 +159,17 @@ Root object untuk hasil respons Gemini.
 Properti:
 
 - `VulnerabilityReports`: daftar `VulnerabilityReport`
+
+### `AuditSessionRecord`
+Model ini menyimpan dataset audit lokal.
+
+Properti utamanya:
+
+- `GeneratedAtUtc`: waktu audit
+- `SourceProjectPath`: path `.csproj` yang diperiksa
+- `ModelName`: model Gemini yang dipakai
+- `ExtractedPackages`: daftar package hasil ekstraksi
+- `VulnerabilityReports`: hasil audit yang sudah dinormalisasi satu item per package
 
 ## Konfigurasi API Key
 
@@ -195,7 +213,7 @@ Catatan penting:
 - Gemini API key
 
 ### Output utama
-Output logis dari project ini adalah daftar hasil audit keamanan per package dalam bentuk objek `GeminiResponse`.
+Output utama project ini adalah file JSON lokal berisi dataset audit lengkap (`AuditSessionRecord`) yang memuat hasil audit keamanan per package.
 
 Contoh isi output:
 
@@ -215,16 +233,15 @@ Komponen utama yang sudah tersedia:
 
 ## Status Implementasi Saat Ini
 
-Secara komponen, fondasi utama sudah tersedia. Namun perlu dicatat bahwa entry point `Main()` saat ini masih sederhana dan belum menghubungkan seluruh flow secara end-to-end.
+Flow utama project kini sudah terhubung end-to-end.
 
 Artinya:
 
-- helper ekstraksi package sudah ada
-- helper pembacaan API key sudah ada
-- helper analisis Gemini sudah ada
-- orchestration penuh dari `Main()` ke seluruh flow masih dapat dilanjutkan pada tahap berikutnya
-
-Dengan kata lain, business flow project ini sudah jelas dan komponen utamanya telah tersedia, tetapi pengkabelan eksekusi penuh masih bisa disempurnakan.
+- aplikasi menerima path `.csproj` melalui argumen atau input console
+- package diekstraksi dari file target
+- daftar package dikirim ke Gemini Pro API
+- respons dinormalisasi agar tetap konsisten satu hasil per package
+- hasil audit disimpan ke file JSON lokal pada folder `audit-results`
 
 ## Flow End-to-End yang Dituju
 
@@ -235,7 +252,18 @@ Flow target project ini adalah:
 3. aplikasi memanggil `ExtractPackagesFromCsproj(...)`
 4. aplikasi memanggil `AnalyzeWithGemini(...)`
 5. aplikasi menerima `GeminiResponse`
-6. aplikasi menampilkan atau menyimpan hasil audit
+6. aplikasi menormalkan hasil agar sesuai daftar package input
+7. aplikasi menampilkan ringkasan dan menyimpan hasil audit sebagai dataset JSON lokal
+
+## Cara Menjalankan
+
+Contoh penggunaan dengan argumen:
+
+```powershell
+dotnet run -- .\ContohProject\ContohProject.csproj
+```
+
+Atau jalankan tanpa argumen lalu masukkan path `.csproj` saat diminta.
 
 ## Manfaat Bisnis
 
