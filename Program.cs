@@ -496,7 +496,7 @@ Analyze these NuGet packages:
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
         GeminiResponse geminiResponse)
     {
-        var outputDirectory = Path.Combine(AppContext.BaseDirectory, "audit-results");
+        var outputDirectory = Path.Combine(GetApplicationRootDirectory(), "audit-results");
         Directory.CreateDirectory(outputDirectory);
 
         var outputFilePath = Path.Combine(
@@ -514,6 +514,19 @@ Analyze these NuGet packages:
 
         File.WriteAllText(outputFilePath, JsonSerializer.Serialize(sessionRecord, SerializerOptions));
         return outputFilePath;
+    }
+
+    private static string GetApplicationRootDirectory()
+    {
+        var currentDirectoryRoot = FindWorkspaceRoot(new DirectoryInfo(Path.GetFullPath(Directory.GetCurrentDirectory())));
+
+        if (currentDirectoryRoot is not null)
+        {
+            return currentDirectoryRoot.FullName;
+        }
+
+        var baseDirectoryRoot = FindWorkspaceRoot(new DirectoryInfo(Path.GetFullPath(AppContext.BaseDirectory)));
+        return baseDirectoryRoot?.FullName ?? Directory.GetCurrentDirectory();
     }
 
     private static bool IsUsableApiKey(string? apiKey)
