@@ -10,7 +10,8 @@ namespace GeminiNuGetAuditor;
 public class Program
 {
     private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
-    private const string GeminiModelName = "gemini-pro";
+    private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
+    private const string DefaultGeminiModelName = "gemini-1.5-flash";
     private static readonly TimeSpan GeminiRequestTimeout = TimeSpan.FromSeconds(60);
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -25,7 +26,9 @@ public class Program
         try
         {
             var csprojPath = ResolveCsprojPath(args);
+            var modelName = GetGeminiModelName();
             Console.WriteLine($"Target project: {csprojPath}");
+            Console.WriteLine($"Using Gemini model: {modelName}");
             Console.WriteLine("Extracting NuGet packages...");
 
             var extractionStopwatch = Stopwatch.StartNew();
@@ -46,7 +49,7 @@ public class Program
             Console.WriteLine("Sending package list to Gemini for security analysis...");
 
             var analysisStopwatch = Stopwatch.StartNew();
-            var geminiResponse = await AnalyzeWithGemini(packageText);
+            var geminiResponse = await AnalyzeWithGemini(GetGeminiApiKey(), modelName, packageText);
             analysisStopwatch.Stop();
 
             Console.WriteLine($"Gemini analysis completed in {FormatElapsed(analysisStopwatch.Elapsed)}.");
@@ -55,7 +58,7 @@ public class Program
             var postProcessingStopwatch = Stopwatch.StartNew();
             var normalizedResponse = NormalizeResponse(packageReferences, geminiResponse);
             Console.WriteLine("Saving audit dataset to local JSON file...");
-            var outputPath = SaveAuditResult(csprojPath, packageReferences, normalizedResponse);
+            var outputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedResponse);
             postProcessingStopwatch.Stop();
 
             var vulnerableCount = normalizedResponse.VulnerabilityReports.Count(x => x.IsVulnerable);
@@ -87,7 +90,7 @@ public class Program
 
     public static Task<GeminiResponse?> AnalyzeWithGemini(string packageText)
     {
-        return AnalyzeWithGemini(GetGeminiApiKey(), packageText);
+        return AnalyzeWithGemini(GetGeminiApiKey(), GetGeminiModelName(), packageText);
     }
 
     public static string GetGeminiApiKey()
@@ -128,9 +131,47 @@ public class Program
             "Gemini API key tidak ditemukan. Set environment variable 'GEMINI_API_KEY' atau isi 'Gemini:ApiKey' pada appsettings.local.json/appsettings.json dengan nilai valid.");
     }
 
-    public static async Task<GeminiResponse?> AnalyzeWithGemini(string apiKey, string packageText)
+    public static string GetGeminiModelName()
+    {
+        var configuredModelName = Environment.GetEnvironmentVariable(GeminiModelEnvironmentVariableName);
+
+        if (!string.IsNullOrWhiteSpace(configuredModelName))
+        {
+            return configuredModelName;
+        }
+
+        foreach (var appSettingsPath in GetAppSettingsPaths())
+        {
+            if (!File.Exists(appSettingsPath))
+            {
+                continue;
+            }
+
+            using var stream = File.OpenRead(appSettingsPath);
+            using var document = JsonDocument.Parse(stream);
+
+            if (!document.RootElement.TryGetProperty("Gemini", out var geminiSection) ||
+                geminiSection.ValueKind != JsonValueKind.Object ||
+                !geminiSection.TryGetProperty("Model", out var modelProperty))
+            {
+                continue;
+            }
+
+            var appSettingsModel = modelProperty.GetString();
+
+            if (!string.IsNullOrWhiteSpace(appSettingsModel))
+            {
+                return appSettingsModel;
+            }
+        }
+
+        return DefaultGeminiModelName;
+    }
+
+    public static async Task<GeminiResponse?> AnalyzeWithGemini(string apiKey, string modelName, string packageText)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentException.ThrowIfNullOrWhiteSpace(packageText);
 
         using var httpClient = new HttpClient();
@@ -192,16 +233,22 @@ Analyze these NuGet packages:
         using var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
         try
         {
-            using var response = await httpClient.PostAsync($"https://generativelanguage.googleapis.com/v1beta/models/{GeminiModelName}:generateContent", content);
+            using var response = await httpClient.PostAsync($"https://generativelanguage.googleapis.com/v1beta/models/{modelName}:generateContent", content);
+            var responseContent = await response.Content.ReadAsStringAsync();
 
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
                 throw new GeminiConfigurationException("API key Gemini tidak valid atau tidak memiliki akses ke model yang dipakai.");
             }
 
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                throw new GeminiConfigurationException(
+                    $"Model Gemini '{modelName}' tidak ditemukan. Coba gunakan model lain seperti '{DefaultGeminiModelName}' melalui environment variable '{GeminiModelEnvironmentVariableName}' atau konfigurasi 'Gemini:Model'. Response: {TruncateForDisplay(responseContent)}");
+            }
+
             response.EnsureSuccessStatusCode();
 
-            var responseContent = await response.Content.ReadAsStringAsync();
             var geminiApiResponse = JsonSerializer.Deserialize<GeminiApiResponse>(responseContent, SerializerOptions);
             var json = geminiApiResponse?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text;
 
@@ -275,14 +322,25 @@ Analyze these NuGet packages:
             return Path.GetFullPath(providedPath);
         }
 
+        var searchRoots = GetSearchRoots().ToList();
         var candidatePaths = new List<string>
         {
             Path.GetFullPath(providedPath, Directory.GetCurrentDirectory()),
             Path.GetFullPath(providedPath, AppContext.BaseDirectory)
         };
 
-        candidatePaths.AddRange(GetParentDirectoryCandidates(Directory.GetCurrentDirectory(), providedPath));
-        candidatePaths.AddRange(GetParentDirectoryCandidates(AppContext.BaseDirectory, providedPath));
+        foreach (var searchRoot in searchRoots)
+        {
+            candidatePaths.AddRange(GetParentDirectoryCandidates(searchRoot, providedPath));
+        }
+
+        if (!HasDirectorySeparator(providedPath))
+        {
+            foreach (var searchRoot in searchRoots)
+            {
+                candidatePaths.AddRange(FindFileByNameUnderDirectory(providedPath, searchRoot));
+            }
+        }
 
         return candidatePaths
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -299,6 +357,85 @@ Analyze these NuGet packages:
             yield return Path.Combine(directory.FullName, providedPath);
             directory = directory.Parent;
         }
+    }
+
+    private static IEnumerable<string> GetSearchRoots()
+    {
+        var currentDirectory = new DirectoryInfo(Path.GetFullPath(Directory.GetCurrentDirectory()));
+        var baseDirectory = new DirectoryInfo(Path.GetFullPath(AppContext.BaseDirectory));
+
+        return new[]
+        {
+            FindWorkspaceRoot(currentDirectory)?.FullName,
+            FindWorkspaceRoot(baseDirectory)?.FullName,
+            currentDirectory.FullName,
+            baseDirectory.FullName
+        }
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct(StringComparer.OrdinalIgnoreCase)!;
+    }
+
+    private static DirectoryInfo? FindWorkspaceRoot(DirectoryInfo? startDirectory)
+    {
+        var directory = startDirectory;
+
+        while (directory is not null)
+        {
+            var hasGitDirectory = Directory.Exists(Path.Combine(directory.FullName, ".git"));
+            var hasSolutionFile = Directory.EnumerateFiles(directory.FullName, "*.sln", SearchOption.TopDirectoryOnly).Any();
+            var hasProjectFile = Directory.EnumerateFiles(directory.FullName, "*.csproj", SearchOption.TopDirectoryOnly).Any();
+
+            if (hasGitDirectory || hasSolutionFile || hasProjectFile)
+            {
+                return directory;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return startDirectory;
+    }
+
+    private static IEnumerable<string> FindFileByNameUnderDirectory(string fileName, string rootDirectory)
+    {
+        var pendingDirectories = new Stack<string>();
+        pendingDirectories.Push(Path.GetFullPath(rootDirectory));
+
+        while (pendingDirectories.Count > 0)
+        {
+            var currentDirectory = pendingDirectories.Pop();
+            string[] fileMatches;
+            string[] childDirectories;
+
+            try
+            {
+                fileMatches = Directory.GetFiles(currentDirectory, fileName, SearchOption.TopDirectoryOnly);
+                childDirectories = Directory.GetDirectories(currentDirectory, "*", SearchOption.TopDirectoryOnly);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                continue;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                continue;
+            }
+
+            foreach (var match in fileMatches)
+            {
+                yield return match;
+            }
+
+            foreach (var childDirectory in childDirectories)
+            {
+                pendingDirectories.Push(childDirectory);
+            }
+        }
+    }
+
+    private static bool HasDirectorySeparator(string path)
+    {
+        return path.Contains(Path.DirectorySeparatorChar) || path.Contains(Path.AltDirectorySeparatorChar);
     }
 
     private static string BuildPackagePrompt(IEnumerable<NuGetPackageReference> packageReferences)
@@ -355,6 +492,7 @@ Analyze these NuGet packages:
 
     private static string SaveAuditResult(
         string csprojPath,
+        string modelName,
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
         GeminiResponse geminiResponse)
     {
@@ -369,7 +507,7 @@ Analyze these NuGet packages:
         {
             GeneratedAtUtc = DateTimeOffset.UtcNow,
             SourceProjectPath = csprojPath,
-            ModelName = GeminiModelName,
+            ModelName = modelName,
             ExtractedPackages = packageReferences.ToList(),
             VulnerabilityReports = geminiResponse.VulnerabilityReports
         };
@@ -419,6 +557,16 @@ Analyze these NuGet packages:
     private static string FormatElapsed(TimeSpan elapsed)
     {
         return $"{elapsed.TotalSeconds:F2}s";
+    }
+
+    private static string TruncateForDisplay(string value, int maxLength = 300)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length <= maxLength)
+        {
+            return value;
+        }
+
+        return value[..maxLength] + "...";
     }
 
     private sealed class GeminiConfigurationException(string message) : Exception(message)
