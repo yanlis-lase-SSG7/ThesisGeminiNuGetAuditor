@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include=".github\copilot-instructions.md" />
     <None Include="samples\DummyAuditTarget\DummyAuditTarget.csproj" />
   </ItemGroup>
 

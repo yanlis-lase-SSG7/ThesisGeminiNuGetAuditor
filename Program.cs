@@ -9,10 +9,6 @@ namespace GeminiNuGetAuditor;
 
 public class Program
 {
-    private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
-    private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
-    private const string DefaultGeminiModelName = "gemini-flash-latest";
-    private static readonly TimeSpan GeminiRequestTimeout = TimeSpan.FromSeconds(60);
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -25,8 +21,9 @@ public class Program
 
         try
         {
+            var geminiSettings = GetGeminiSettings();
             var csprojPath = ResolveCsprojPath(args);
-            var modelName = GetGeminiModelName();
+            var modelName = GetGeminiModelName(geminiSettings);
             Console.WriteLine($"Target project: {csprojPath}");
             Console.WriteLine($"Using Gemini model: {modelName}");
             Console.WriteLine("Extracting NuGet packages...");
@@ -50,7 +47,7 @@ public class Program
             Console.WriteLine("Sending package list to Gemini for security analysis...");
 
             var analysisStopwatch = Stopwatch.StartNew();
-            var geminiResponse = await AnalyzeWithGemini(GetGeminiApiKey(), modelName, packageReferences, securityContext);
+            var geminiResponse = await AnalyzeWithGemini(GetGeminiApiKey(geminiSettings), modelName, packageReferences, securityContext, geminiSettings);
             analysisStopwatch.Stop();
 
             Console.WriteLine($"Gemini analysis completed in {FormatElapsed(analysisStopwatch.Elapsed)}.");
@@ -93,100 +90,78 @@ public class Program
 
     public static Task<GeminiResponse?> AnalyzeWithGemini(IReadOnlyCollection<NuGetPackageReference> packageReferences, string securityContext)
     {
-        return AnalyzeWithGemini(GetGeminiApiKey(), GetGeminiModelName(), packageReferences, securityContext);
+        var geminiSettings = GetGeminiSettings();
+        return AnalyzeWithGemini(GetGeminiApiKey(geminiSettings), GetGeminiModelName(geminiSettings), packageReferences, securityContext, geminiSettings);
     }
 
     public static string GetGeminiApiKey()
     {
-        var apiKey = Environment.GetEnvironmentVariable(GeminiApiKeyEnvironmentVariableName);
+        return GetGeminiApiKey(GetGeminiSettings());
+    }
 
-        if (IsUsableApiKey(apiKey))
+    private static string GetGeminiApiKey(GeminiSettings settings)
+    {
+        var apiKey = Environment.GetEnvironmentVariable(settings.ApiKeyEnvironmentVariableName);
+
+        if (IsUsableApiKey(apiKey, settings.ApiKeyPlaceholder))
         {
             return apiKey!;
         }
 
-        foreach (var appSettingsPath in GetAppSettingsPaths())
+        if (IsUsableApiKey(settings.ApiKey, settings.ApiKeyPlaceholder))
         {
-            if (!File.Exists(appSettingsPath))
-            {
-                continue;
-            }
-
-            using var stream = File.OpenRead(appSettingsPath);
-            using var document = JsonDocument.Parse(stream);
-
-            if (!document.RootElement.TryGetProperty("Gemini", out var geminiSection) ||
-                geminiSection.ValueKind != JsonValueKind.Object ||
-                !geminiSection.TryGetProperty("ApiKey", out var apiKeyProperty))
-            {
-                continue;
-            }
-
-            var appSettingsApiKey = apiKeyProperty.GetString();
-
-            if (IsUsableApiKey(appSettingsApiKey))
-            {
-                return appSettingsApiKey!;
-            }
+            return settings.ApiKey;
         }
 
         throw new GeminiConfigurationException(
-            "Gemini API key tidak ditemukan. Set environment variable 'GEMINI_API_KEY' atau isi 'Gemini:ApiKey' pada appsettings.local.json/appsettings.json dengan nilai valid.");
+            $"Gemini API key tidak ditemukan. Set environment variable '{settings.ApiKeyEnvironmentVariableName}' atau isi 'Gemini:ApiKey' pada appsettings.local.json/appsettings.json dengan nilai valid.");
     }
 
     public static string GetGeminiModelName()
     {
-        var configuredModelName = Environment.GetEnvironmentVariable(GeminiModelEnvironmentVariableName);
+        return GetGeminiModelName(GetGeminiSettings());
+    }
+
+    private static string GetGeminiModelName(GeminiSettings settings)
+    {
+        var configuredModelName = Environment.GetEnvironmentVariable(settings.ModelEnvironmentVariableName);
 
         if (!string.IsNullOrWhiteSpace(configuredModelName))
         {
             return configuredModelName;
         }
 
-        foreach (var appSettingsPath in GetAppSettingsPaths())
+        if (!string.IsNullOrWhiteSpace(settings.Model))
         {
-            if (!File.Exists(appSettingsPath))
-            {
-                continue;
-            }
-
-            using var stream = File.OpenRead(appSettingsPath);
-            using var document = JsonDocument.Parse(stream);
-
-            if (!document.RootElement.TryGetProperty("Gemini", out var geminiSection) ||
-                geminiSection.ValueKind != JsonValueKind.Object ||
-                !geminiSection.TryGetProperty("Model", out var modelProperty))
-            {
-                continue;
-            }
-
-            var appSettingsModel = modelProperty.GetString();
-
-            if (!string.IsNullOrWhiteSpace(appSettingsModel))
-            {
-                return appSettingsModel;
-            }
+            return settings.Model;
         }
 
-        return DefaultGeminiModelName;
+        if (!string.IsNullOrWhiteSpace(settings.DefaultModelName))
+        {
+            return settings.DefaultModelName;
+        }
+
+        throw new GeminiConfigurationException("Konfigurasi model Gemini tidak valid. Isi 'Gemini:Model' atau 'Gemini:DefaultModelName'.");
     }
 
-    public static async Task<GeminiResponse?> AnalyzeWithGemini(
+    private static async Task<GeminiResponse?> AnalyzeWithGemini(
         string apiKey,
         string modelName,
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
-        string securityContext)
+        string securityContext,
+        GeminiSettings settings)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentNullException.ThrowIfNull(packageReferences);
         ArgumentException.ThrowIfNullOrWhiteSpace(securityContext);
+        ArgumentNullException.ThrowIfNull(settings);
 
         var packageText = BuildPackagePrompt(packageReferences);
         ArgumentException.ThrowIfNullOrWhiteSpace(packageText);
 
         using var httpClient = new HttpClient();
-        httpClient.Timeout = GeminiRequestTimeout;
+        httpClient.Timeout = TimeSpan.FromSeconds(settings.RequestTimeoutSeconds);
         httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         httpClient.DefaultRequestHeaders.Add("X-Goog-Api-Key", apiKey);
 
@@ -252,7 +227,8 @@ Security reference data:
         using var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
         try
         {
-            using var response = await httpClient.PostAsync($"https://generativelanguage.googleapis.com/v1beta/models/{modelName}:generateContent", content);
+            var endpoint = string.Format(settings.GenerateContentEndpointTemplate, modelName);
+            using var response = await httpClient.PostAsync(endpoint, content);
             var responseContent = await response.Content.ReadAsStringAsync();
 
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
@@ -263,7 +239,7 @@ Security reference data:
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 throw new GeminiConfigurationException(
-                    $"Model Gemini '{modelName}' tidak ditemukan. Coba gunakan model lain seperti '{DefaultGeminiModelName}' melalui environment variable '{GeminiModelEnvironmentVariableName}' atau konfigurasi 'Gemini:Model'. Response: {TruncateForDisplay(responseContent)}");
+                    $"Model Gemini '{modelName}' tidak ditemukan. Coba gunakan model lain seperti '{settings.DefaultModelName}' melalui environment variable '{settings.ModelEnvironmentVariableName}' atau konfigurasi 'Gemini:Model'. Response: {TruncateForDisplay(responseContent)}");
             }
 
             response.EnsureSuccessStatusCode();
@@ -280,8 +256,85 @@ Security reference data:
         }
         catch (TaskCanceledException ex)
         {
-            throw new TimeoutException($"Permintaan ke Gemini melebihi batas waktu {GeminiRequestTimeout.TotalSeconds:0} detik.", ex);
+            throw new TimeoutException($"Permintaan ke Gemini melebihi batas waktu {settings.RequestTimeoutSeconds:0} detik.", ex);
         }
+    }
+
+    private static GeminiSettings GetGeminiSettings()
+    {
+        var settings = new GeminiSettings();
+
+        foreach (var appSettingsPath in GetAppSettingsPaths())
+        {
+            if (!File.Exists(appSettingsPath))
+            {
+                continue;
+            }
+
+            using var stream = File.OpenRead(appSettingsPath);
+            using var document = JsonDocument.Parse(stream);
+
+            if (!document.RootElement.TryGetProperty("Gemini", out var geminiSection) || geminiSection.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            settings.ApiKey = ReadGeminiString(geminiSection, "ApiKey", settings.ApiKey);
+            settings.Model = ReadGeminiString(geminiSection, "Model", settings.Model);
+            settings.ApiKeyEnvironmentVariableName = ReadGeminiString(geminiSection, "ApiKeyEnvironmentVariableName", settings.ApiKeyEnvironmentVariableName);
+            settings.ModelEnvironmentVariableName = ReadGeminiString(geminiSection, "ModelEnvironmentVariableName", settings.ModelEnvironmentVariableName);
+            settings.DefaultModelName = ReadGeminiString(geminiSection, "DefaultModelName", settings.DefaultModelName);
+            settings.ApiKeyPlaceholder = ReadGeminiString(geminiSection, "ApiKeyPlaceholder", settings.ApiKeyPlaceholder);
+            settings.GenerateContentEndpointTemplate = ReadGeminiString(geminiSection, "GenerateContentEndpointTemplate", settings.GenerateContentEndpointTemplate);
+            settings.RequestTimeoutSeconds = ReadGeminiInt(geminiSection, "RequestTimeoutSeconds", settings.RequestTimeoutSeconds);
+        }
+
+        ValidateGeminiSettings(settings);
+        return settings;
+    }
+
+    private static void ValidateGeminiSettings(GeminiSettings settings)
+    {
+        if (string.IsNullOrWhiteSpace(settings.ApiKeyEnvironmentVariableName))
+        {
+            throw new GeminiConfigurationException("Konfigurasi 'Gemini:ApiKeyEnvironmentVariableName' wajib diisi.");
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.ModelEnvironmentVariableName))
+        {
+            throw new GeminiConfigurationException("Konfigurasi 'Gemini:ModelEnvironmentVariableName' wajib diisi.");
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.GenerateContentEndpointTemplate) || !settings.GenerateContentEndpointTemplate.Contains("{0}", StringComparison.Ordinal))
+        {
+            throw new GeminiConfigurationException("Konfigurasi 'Gemini:GenerateContentEndpointTemplate' wajib diisi dan harus mengandung placeholder '{0}' untuk nama model.");
+        }
+
+        if (settings.RequestTimeoutSeconds <= 0)
+        {
+            throw new GeminiConfigurationException("Konfigurasi 'Gemini:RequestTimeoutSeconds' harus lebih besar dari 0.");
+        }
+    }
+
+    private static string ReadGeminiString(JsonElement section, string propertyName, string currentValue)
+    {
+        if (!section.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.String)
+        {
+            return currentValue;
+        }
+
+        var value = property.GetString();
+        return string.IsNullOrWhiteSpace(value) ? currentValue : value;
+    }
+
+    private static int ReadGeminiInt(JsonElement section, string propertyName, int currentValue)
+    {
+        if (!section.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.Number)
+        {
+            return currentValue;
+        }
+
+        return property.TryGetInt32(out var value) ? value : currentValue;
     }
 
     private static IEnumerable<string> GetAppSettingsPaths()
@@ -722,10 +775,10 @@ Security reference data:
         return baseDirectoryRoot?.FullName ?? Directory.GetCurrentDirectory();
     }
 
-    private static bool IsUsableApiKey(string? apiKey)
+    private static bool IsUsableApiKey(string? apiKey, string? placeholder)
     {
         return !string.IsNullOrWhiteSpace(apiKey) &&
-               !string.Equals(apiKey, "REPLACE_WITH_YOUR_NEW_GEMINI_API_KEY", StringComparison.OrdinalIgnoreCase);
+               !string.Equals(apiKey, placeholder, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ExtractJsonPayload(string responseText)
@@ -777,6 +830,18 @@ Security reference data:
 
     private sealed class GeminiConfigurationException(string message) : Exception(message)
     {
+    }
+
+    private sealed class GeminiSettings
+    {
+        public string ApiKey { get; set; } = string.Empty;
+        public string Model { get; set; } = string.Empty;
+        public string ApiKeyEnvironmentVariableName { get; set; } = string.Empty;
+        public string ModelEnvironmentVariableName { get; set; } = string.Empty;
+        public string DefaultModelName { get; set; } = string.Empty;
+        public string ApiKeyPlaceholder { get; set; } = string.Empty;
+        public string GenerateContentEndpointTemplate { get; set; } = string.Empty;
+        public int RequestTimeoutSeconds { get; set; }
     }
 
     private sealed class GeminiApiResponse
