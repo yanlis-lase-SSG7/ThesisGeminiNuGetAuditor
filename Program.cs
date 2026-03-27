@@ -11,11 +11,13 @@ public class Program
 {
     private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
     private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
+
     private static readonly JsonDocumentOptions AppSettingsJsonOptions = new()
     {
         CommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true
     };
+
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -50,7 +52,9 @@ public class Program
 
             Console.WriteLine($"Found {packageReferences.Count} package(s) to analyze.");
             Console.WriteLine("Retrieving security reference context...");
-            var securityContextResult = SecurityReferenceProvider.GetSecurityContextWithDiagnostics(packageReferences.Select(x => x.PackageName).ToList());
+            var securityContextResult = SecurityReferenceProvider.GetSecurityContextWithDiagnostics(
+                packageReferences.Select(x => x.PackageName).ToList());
+
             Console.WriteLine($"Security reference source: {securityContextResult.Source}");
 
             foreach (var detail in securityContextResult.Diagnostics)
@@ -62,7 +66,12 @@ public class Program
             Console.WriteLine("Sending package list to Gemini for security analysis...");
 
             var analysisStopwatch = Stopwatch.StartNew();
-            var geminiResponse = await AnalyzeWithGemini(GetGeminiApiKey(geminiSettings), modelName, packageReferences, securityContext, geminiSettings);
+            var geminiResponse = await AnalyzeWithGeminiWithBatching(
+                GetGeminiApiKey(geminiSettings),
+                modelName,
+                packageReferences,
+                securityContext,
+                geminiSettings);
             analysisStopwatch.Stop();
 
             Console.WriteLine($"Gemini analysis completed in {FormatElapsed(analysisStopwatch.Elapsed)}.");
@@ -106,12 +115,22 @@ public class Program
     public static Task<GeminiResponse?> AnalyzeWithGemini(IReadOnlyCollection<NuGetPackageReference> packageReferences, string securityContext)
     {
         var geminiSettings = GetGeminiSettings();
-        return AnalyzeWithGemini(GetGeminiApiKey(geminiSettings), GetGeminiModelName(geminiSettings), packageReferences, securityContext, geminiSettings);
+        return AnalyzeWithGemini(
+            GetGeminiApiKey(geminiSettings),
+            GetGeminiModelName(geminiSettings),
+            packageReferences,
+            securityContext,
+            geminiSettings);
     }
 
     public static string GetGeminiApiKey()
     {
         return GetGeminiApiKey(GetGeminiSettings());
+    }
+
+    public static string GetGeminiModelName()
+    {
+        return GetGeminiModelName(GetGeminiSettings());
     }
 
     private static string GetGeminiApiKey(GeminiSettings settings)
@@ -132,11 +151,6 @@ public class Program
             $"Gemini API key tidak ditemukan. Set environment variable '{GeminiApiKeyEnvironmentVariableName}' atau isi 'Gemini:ApiKey' pada appsettings.local.json/appsettings.json dengan nilai valid.");
     }
 
-    public static string GetGeminiModelName()
-    {
-        return GetGeminiModelName(GetGeminiSettings());
-    }
-
     private static string GetGeminiModelName(GeminiSettings settings)
     {
         var configuredModelName = Environment.GetEnvironmentVariable(GeminiModelEnvironmentVariableName);
@@ -152,6 +166,41 @@ public class Program
         }
 
         throw new GeminiConfigurationException("Konfigurasi model Gemini tidak valid. Isi 'Gemini:Model'.");
+    }
+
+    private static async Task<GeminiResponse?> AnalyzeWithGeminiWithBatching(
+        string apiKey,
+        string modelName,
+        IReadOnlyCollection<NuGetPackageReference> packageReferences,
+        string securityContext,
+        GeminiSettings settings)
+    {
+        if (packageReferences.Count <= settings.MaxPackagesPerRequest)
+        {
+            return await AnalyzeWithGemini(apiKey, modelName, packageReferences, securityContext, settings);
+        }
+
+        var batches = packageReferences.Chunk(settings.MaxPackagesPerRequest).ToList();
+        Console.WriteLine($"[Gemini] Large package list detected. Using batching: {batches.Count} batch(es), up to {settings.MaxPackagesPerRequest} package(s) per batch.");
+
+        var mergedReports = new List<VulnerabilityReport>();
+
+        for (var i = 0; i < batches.Count; i++)
+        {
+            var batch = batches[i];
+            Console.WriteLine($"[Gemini] Processing batch {i + 1}/{batches.Count} ({batch.Length} package(s))...");
+            var batchResponse = await AnalyzeWithGemini(apiKey, modelName, batch, securityContext, settings);
+
+            if (batchResponse?.VulnerabilityReports is { Count: > 0 })
+            {
+                mergedReports.AddRange(batchResponse.VulnerabilityReports);
+            }
+        }
+
+        return new GeminiResponse
+        {
+            VulnerabilityReports = mergedReports
+        };
     }
 
     private static async Task<GeminiResponse?> AnalyzeWithGemini(
@@ -301,6 +350,7 @@ Security reference data:
             settings.Model = ReadGeminiString(geminiSection, "Model", settings.Model);
             settings.GenerateContentEndpointTemplate = ReadGeminiString(geminiSection, "GenerateContentEndpointTemplate", settings.GenerateContentEndpointTemplate);
             settings.RequestTimeoutSeconds = ReadGeminiInt(geminiSection, "RequestTimeoutSeconds", settings.RequestTimeoutSeconds);
+            settings.MaxPackagesPerRequest = ReadGeminiInt(geminiSection, "MaxPackagesPerRequest", settings.MaxPackagesPerRequest);
         }
 
         ValidateGeminiSettings(settings);
@@ -322,6 +372,11 @@ Security reference data:
         if (settings.RequestTimeoutSeconds <= 0)
         {
             throw new GeminiConfigurationException("Konfigurasi 'Gemini:RequestTimeoutSeconds' harus lebih besar dari 0.");
+        }
+
+        if (settings.MaxPackagesPerRequest <= 0)
+        {
+            throw new GeminiConfigurationException("Konfigurasi 'Gemini:MaxPackagesPerRequest' harus lebih besar dari 0.");
         }
     }
 
@@ -854,6 +909,7 @@ Security reference data:
         public string Model { get; set; } = string.Empty;
         public string GenerateContentEndpointTemplate { get; set; } = string.Empty;
         public int RequestTimeoutSeconds { get; set; }
+        public int MaxPackagesPerRequest { get; set; } = 15;
     }
 
     private sealed class GeminiApiResponse

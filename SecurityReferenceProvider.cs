@@ -199,6 +199,12 @@ public static class SecurityReferenceProvider
                 {
                     accessSucceeded = true;
                 }
+
+                if (apiResponse.StatusCode.Value is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                {
+                    diagnostics.Add("GitHub token unauthorized/forbidden. Remaining packages skipped to prevent repeated failed calls.");
+                    break;
+                }
             }
             else
             {
