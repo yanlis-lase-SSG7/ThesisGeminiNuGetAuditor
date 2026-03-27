@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -7,6 +8,11 @@ namespace GeminiNuGetAuditor;
 public static class SecurityReferenceProvider
 {
     private const string GitHubTokenEnvironmentVariableName = "GITHUB_TOKEN";
+    private static readonly JsonDocumentOptions InputJsonOptions = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
+    };
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         WriteIndented = true
@@ -14,14 +20,30 @@ public static class SecurityReferenceProvider
 
     public static string GetSecurityContext(List<string> packages)
     {
-        return GetSecurityContextAsync(packages).GetAwaiter().GetResult();
+        return GetSecurityContextWithDiagnostics(packages).Context;
     }
 
     public static async Task<string> GetSecurityContextAsync(List<string> packages, CancellationToken cancellationToken = default)
     {
+        var result = await GetSecurityContextWithDiagnosticsAsync(packages, cancellationToken);
+        return result.Context;
+    }
+
+    public static SecurityContextResult GetSecurityContextWithDiagnostics(List<string> packages)
+    {
+        return GetSecurityContextWithDiagnosticsAsync(packages).GetAwaiter().GetResult();
+    }
+
+    public static async Task<SecurityContextResult> GetSecurityContextWithDiagnosticsAsync(List<string> packages, CancellationToken cancellationToken = default)
+    {
         if (packages is null || packages.Count == 0)
         {
-            return "[]";
+            return new SecurityContextResult
+            {
+                Context = "[]",
+                Source = "None",
+                Diagnostics = new List<string> { "No package input. Retrieval skipped." }
+            };
         }
 
         var packageSet = new HashSet<string>(
@@ -30,29 +52,59 @@ public static class SecurityReferenceProvider
 
         if (packageSet.Count == 0)
         {
-            return "[]";
+            return new SecurityContextResult
+            {
+                Context = "[]",
+                Source = "None",
+                Diagnostics = new List<string> { "Package input contains only empty names. Retrieval skipped." }
+            };
         }
 
         var settings = GetSecurityReferenceSettings();
+        var diagnostics = new List<string>();
 
-        var localContext = TryGetSecurityContextFromLocalFile(packageSet, settings.AdvisoryDbFileName);
+        var localFileResult = TryGetSecurityContextFromLocalFile(packageSet, settings.AdvisoryDbFileName);
 
-        if (!string.IsNullOrWhiteSpace(localContext))
+        if (localFileResult.IsLoaded)
         {
-            return localContext;
+            diagnostics.Add($"Local advisory file found: {localFileResult.FilePath}.");
+            diagnostics.Add($"Matched advisory entries from local file: {localFileResult.MatchedCount}.");
+
+            return new SecurityContextResult
+            {
+                Context = localFileResult.Context,
+                Source = "LocalFile",
+                Diagnostics = diagnostics
+            };
         }
 
-        var (apiAvailable, apiContext) = await TryGetSecurityContextFromGitHubApiAsync(packageSet, settings, cancellationToken);
+        diagnostics.Add($"Local advisory file not found: {settings.AdvisoryDbFileName}.");
 
-        if (apiAvailable)
+        var apiResult = await TryGetSecurityContextFromGitHubApiAsync(packageSet, settings, cancellationToken);
+        diagnostics.AddRange(apiResult.Diagnostics);
+
+        if (apiResult.AccessSucceeded)
         {
-            return apiContext;
+            return new SecurityContextResult
+            {
+                Context = apiResult.Context,
+                Source = "GitHubApi",
+                Diagnostics = diagnostics
+            };
         }
 
-        return GetFallbackSecurityContext(packageSet, settings);
+        var fallbackContext = GetFallbackSecurityContext(packageSet, settings, out var fallbackMatchCount);
+        diagnostics.Add($"Fallback advisory entries matched: {fallbackMatchCount}.");
+
+        return new SecurityContextResult
+        {
+            Context = fallbackContext,
+            Source = "Fallback",
+            Diagnostics = diagnostics
+        };
     }
 
-    private static string? TryGetSecurityContextFromLocalFile(HashSet<string> packageSet, string advisoryDbFileName)
+    private static LocalSecurityContextResult TryGetSecurityContextFromLocalFile(HashSet<string> packageSet, string advisoryDbFileName)
     {
         var advisoryDbPath = Path.Combine(AppContext.BaseDirectory, advisoryDbFileName);
 
@@ -63,11 +115,17 @@ public static class SecurityReferenceProvider
 
         if (!File.Exists(advisoryDbPath))
         {
-            return null;
+            return new LocalSecurityContextResult
+            {
+                IsLoaded = false,
+                Context = "[]",
+                FilePath = advisoryDbPath,
+                MatchedCount = 0
+            };
         }
 
         using var stream = File.OpenRead(advisoryDbPath);
-        using var document = JsonDocument.Parse(stream);
+        using var document = JsonDocument.Parse(stream, InputJsonOptions);
 
         var matched = new List<JsonElement>();
 
@@ -81,19 +139,43 @@ public static class SecurityReferenceProvider
             }
         }
 
-        return JsonSerializer.Serialize(matched, SerializerOptions);
+        return new LocalSecurityContextResult
+        {
+            IsLoaded = true,
+            Context = JsonSerializer.Serialize(matched, SerializerOptions),
+            FilePath = advisoryDbPath,
+            MatchedCount = matched.Count
+        };
     }
 
-    private static async Task<(bool ApiAvailable, string Context)> TryGetSecurityContextFromGitHubApiAsync(
+    private static async Task<GitHubSecurityContextResult> TryGetSecurityContextFromGitHubApiAsync(
         HashSet<string> packageSet,
         SecurityReferenceSettings settings,
         CancellationToken cancellationToken)
     {
         var githubToken = ResolveGitHubToken(settings);
 
-        if (string.IsNullOrWhiteSpace(githubToken) || string.IsNullOrWhiteSpace(settings.GitHubGraphQlUrl))
+        if (string.IsNullOrWhiteSpace(githubToken))
         {
-            return (false, string.Empty);
+            return new GitHubSecurityContextResult
+            {
+                AccessSucceeded = false,
+                Context = "[]",
+                Diagnostics = new List<string>
+                {
+                    $"GitHub token is empty. Set env var '{GitHubTokenEnvironmentVariableName}' or fill 'SecurityReference:GitHubToken'."
+                }
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.GitHubGraphQlUrl))
+        {
+            return new GitHubSecurityContextResult
+            {
+                AccessSucceeded = false,
+                Context = "[]",
+                Diagnostics = new List<string> { "GitHub GraphQL URL is empty." }
+            };
         }
 
         using var httpClient = new HttpClient();
@@ -102,17 +184,39 @@ public static class SecurityReferenceProvider
         httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         var results = new List<SecurityAdvisoryRecord>();
+        var diagnostics = new List<string>();
+        var accessSucceeded = false;
 
         foreach (var packageName in packageSet)
         {
-            var advisories = await QueryNuGetAdvisoriesFromGitHubAsync(httpClient, settings.GitHubGraphQlUrl, settings.GitHubGraphQlNuGetQuery, packageName, cancellationToken);
-            results.AddRange(advisories);
+            var apiResponse = await QueryNuGetAdvisoriesFromGitHubAsync(httpClient, settings.GitHubGraphQlUrl, settings.GitHubGraphQlNuGetQuery, packageName, cancellationToken);
+
+            if (apiResponse.StatusCode.HasValue)
+            {
+                diagnostics.Add($"GitHub API package '{packageName}': HTTP {(int)apiResponse.StatusCode.Value} ({apiResponse.StatusCode.Value}), advisories={apiResponse.Records.Count}.");
+
+                if (apiResponse.StatusCode.Value == HttpStatusCode.OK)
+                {
+                    accessSucceeded = true;
+                }
+            }
+            else
+            {
+                diagnostics.Add($"GitHub API package '{packageName}': request failed ({apiResponse.ErrorMessage}).");
+            }
+
+            results.AddRange(apiResponse.Records);
         }
 
-        return (true, JsonSerializer.Serialize(results, SerializerOptions));
+        return new GitHubSecurityContextResult
+        {
+            AccessSucceeded = accessSucceeded,
+            Context = JsonSerializer.Serialize(results, SerializerOptions),
+            Diagnostics = diagnostics
+        };
     }
 
-    private static async Task<List<SecurityAdvisoryRecord>> QueryNuGetAdvisoriesFromGitHubAsync(
+    private static async Task<GitHubPackageQueryResult> QueryNuGetAdvisoriesFromGitHubAsync(
         HttpClient httpClient,
         string gitHubGraphQlUrl,
         string gitHubGraphQlNuGetQuery,
@@ -133,10 +237,16 @@ public static class SecurityReferenceProvider
         try
         {
             using var response = await httpClient.PostAsync(gitHubGraphQlUrl, content, cancellationToken);
+            var statusCode = response.StatusCode;
 
             if (!response.IsSuccessStatusCode)
             {
-                return new List<SecurityAdvisoryRecord>();
+                return new GitHubPackageQueryResult
+                {
+                    StatusCode = statusCode,
+                    Records = new List<SecurityAdvisoryRecord>(),
+                    ErrorMessage = $"Non-success status code: {(int)statusCode}"
+                };
             }
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -147,7 +257,12 @@ public static class SecurityReferenceProvider
                 !vulnerabilities.TryGetProperty("nodes", out var nodes) ||
                 nodes.ValueKind != JsonValueKind.Array)
             {
-                return new List<SecurityAdvisoryRecord>();
+                return new GitHubPackageQueryResult
+                {
+                    StatusCode = statusCode,
+                    Records = new List<SecurityAdvisoryRecord>(),
+                    ErrorMessage = "Response schema does not contain expected nodes."
+                };
             }
 
             var records = new List<SecurityAdvisoryRecord>();
@@ -176,11 +291,21 @@ public static class SecurityReferenceProvider
                 });
             }
 
-            return records;
+            return new GitHubPackageQueryResult
+            {
+                StatusCode = statusCode,
+                Records = records,
+                ErrorMessage = string.Empty
+            };
         }
-        catch
+        catch (Exception ex)
         {
-            return new List<SecurityAdvisoryRecord>();
+            return new GitHubPackageQueryResult
+            {
+                StatusCode = null,
+                Records = new List<SecurityAdvisoryRecord>(),
+                ErrorMessage = ex.Message
+            };
         }
     }
 
@@ -206,7 +331,7 @@ public static class SecurityReferenceProvider
             }
 
             using var stream = File.OpenRead(path);
-            using var document = JsonDocument.Parse(stream);
+            using var document = JsonDocument.Parse(stream, InputJsonOptions);
 
             if (!document.RootElement.TryGetProperty("SecurityReference", out var section) || section.ValueKind != JsonValueKind.Object)
             {
@@ -323,9 +448,9 @@ public static class SecurityReferenceProvider
         return property.GetRawText();
     }
 
-    private static string GetFallbackSecurityContext(HashSet<string> packageSet, SecurityReferenceSettings settings)
+    private static string GetFallbackSecurityContext(HashSet<string> packageSet, SecurityReferenceSettings settings, out int matchedCount)
     {
-        using var document = JsonDocument.Parse(settings.FallbackAdvisoriesJson);
+        using var document = JsonDocument.Parse(settings.FallbackAdvisoriesJson, InputJsonOptions);
         var matched = new List<JsonElement>();
 
         foreach (var advisory in document.RootElement.EnumerateArray())
@@ -338,6 +463,7 @@ public static class SecurityReferenceProvider
             }
         }
 
+        matchedCount = matched.Count;
         return JsonSerializer.Serialize(matched, SerializerOptions);
     }
 
@@ -419,6 +545,35 @@ public static class SecurityReferenceProvider
         }
 
         return string.Empty;
+    }
+
+    public sealed class SecurityContextResult
+    {
+        public string Context { get; set; } = "[]";
+        public string Source { get; set; } = "None";
+        public List<string> Diagnostics { get; set; } = new();
+    }
+
+    private sealed class LocalSecurityContextResult
+    {
+        public bool IsLoaded { get; set; }
+        public string Context { get; set; } = "[]";
+        public string FilePath { get; set; } = string.Empty;
+        public int MatchedCount { get; set; }
+    }
+
+    private sealed class GitHubSecurityContextResult
+    {
+        public bool AccessSucceeded { get; set; }
+        public string Context { get; set; } = "[]";
+        public List<string> Diagnostics { get; set; } = new();
+    }
+
+    private sealed class GitHubPackageQueryResult
+    {
+        public HttpStatusCode? StatusCode { get; set; }
+        public List<SecurityAdvisoryRecord> Records { get; set; } = new();
+        public string ErrorMessage { get; set; } = string.Empty;
     }
 
     private sealed class SecurityReferenceSettings

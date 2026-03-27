@@ -7,7 +7,7 @@
 Project ini dibuat untuk:
 
 - menginventaris package NuGet yang digunakan oleh suatu project
-- mengambil **security reference data** lokal (`github-advisory-db.json`) sebagai ground truth
+- mengambil **security reference data** sebagai ground truth dari beberapa sumber (local file, GitHub GraphQL API, fallback sample)
 - mengirim package + konteks referensi ke Gemini untuk analisis terarah
 - menurunkan risiko halusinasi dengan aturan "Unknown jika tidak ada di referensi"
 - menyimpan hasil audit ke JSON dan CSV untuk analisis kuantitatif (Precision, Recall, F1-Score)
@@ -18,7 +18,10 @@ Berikut alur bisnis utama project ini:
 
 1. User menentukan file `.csproj` yang ingin diaudit.
 2. Aplikasi membaca seluruh `PackageReference` dari file tersebut (Extraction).
-3. Aplikasi mengambil context referensi keamanan dari `github-advisory-db.json` (Retrieval).
+3. Aplikasi mengambil context referensi keamanan dengan prioritas:
+   - local file `github-advisory-db.json`
+   - GitHub GraphQL API
+   - fallback advisory sample di `appsettings` (Retrieval).
 4. Daftar package + referensi keamanan digabung dalam prompt (Augmentation).
 5. Gemini diminta mengembalikan **JSON murni** sesuai model `GeminiResponse` (Generation).
 6. Hasil dinormalisasi agar 1 package = 1 report.
@@ -28,26 +31,14 @@ Berikut alur bisnis utama project ini:
 
 ## Detail Alur dari Sudut Pandang User
 
-### Langkah 1 - Menentukan target audit
-User memilih project `.NET` yang dependency NuGet-nya ingin diperiksa.
-
-### Langkah 2 - Sistem membaca dependency
-Aplikasi membuka file `.csproj` dan mencari seluruh elemen `PackageReference`.
-
-Contoh data yang diambil:
-
-- nama package
-- versi package saat ini
-
 ### Langkah 3 - Sistem mengambil referensi keamanan (Ground Truth)
-Aplikasi membaca `github-advisory-db.json`, lalu memfilter advisory yang cocok dengan package lokal.
+Aplikasi melakukan retrieval berlapis:
 
-### Langkah 4 - Sistem meminta analisis ke Gemini
-Gemini menerima package lokal + security context dengan aturan:
+1. baca `github-advisory-db.json` jika tersedia
+2. jika tidak tersedia, query GitHub GraphQL API
+3. jika API gagal/tidak tersedia, gunakan fallback advisories dari `appsettings`
 
-- hanya tandai rentan jika ada pada referensi
-- jika package tidak ada pada referensi, status harus Unknown
-- mitigation plan mengikuti standar keamanan `.NET 8/9`
+Setiap proses retrieval menampilkan diagnostics di console agar sumber data dapat diverifikasi.
 
 ### Langkah 5 - User menerima hasil audit
 Setiap package memiliki hasil seperti:
@@ -56,66 +47,39 @@ Setiap package memiliki hasil seperti:
 - `CurrentVersion`
 - `IsVulnerable`
 - `CVE_ID`
-- `Severity`
-- `MitigationPlan`
+- `Severity` (EN)
+- `SeverityIndonesia` (ID)
+- `MitigationPlan` (EN)
+- `MitigationPlanIndonesia` (ID)
 - `IsGroundedInReference`
-- `ReasoningTrace`
-
-### Langkah 6 - Dataset penelitian tersimpan
-Hasil audit disimpan ke folder `audit-results` dalam dua format:
-
-- JSON audit lengkap per sesi
-- CSV metrik klasifikasi per package
+- `ReasoningTrace` (EN)
+- `ReasoningTraceIndonesia` (ID)
 
 ## Detail Alur dari Sudut Pandang Technician
 
-### 1. Ekstraksi package dari `.csproj`
-File `CsprojPackageExtractor.cs` menangani parsing XML menggunakan `System.Xml.Linq`.
-
-Method utama:
-
-- `ExtractPackageReferences(string filePath)`
-- `ExtractPackagesFromCsproj(string filePath)`
-
 ### 2. Retrieval security reference
-File `SecurityReferenceProvider.cs` menangani pembacaan database advisory lokal.
+File `SecurityReferenceProvider.cs` menangani retrieval context dari beberapa sumber.
 
 Method utama:
 
 - `GetSecurityContext(List<string> packages)`
+- `GetSecurityContextWithDiagnostics(List<string> packages)`
 
 Tanggung jawab method ini:
 
-- membaca file `github-advisory-db.json`
-- mengekstrak daftar advisory (beberapa bentuk struktur JSON didukung)
-- memfilter advisory berdasarkan nama package dari `.csproj`
-- mengembalikan context JSON terfilter untuk prompt RAG
+- mencoba local advisory file terlebih dahulu
+- fallback ke GitHub GraphQL API jika local file tidak ada
+- fallback ke sample advisories jika API gagal/tidak tersedia
+- mengembalikan diagnostics detail source retrieval untuk logging console
 
 ### 3. Pengiriman request ke Gemini
-File `Program.cs` berisi method:
+`Program.cs` menampilkan diagnostics request Gemini di console, termasuk:
 
-- `AnalyzeWithGemini(string apiKey, string modelName, IReadOnlyCollection<NuGetPackageReference> packageReferences, string securityContext)`
-- `AnalyzeWithGemini(IReadOnlyCollection<NuGetPackageReference> packageReferences, string securityContext)`
+- endpoint yang dipanggil
+- HTTP status response
+- status parsing payload
 
-Tanggung jawab method ini:
-
-- menerima package lokal dan context referensi keamanan
-- menyusun prompt RAG anti-halusinasi
-- menambahkan header `X-Goog-Api-Key`
-- mengirim request HTTP ke endpoint Gemini
-- mengekstrak payload JSON dari respons Gemini
-- mendeserialisasi ke model `GeminiResponse`
-
-### 4. Logging dataset JSON dan CSV
-Setelah normalisasi, aplikasi menyimpan:
-
-- JSON sesi audit (`AuditSessionRecord`)
-- CSV metrik klasifikasi (`SaveScanMetricsCsv(...)`) dengan kolom:
-  - `ProjectName`
-  - `PackageName`
-  - `Gemini_Detected`
-  - `Reference_Exists`
-  - `Match_Result` (`True Positive`, `False Positive`, `False Negative`, `True Negative`)
+Tujuannya agar mudah memverifikasi bahwa request benar-benar mengakses API Gemini, bukan gagal diam-diam.
 
 ## Struktur Model Data
 
@@ -131,108 +95,45 @@ Properti:
 - `IsVulnerable`
 - `CVE_ID`
 - `Severity`
+- `SeverityIndonesia`
 - `MitigationPlan`
+- `MitigationPlanIndonesia`
 - `IsGroundedInReference`
 - `ReasoningTrace`
-
-### `GeminiResponse`
-Root object respons Gemini:
-
-- `VulnerabilityReports`
-
-### `AuditSessionRecord`
-Dataset audit per sesi:
-
-- `GeneratedAtUtc`
-- `SourceProjectPath`
-- `ModelName`
-- `ExtractedPackages`
-- `VulnerabilityReports`
+- `ReasoningTraceIndonesia`
 
 ## Input dan Output
 
 ### Input utama
 
 - path file `.csproj`
-- Gemini API key
-- file referensi lokal `github-advisory-db.json`
+- Gemini API key (`GEMINI_API_KEY` atau `Gemini:ApiKey`)
+- GitHub token (`GITHUB_TOKEN` atau `SecurityReference:GitHubToken`)
+- konfigurasi retrieval pada section `SecurityReference` di `appsettings`
 
 ### Output utama
 
 - file JSON lokal berisi dataset audit lengkap (`AuditSessionRecord`)
 - file CSV metrik klasifikasi per package untuk analisis Precision, Recall, dan F1-Score
-
-### Format CSV Metrik
-
-File CSV berisi kolom berikut:
-
-- `ProjectName`: nama project sumber (`.csproj`)
-- `PackageName`: nama package yang dievaluasi
-- `Gemini_Detected`: hasil prediksi model (`true/false`)
-- `Reference_Exists`: status keberadaan package pada referensi keamanan (`true/false`)
-- `Match_Result`: label evaluasi klasifikasi
-
-Nilai `Match_Result`:
-
-- `True Positive (TP)`: `Gemini_Detected=true` dan `Reference_Exists=true`
-- `False Positive (FP)`: `Gemini_Detected=true` dan `Reference_Exists=false`
-- `False Negative (FN)`: `Gemini_Detected=false` dan `Reference_Exists=true`
-- `True Negative (TN)`: `Gemini_Detected=false` dan `Reference_Exists=false`
-
-Contoh baris CSV:
-
-`MyProject,Newtonsoft.Json,true,true,True Positive`
-
-## Metrik Penelitian Kuantitatif
-
-Dataset CSV dapat langsung dipakai untuk menghitung metrik utama:
-
-- `Precision = TP / (TP + FP)`
-- `Recall = TP / (TP + FN)`
-- `F1-Score = 2 * (Precision * Recall) / (Precision + Recall)`
-
-Interpretasi singkat:
-
-- Precision tinggi: false alarm rendah
-- Recall tinggi: temuan rentan yang terdeteksi lebih lengkap
-- F1 tinggi: keseimbangan akurasi deteksi dan jangkauan temuan
-
-## Asumsi Evaluasi
-
-Agar hasil konsisten untuk eksperimen tesis:
-
-- ground truth berasal dari `github-advisory-db.json` yang dipakai pada proses retrieval
-- package yang tidak ditemukan pada referensi diperlakukan sebagai `Unknown` oleh prompt
-- evaluasi klasifikasi tetap menggunakan pasangan biner (`Gemini_Detected` vs `Reference_Exists`) untuk perhitungan TP/FP/FN/TN
-- setiap scan menghasilkan file CSV baru bertimestamp untuk menjaga jejak eksperimen
+- diagnostics detail di console untuk status retrieval source dan status akses Gemini API
 
 ## Gambaran Arsitektur Saat Ini
 
 Komponen utama:
 
 - `CsprojPackageExtractor.cs` untuk extraction
-- `SecurityReferenceProvider.cs` untuk retrieval context
+- `SecurityReferenceProvider.cs` untuk retrieval context + diagnostics
 - `Program.cs` untuk augmentation + generation + normalisasi + persistence
-- `VulnerabilityModels.cs` untuk model hasil audit
-
-## Flow End-to-End yang Dituju
-
-1. aplikasi menerima/menentukan path `.csproj`
-2. aplikasi melakukan extraction package
-3. aplikasi memanggil `GetSecurityContext(...)` untuk retrieval
-4. aplikasi memanggil `AnalyzeWithGemini(...)` dengan package + security context
-5. aplikasi menerima `GeminiResponse`
-6. aplikasi menormalkan hasil agar sesuai daftar package input
-7. aplikasi menyimpan JSON audit dan CSV metrik
+- `VulnerabilityModels.cs` untuk model hasil audit (bilingual fields)
 
 ## Ringkasan Cepat
 
 Jika ingin memahami project ini dalam 30 detik:
 
 - project membaca package NuGet dari `.csproj`
-- project mengambil ground truth dari `github-advisory-db.json`
+- project mengambil ground truth dari local file/GitHub API/fallback sample
 - package + referensi dikirim ke Gemini (RAG prompt)
-- hasil audit menyertakan status kerentanan, grounding reference, dan reasoning trace
-- output disimpan ke JSON dan CSV agar bisa dihitung metrik Precision/Recall/F1
+- hasil audit menyertakan field bilingual EN-ID untuk severity, mitigation, dan reasoning
+- output disimpan ke JSON + CSV, dan console menampilkan diagnostics akses API
 
 Last Updated : 27 Maret 2026

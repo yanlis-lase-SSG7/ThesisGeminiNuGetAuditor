@@ -11,6 +11,11 @@ public class Program
 {
     private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
     private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
+    private static readonly JsonDocumentOptions AppSettingsJsonOptions = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
+    };
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -44,8 +49,16 @@ public class Program
             }
 
             Console.WriteLine($"Found {packageReferences.Count} package(s) to analyze.");
-            Console.WriteLine("Retrieving security reference context from local advisory database...");
-            var securityContext = SecurityReferenceProvider.GetSecurityContext(packageReferences.Select(x => x.PackageName).ToList());
+            Console.WriteLine("Retrieving security reference context...");
+            var securityContextResult = SecurityReferenceProvider.GetSecurityContextWithDiagnostics(packageReferences.Select(x => x.PackageName).ToList());
+            Console.WriteLine($"Security reference source: {securityContextResult.Source}");
+
+            foreach (var detail in securityContextResult.Diagnostics)
+            {
+                Console.WriteLine($"[Retrieval] {detail}");
+            }
+
+            var securityContext = securityContextResult.Context;
             Console.WriteLine("Sending package list to Gemini for security analysis...");
 
             var analysisStopwatch = Stopwatch.StartNew();
@@ -179,9 +192,12 @@ The JSON must match this exact C# model structure and property names:
       "IsVulnerable": true,
       "CVE_ID": "string",
       "Severity": "string",
+      "SeverityIndonesia": "string",
       "MitigationPlan": "string",
+      "MitigationPlanIndonesia": "string",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "string"
+      "ReasoningTrace": "string",
+      "ReasoningTraceIndonesia": "string"
     }
   ]
 }
@@ -193,7 +209,8 @@ Rules:
 - Use empty string for unknown string values.
 - Use false for `IsVulnerable` when no known vulnerability is identified.
 - Set `IsGroundedInReference` to true only when the finding exists in the provided security reference data.
-- If a package is not in the reference, set `IsVulnerable` to false, `IsGroundedInReference` to false, and `Severity` to "Unknown".
+- If a package is not in the reference, set `IsVulnerable` to false, `IsGroundedInReference` to false, and `Severity`/`SeverityIndonesia` to "Unknown"/"Tidak diketahui".
+- Always fill bilingual fields: English and Indonesian versions for severity, mitigation plan, and reasoning trace.
 - Compare these local packages with the provided security reference data. Only flag vulnerabilities if they exist in the reference. If a package is not in the reference, mark it as Unknown. Provide a mitigation plan based on .NET 8/9 security standards.
 
 Local packages:
@@ -225,7 +242,9 @@ Security reference data:
         try
         {
             var endpoint = string.Format(settings.GenerateContentEndpointTemplate, modelName);
+            Console.WriteLine($"[Gemini] Endpoint: {endpoint}");
             using var response = await httpClient.PostAsync(endpoint, content);
+            Console.WriteLine($"[Gemini] HTTP {(int)response.StatusCode} ({response.StatusCode})");
             var responseContent = await response.Content.ReadAsStringAsync();
 
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
@@ -246,9 +265,11 @@ Security reference data:
 
             if (string.IsNullOrWhiteSpace(json))
             {
+                Console.WriteLine("[Gemini] Response payload is empty.");
                 return null;
             }
 
+            Console.WriteLine("[Gemini] Response payload parsed successfully.");
             return JsonSerializer.Deserialize<GeminiResponse>(ExtractJsonPayload(json), SerializerOptions);
         }
         catch (TaskCanceledException ex)
@@ -269,7 +290,7 @@ Security reference data:
             }
 
             using var stream = File.OpenRead(appSettingsPath);
-            using var document = JsonDocument.Parse(stream);
+            using var document = JsonDocument.Parse(stream, AppSettingsJsonOptions);
 
             if (!document.RootElement.TryGetProperty("Gemini", out var geminiSection) || geminiSection.ValueKind != JsonValueKind.Object)
             {
@@ -528,7 +549,11 @@ Security reference data:
                     report.CurrentVersion = packageReference.CurrentVersion;
                     report.CVE_ID ??= string.Empty;
                     report.Severity ??= string.Empty;
+                    report.SeverityIndonesia ??= string.Empty;
                     report.MitigationPlan ??= string.Empty;
+                    report.MitigationPlanIndonesia ??= string.Empty;
+                    report.ReasoningTrace ??= string.Empty;
+                    report.ReasoningTraceIndonesia ??= string.Empty;
                     return report;
                 }
 
@@ -539,7 +564,11 @@ Security reference data:
                     IsVulnerable = false,
                     CVE_ID = string.Empty,
                     Severity = string.Empty,
-                    MitigationPlan = string.Empty
+                    SeverityIndonesia = string.Empty,
+                    MitigationPlan = string.Empty,
+                    MitigationPlanIndonesia = string.Empty,
+                    ReasoningTrace = string.Empty,
+                    ReasoningTraceIndonesia = string.Empty
                 };
             })
             .ToList();
