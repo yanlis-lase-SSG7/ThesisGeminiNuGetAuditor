@@ -1,0 +1,41 @@
+{
+  "Gemini": {
+    "ApiKey": "sample", //just sample key, do not remove or change the value, it will be overridden by environment variable in production
+    "Model": "gemini-flash-latest",
+    "RequestTimeoutSeconds": 60,
+    "MaxPackagesPerRequest": 15,
+    "MaxRetryCount": 2,
+    "RetryDelayMilliseconds": 2000,
+    "GenerateContentEndpointTemplate": "https://generativelanguage.googleapis.com/v1beta/models/{0}:generateContent"
+  },
+  "SecurityReference": {
+    "AdvisoryDbFileName": "github-advisory-db.json",
+    "GitHubGraphQlUrl": "https://api.github.com/graphql",
+    "GitHubGraphQlNuGetQuery": "query($package:String!){ securityVulnerabilities(first:20, ecosystem:NUGET, package:$package){ nodes{ package{ name } vulnerableVersionRange firstPatchedVersion{ identifier } severity advisory{ ghsaId summary permalink identifiers{ type value } } } } }",
+    "GitHubToken": "sample", //just sample key, do not remove or change the value, it will be overridden by environment variable in production
+    "GitHubUserAgentProductName": "GeminiNuGetAuditor",
+    "GitHubUserAgentProductVersion": "1.0",
+    "FallbackAdvisories": [
+      {
+        "PackageName": "Newtonsoft.Json",
+        "VulnerableVersionRange": "< 13.0.1",
+        "Severity": "HIGH",
+        "GHSA": "GHSA-5crp-9r3c-p9vr",
+        "CVE": "CVE-2021-24112",
+        "Summary": "Potential denial of service in old Newtonsoft.Json versions.",
+        "ReferenceUrl": "https://github.com/advisories/GHSA-5crp-9r3c-p9vr",
+        "FirstPatchedVersion": "13.0.1"
+      },
+      {
+        "PackageName": "System.Text.Encodings.Web",
+        "VulnerableVersionRange": "< 4.7.2",
+        "Severity": "MODERATE",
+        "GHSA": "GHSA-ghhp-997w-qr28",
+        "CVE": "CVE-2021-26701",
+        "Summary": "Known vulnerability in older package versions.",
+        "ReferenceUrl": "https://github.com/advisories/GHSA-ghhp-997w-qr28",
+        "FirstPatchedVersion": "4.7.2"
+      }
+    ]
+  }
+}

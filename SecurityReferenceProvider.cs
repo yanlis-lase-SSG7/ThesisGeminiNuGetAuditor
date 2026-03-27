@@ -390,11 +390,6 @@ public static class SecurityReferenceProvider
         var basePath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
         yield return basePath;
 
-        if (!string.Equals(baseLocalPath, currentLocalPath, StringComparison.OrdinalIgnoreCase))
-        {
-            yield return currentLocalPath;
-        }
-
         var currentPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
 
         if (!string.Equals(basePath, currentPath, StringComparison.OrdinalIgnoreCase))

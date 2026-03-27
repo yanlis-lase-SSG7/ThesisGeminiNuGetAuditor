@@ -495,11 +495,6 @@ Security reference data:
         var baseDirectoryPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
         yield return baseDirectoryPath;
 
-        if (!string.Equals(baseLocalPath, currentLocalPath, StringComparison.OrdinalIgnoreCase))
-        {
-            yield return currentLocalPath;
-        }
-
         var currentDirectoryPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
 
         if (!string.Equals(baseDirectoryPath, currentDirectoryPath, StringComparison.OrdinalIgnoreCase))
