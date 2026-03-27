@@ -387,13 +387,8 @@ public static class SecurityReferenceProvider
 
     private static IEnumerable<string> GetAppSettingsPaths()
     {
-        var baseLocalPath = Path.Combine(AppContext.BaseDirectory, "appsettings.local.json");
-        yield return baseLocalPath;
-
         var basePath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
         yield return basePath;
-
-        var currentLocalPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.local.json");
 
         if (!string.Equals(baseLocalPath, currentLocalPath, StringComparison.OrdinalIgnoreCase))
         {

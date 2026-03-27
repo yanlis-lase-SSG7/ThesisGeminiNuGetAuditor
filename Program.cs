@@ -148,7 +148,7 @@ public class Program
         }
 
         throw new GeminiConfigurationException(
-            $"Gemini API key tidak ditemukan. Set environment variable '{GeminiApiKeyEnvironmentVariableName}' atau isi 'Gemini:ApiKey' pada appsettings.local.json/appsettings.json dengan nilai valid.");
+            $"Gemini API key tidak ditemukan. Set environment variable '{GeminiApiKeyEnvironmentVariableName}' atau isi 'Gemini:ApiKey' pada appsettings.json dengan nilai valid.");
     }
 
     private static string GetGeminiModelName(GeminiSettings settings)
@@ -177,7 +177,8 @@ public class Program
     {
         if (packageReferences.Count <= settings.MaxPackagesPerRequest)
         {
-            return await AnalyzeWithGemini(apiKey, modelName, packageReferences, securityContext, settings);
+            var scopedSecurityContext = FilterSecurityContextForPackages(securityContext, packageReferences.Select(x => x.PackageName));
+            return await AnalyzeWithGeminiWithRetry(apiKey, modelName, packageReferences, scopedSecurityContext, settings);
         }
 
         var batches = packageReferences.Chunk(settings.MaxPackagesPerRequest).ToList();
@@ -188,8 +189,10 @@ public class Program
         for (var i = 0; i < batches.Count; i++)
         {
             var batch = batches[i];
-            Console.WriteLine($"[Gemini] Processing batch {i + 1}/{batches.Count} ({batch.Length} package(s))...");
-            var batchResponse = await AnalyzeWithGemini(apiKey, modelName, batch, securityContext, settings);
+            var scopedSecurityContext = FilterSecurityContextForPackages(securityContext, batch.Select(x => x.PackageName));
+
+            Console.WriteLine($"[Gemini] Processing batch {i + 1}/{batches.Count} ({batch.Length} package(s)). Security context chars={scopedSecurityContext.Length}.");
+            var batchResponse = await AnalyzeWithGeminiWithRetry(apiKey, modelName, batch, scopedSecurityContext, settings);
 
             if (batchResponse?.VulnerabilityReports is { Count: > 0 })
             {
@@ -201,6 +204,80 @@ public class Program
         {
             VulnerabilityReports = mergedReports
         };
+    }
+
+    private static async Task<GeminiResponse?> AnalyzeWithGeminiWithRetry(
+        string apiKey,
+        string modelName,
+        IReadOnlyCollection<NuGetPackageReference> packageReferences,
+        string securityContext,
+        GeminiSettings settings)
+    {
+        var maxAttempts = settings.MaxRetryCount + 1;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                return await AnalyzeWithGemini(apiKey, modelName, packageReferences, securityContext, settings);
+            }
+            catch (TimeoutException) when (attempt < maxAttempts)
+            {
+                var delay = settings.RetryDelayMilliseconds * attempt;
+                Console.WriteLine($"[Gemini] Timeout at attempt {attempt}/{maxAttempts}. Retrying in {delay}ms...");
+                await Task.Delay(delay);
+            }
+            catch (HttpRequestException ex) when (attempt < maxAttempts && IsTransientStatusCode(ex.StatusCode))
+            {
+                var delay = settings.RetryDelayMilliseconds * attempt;
+                Console.WriteLine($"[Gemini] Transient HTTP error at attempt {attempt}/{maxAttempts}: {ex.StatusCode}. Retrying in {delay}ms...");
+                await Task.Delay(delay);
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsTransientStatusCode(HttpStatusCode? statusCode)
+    {
+        if (!statusCode.HasValue)
+        {
+            return true;
+        }
+
+        return statusCode == HttpStatusCode.TooManyRequests || (int)statusCode.Value >= 500;
+    }
+
+    private static string FilterSecurityContextForPackages(string securityContext, IEnumerable<string> packageNames)
+    {
+        if (string.IsNullOrWhiteSpace(securityContext))
+        {
+            return "[]";
+        }
+
+        var packageSet = new HashSet<string>(
+            packageNames.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()),
+            StringComparer.OrdinalIgnoreCase);
+
+        if (packageSet.Count == 0)
+        {
+            return "[]";
+        }
+
+        using var document = JsonDocument.Parse(securityContext, AppSettingsJsonOptions);
+        var matched = new List<JsonElement>();
+
+        foreach (var advisory in GetAdvisoriesFromSecurityContext(document.RootElement))
+        {
+            var packageName = TryGetPackageNameFromSecurityContext(advisory);
+
+            if (!string.IsNullOrWhiteSpace(packageName) && packageSet.Contains(packageName))
+            {
+                matched.Add(advisory.Clone());
+            }
+        }
+
+        return JsonSerializer.Serialize(matched, SerializerOptions);
     }
 
     private static async Task<GeminiResponse?> AnalyzeWithGemini(
@@ -351,6 +428,8 @@ Security reference data:
             settings.GenerateContentEndpointTemplate = ReadGeminiString(geminiSection, "GenerateContentEndpointTemplate", settings.GenerateContentEndpointTemplate);
             settings.RequestTimeoutSeconds = ReadGeminiInt(geminiSection, "RequestTimeoutSeconds", settings.RequestTimeoutSeconds);
             settings.MaxPackagesPerRequest = ReadGeminiInt(geminiSection, "MaxPackagesPerRequest", settings.MaxPackagesPerRequest);
+            settings.MaxRetryCount = ReadGeminiInt(geminiSection, "MaxRetryCount", settings.MaxRetryCount);
+            settings.RetryDelayMilliseconds = ReadGeminiInt(geminiSection, "RetryDelayMilliseconds", settings.RetryDelayMilliseconds);
         }
 
         ValidateGeminiSettings(settings);
@@ -378,6 +457,16 @@ Security reference data:
         {
             throw new GeminiConfigurationException("Konfigurasi 'Gemini:MaxPackagesPerRequest' harus lebih besar dari 0.");
         }
+
+        if (settings.MaxRetryCount < 0)
+        {
+            throw new GeminiConfigurationException("Konfigurasi 'Gemini:MaxRetryCount' tidak boleh negatif.");
+        }
+
+        if (settings.RetryDelayMilliseconds <= 0)
+        {
+            throw new GeminiConfigurationException("Konfigurasi 'Gemini:RetryDelayMilliseconds' harus lebih besar dari 0.");
+        }
     }
 
     private static string ReadGeminiString(JsonElement section, string propertyName, string currentValue)
@@ -403,13 +492,8 @@ Security reference data:
 
     private static IEnumerable<string> GetAppSettingsPaths()
     {
-        var baseLocalPath = Path.Combine(AppContext.BaseDirectory, "appsettings.local.json");
-        yield return baseLocalPath;
-
         var baseDirectoryPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
         yield return baseDirectoryPath;
-
-        var currentLocalPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.local.json");
 
         if (!string.Equals(baseLocalPath, currentLocalPath, StringComparison.OrdinalIgnoreCase))
         {
@@ -910,6 +994,8 @@ Security reference data:
         public string GenerateContentEndpointTemplate { get; set; } = string.Empty;
         public int RequestTimeoutSeconds { get; set; }
         public int MaxPackagesPerRequest { get; set; } = 15;
+        public int MaxRetryCount { get; set; } = 2;
+        public int RetryDelayMilliseconds { get; set; } = 2000;
     }
 
     private sealed class GeminiApiResponse
