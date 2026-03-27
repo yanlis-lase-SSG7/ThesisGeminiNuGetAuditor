@@ -45,11 +45,12 @@ public class Program
             }
 
             Console.WriteLine($"Found {packageReferences.Count} package(s) to analyze.");
-            var packageText = BuildPackagePrompt(packageReferences);
+            Console.WriteLine("Retrieving security reference context from local advisory database...");
+            var securityContext = SecurityReferenceProvider.GetSecurityContext(packageReferences.Select(x => x.PackageName).ToList());
             Console.WriteLine("Sending package list to Gemini for security analysis...");
 
             var analysisStopwatch = Stopwatch.StartNew();
-            var geminiResponse = await AnalyzeWithGemini(GetGeminiApiKey(), modelName, packageText);
+            var geminiResponse = await AnalyzeWithGemini(GetGeminiApiKey(), modelName, packageReferences, securityContext);
             analysisStopwatch.Stop();
 
             Console.WriteLine($"Gemini analysis completed in {FormatElapsed(analysisStopwatch.Elapsed)}.");
@@ -59,6 +60,7 @@ public class Program
             var normalizedResponse = NormalizeResponse(packageReferences, geminiResponse);
             Console.WriteLine("Saving audit dataset to local JSON file...");
             var outputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedResponse);
+            var metricsCsvPath = SaveScanMetricsCsv(csprojPath, normalizedResponse, securityContext);
             postProcessingStopwatch.Stop();
 
             var vulnerableCount = normalizedResponse.VulnerabilityReports.Count(x => x.IsVulnerable);
@@ -69,6 +71,7 @@ public class Program
             Console.WriteLine($"Post-processing completed in {FormatElapsed(postProcessingStopwatch.Elapsed)}.");
             Console.WriteLine($"Total execution time: {FormatElapsed(totalStopwatch.Elapsed)}.");
             Console.WriteLine($"Audit result saved to: {outputPath}");
+            Console.WriteLine($"Metrics CSV saved to: {metricsCsvPath}");
             return 0;
         }
         catch (GeminiConfigurationException ex)
@@ -88,9 +91,9 @@ public class Program
         }
     }
 
-    public static Task<GeminiResponse?> AnalyzeWithGemini(string packageText)
+    public static Task<GeminiResponse?> AnalyzeWithGemini(IReadOnlyCollection<NuGetPackageReference> packageReferences, string securityContext)
     {
-        return AnalyzeWithGemini(GetGeminiApiKey(), GetGeminiModelName(), packageText);
+        return AnalyzeWithGemini(GetGeminiApiKey(), GetGeminiModelName(), packageReferences, securityContext);
     }
 
     public static string GetGeminiApiKey()
@@ -168,10 +171,18 @@ public class Program
         return DefaultGeminiModelName;
     }
 
-    public static async Task<GeminiResponse?> AnalyzeWithGemini(string apiKey, string modelName, string packageText)
+    public static async Task<GeminiResponse?> AnalyzeWithGemini(
+        string apiKey,
+        string modelName,
+        IReadOnlyCollection<NuGetPackageReference> packageReferences,
+        string securityContext)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        ArgumentNullException.ThrowIfNull(packageReferences);
+        ArgumentException.ThrowIfNullOrWhiteSpace(securityContext);
+
+        var packageText = BuildPackagePrompt(packageReferences);
         ArgumentException.ThrowIfNullOrWhiteSpace(packageText);
 
         using var httpClient = new HttpClient();
@@ -196,7 +207,9 @@ The JSON must match this exact C# model structure and property names:
       "IsVulnerable": true,
       "CVE_ID": "string",
       "Severity": "string",
-      "MitigationPlan": "string"
+      "MitigationPlan": "string",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "string"
     }
   ]
 }
@@ -207,9 +220,15 @@ Rules:
 - Return one item per package.
 - Use empty string for unknown string values.
 - Use false for `IsVulnerable` when no known vulnerability is identified.
+- Set `IsGroundedInReference` to true only when the finding exists in the provided security reference data.
+- If a package is not in the reference, set `IsVulnerable` to false, `IsGroundedInReference` to false, and `Severity` to "Unknown".
+- Compare these local packages with the provided security reference data. Only flag vulnerabilities if they exist in the reference. If a package is not in the reference, mark it as Unknown. Provide a mitigation plan based on .NET 8/9 security standards.
 
-Analyze these NuGet packages:
+Local packages:
 {{packageText}}
+
+Security reference data:
+{{securityContext}}
 """;
 
         var requestBody = new
@@ -514,6 +533,180 @@ Analyze these NuGet packages:
 
         File.WriteAllText(outputFilePath, JsonSerializer.Serialize(sessionRecord, SerializerOptions));
         return outputFilePath;
+    }
+
+    private static string SaveScanMetricsCsv(
+        string csprojPath,
+        GeminiResponse geminiResponse,
+        string securityContext)
+    {
+        var outputDirectory = Path.Combine(GetApplicationRootDirectory(), "audit-results");
+        Directory.CreateDirectory(outputDirectory);
+
+        var projectName = Path.GetFileNameWithoutExtension(csprojPath);
+        var outputFilePath = Path.Combine(
+            outputDirectory,
+            $"metrics-{projectName}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv");
+
+        var referencedPackages = ExtractReferencedPackageNames(securityContext);
+        var builder = new StringBuilder();
+        builder.AppendLine("ProjectName,PackageName,Gemini_Detected,Reference_Exists,Match_Result");
+
+        foreach (var report in geminiResponse.VulnerabilityReports)
+        {
+            var packageName = report.PackageName ?? string.Empty;
+            var geminiDetected = report.IsVulnerable;
+            var referenceExists = !string.IsNullOrWhiteSpace(packageName) && referencedPackages.Contains(packageName);
+            var matchResult = GetMatchResult(geminiDetected, referenceExists);
+
+            builder.AppendLine(string.Join(",",
+                EscapeCsv(projectName),
+                EscapeCsv(packageName),
+                geminiDetected ? "true" : "false",
+                referenceExists ? "true" : "false",
+                EscapeCsv(matchResult)));
+        }
+
+        File.WriteAllText(outputFilePath, builder.ToString());
+        return outputFilePath;
+    }
+
+    private static HashSet<string> ExtractReferencedPackageNames(string securityContext)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (string.IsNullOrWhiteSpace(securityContext))
+        {
+            return result;
+        }
+
+        using var document = JsonDocument.Parse(securityContext);
+
+        foreach (var advisory in GetAdvisoriesFromSecurityContext(document.RootElement))
+        {
+            var packageName = TryGetPackageNameFromSecurityContext(advisory);
+
+            if (!string.IsNullOrWhiteSpace(packageName))
+            {
+                result.Add(packageName);
+            }
+        }
+
+        return result;
+    }
+
+    private static IEnumerable<JsonElement> GetAdvisoriesFromSecurityContext(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in root.EnumerateArray())
+            {
+                yield return item;
+            }
+
+            yield break;
+        }
+
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            yield break;
+        }
+
+        if (root.TryGetProperty("advisories", out var advisories) && advisories.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in advisories.EnumerateArray())
+            {
+                yield return item;
+            }
+
+            yield break;
+        }
+
+        if (root.TryGetProperty("vulnerabilities", out var vulnerabilities) && vulnerabilities.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in vulnerabilities.EnumerateArray())
+            {
+                yield return item;
+            }
+        }
+    }
+
+    private static string TryGetPackageNameFromSecurityContext(JsonElement advisory)
+    {
+        if (advisory.ValueKind != JsonValueKind.Object)
+        {
+            return string.Empty;
+        }
+
+        if (advisory.TryGetProperty("PackageName", out var packageName) && packageName.ValueKind == JsonValueKind.String)
+        {
+            return packageName.GetString() ?? string.Empty;
+        }
+
+        if (advisory.TryGetProperty("packageName", out var camelCasePackageName) && camelCasePackageName.ValueKind == JsonValueKind.String)
+        {
+            return camelCasePackageName.GetString() ?? string.Empty;
+        }
+
+        if (advisory.TryGetProperty("package", out var package))
+        {
+            if (package.ValueKind == JsonValueKind.String)
+            {
+                return package.GetString() ?? string.Empty;
+            }
+
+            if (package.ValueKind == JsonValueKind.Object)
+            {
+                if (package.TryGetProperty("name", out var nestedName) && nestedName.ValueKind == JsonValueKind.String)
+                {
+                    return nestedName.GetString() ?? string.Empty;
+                }
+
+                if (package.TryGetProperty("Name", out var nestedPascalName) && nestedPascalName.ValueKind == JsonValueKind.String)
+                {
+                    return nestedPascalName.GetString() ?? string.Empty;
+                }
+            }
+        }
+
+        if (advisory.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String)
+        {
+            return name.GetString() ?? string.Empty;
+        }
+
+        return string.Empty;
+    }
+
+    private static string GetMatchResult(bool geminiDetected, bool referenceExists)
+    {
+        if (geminiDetected && referenceExists)
+        {
+            return "True Positive";
+        }
+
+        if (geminiDetected && !referenceExists)
+        {
+            return "False Positive";
+        }
+
+        if (!geminiDetected && referenceExists)
+        {
+            return "False Negative";
+        }
+
+        return "True Negative";
+    }
+
+    private static string EscapeCsv(string value)
+    {
+        var safeValue = value ?? string.Empty;
+
+        if (!safeValue.Contains(',') && !safeValue.Contains('"') && !safeValue.Contains('\n') && !safeValue.Contains('\r'))
+        {
+            return safeValue;
+        }
+
+        return $"\"{safeValue.Replace("\"", "\"\"")}\"";
     }
 
     private static string GetApplicationRootDirectory()
