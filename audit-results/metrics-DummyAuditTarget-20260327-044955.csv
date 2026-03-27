@@ -1,4 +1,0 @@
-ProjectName,PackageName,Gemini_Detected,Reference_Exists,Match_Result
-DummyAuditTarget,Newtonsoft.Json,false,true,False Negative
-DummyAuditTarget,Serilog,false,false,True Negative
-DummyAuditTarget,Dapper,false,false,True Negative
