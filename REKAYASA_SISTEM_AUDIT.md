@@ -1,20 +1,21 @@
-# Dokumentasi Instrumen Penelitian: NuGet Security Auditor (Gemini Pro)
+# Dokumentasi Instrumen Penelitian: RAG-Based NuGet Security Auditor
 
 ## 1. Tujuan Sistem
-[cite_start]Membangun aplikasi konsol .NET 8 yang berfungsi sebagai instrumen pengumpul data kuantitatif untuk mengukur akurasi Gemini Pro dalam mendeteksi kerentanan keamanan (CVE) pada dependensi NuGet[cite: 1, 13, 16].
+[cite_start]Membangun instrumen penelitian kuantitatif berbasis .NET 8 untuk menguji akurasi deteksi kerentanan NuGet menggunakan arsitektur Retrieval-Augmented Generation (RAG)[cite: 92, 98].
 
-## 2. Fungsi Utama
-1. [cite_start]**Extraction**: Membaca file `.csproj` menggunakan XML parsing untuk mengambil daftar package dan versi[cite: 13, 15].
-2. [cite_start]**Analysis**: Mengirimkan daftar tersebut ke Gemini Pro API dengan prompt yang meminta output JSON terstruktur[cite: 13, 15].
-3. [cite_start]**Logging**: Menyimpan hasil audit ke dalam file JSON lokal sebagai dataset penelitian.
+## 2. Arsitektur Solusi (Hulu ke Hilir)
+1. [cite_start]**Extraction**: Membaca file `.csproj` untuk mengambil daftar `PackageReference`[cite: 78].
+2. [cite_start]**Retrieval (The RAG Part)**: Sistem harus mencari referensi data keamanan nyata (seperti GitHub Advisory Database atau NIST) sebagai "Ground Truth" untuk membatasi halusinasi AI[cite: 38, 40].
+3. [cite_start]**Augmentation**: Menggabungkan daftar package dari user dengan data referensi keamanan ke dalam satu prompt terstruktur[cite: 39].
+4. [cite_start]**Generation**: Gemini Pro melakukan reasoning untuk menentukan apakah package tersebut benar-benar berisiko dalam konteks .NET 8/9[cite: 96].
 
-## 3. Batasan Teknis
-- Target Framework: .NET 8.0.
-- AI Model: Gemini Pro (via REST API).
-- [cite_start]Output: Harus sesuai dengan schema `VulnerabilityReport` (PackageName, CurrentVersion, IsVulnerable, CVE_ID, Severity, MitigationPlan)[cite: 14, 16].
+## 3. Spesifikasi Teknis
+- [cite_start]**Target Framework**: .NET 8.0[cite: 66].
+- [cite_start]**AI Model**: Gemini Pro (Long-context reasoning enabled)[cite: 36].
+- [cite_start]**Anti-Hallucination Guardrail**: Prompt harus memaksa model untuk menjawab "Unknown" jika data tidak ditemukan di referensi eksternal[cite: 40].
 
-## 4. Metrik Keberhasilan (Research Metrics)
-Data yang dihasilkan akan digunakan untuk menghitung:
-- **Precision**: Akurasi temuan benar (True Positives).
-- **Recall**: Kemampuan menemukan semua celah yang ada di benchmark.
-- [cite_start]**F1-Score**: Keseimbangan performa deteksi[cite: 16].
+## 4. Metrik Penelitian (Performance Metrics)
+Data output harus memungkinkan penghitungan statistik:
+- [cite_start]**Precision**: Rasio temuan celah keamanan yang benar-benar valid[cite: 9, 81].
+- [cite_start]**Recall**: Kemampuan sistem menemukan seluruh celah yang terdaftar di database resmi[cite: 9, 81].
+- [cite_start]**F1-Score**: Keseimbangan antara akurasi dan jangkauan deteksi[cite: 8, 100].
