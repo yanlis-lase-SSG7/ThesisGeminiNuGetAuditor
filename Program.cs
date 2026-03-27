@@ -9,6 +9,8 @@ namespace GeminiNuGetAuditor;
 
 public class Program
 {
+    private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
+    private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -101,20 +103,20 @@ public class Program
 
     private static string GetGeminiApiKey(GeminiSettings settings)
     {
-        var apiKey = Environment.GetEnvironmentVariable(settings.ApiKeyEnvironmentVariableName);
+        var apiKey = Environment.GetEnvironmentVariable(GeminiApiKeyEnvironmentVariableName);
 
-        if (IsUsableApiKey(apiKey, settings.ApiKeyPlaceholder))
+        if (IsUsableApiKey(apiKey))
         {
             return apiKey!;
         }
 
-        if (IsUsableApiKey(settings.ApiKey, settings.ApiKeyPlaceholder))
+        if (IsUsableApiKey(settings.ApiKey))
         {
             return settings.ApiKey;
         }
 
         throw new GeminiConfigurationException(
-            $"Gemini API key tidak ditemukan. Set environment variable '{settings.ApiKeyEnvironmentVariableName}' atau isi 'Gemini:ApiKey' pada appsettings.local.json/appsettings.json dengan nilai valid.");
+            $"Gemini API key tidak ditemukan. Set environment variable '{GeminiApiKeyEnvironmentVariableName}' atau isi 'Gemini:ApiKey' pada appsettings.local.json/appsettings.json dengan nilai valid.");
     }
 
     public static string GetGeminiModelName()
@@ -124,7 +126,7 @@ public class Program
 
     private static string GetGeminiModelName(GeminiSettings settings)
     {
-        var configuredModelName = Environment.GetEnvironmentVariable(settings.ModelEnvironmentVariableName);
+        var configuredModelName = Environment.GetEnvironmentVariable(GeminiModelEnvironmentVariableName);
 
         if (!string.IsNullOrWhiteSpace(configuredModelName))
         {
@@ -136,12 +138,7 @@ public class Program
             return settings.Model;
         }
 
-        if (!string.IsNullOrWhiteSpace(settings.DefaultModelName))
-        {
-            return settings.DefaultModelName;
-        }
-
-        throw new GeminiConfigurationException("Konfigurasi model Gemini tidak valid. Isi 'Gemini:Model' atau 'Gemini:DefaultModelName'.");
+        throw new GeminiConfigurationException("Konfigurasi model Gemini tidak valid. Isi 'Gemini:Model'.");
     }
 
     private static async Task<GeminiResponse?> AnalyzeWithGemini(
@@ -239,7 +236,7 @@ Security reference data:
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 throw new GeminiConfigurationException(
-                    $"Model Gemini '{modelName}' tidak ditemukan. Coba gunakan model lain seperti '{settings.DefaultModelName}' melalui environment variable '{settings.ModelEnvironmentVariableName}' atau konfigurasi 'Gemini:Model'. Response: {TruncateForDisplay(responseContent)}");
+                    $"Model Gemini '{modelName}' tidak ditemukan. Coba gunakan model lain melalui environment variable '{GeminiModelEnvironmentVariableName}' atau konfigurasi 'Gemini:Model'. Response: {TruncateForDisplay(responseContent)}");
             }
 
             response.EnsureSuccessStatusCode();
@@ -281,10 +278,6 @@ Security reference data:
 
             settings.ApiKey = ReadGeminiString(geminiSection, "ApiKey", settings.ApiKey);
             settings.Model = ReadGeminiString(geminiSection, "Model", settings.Model);
-            settings.ApiKeyEnvironmentVariableName = ReadGeminiString(geminiSection, "ApiKeyEnvironmentVariableName", settings.ApiKeyEnvironmentVariableName);
-            settings.ModelEnvironmentVariableName = ReadGeminiString(geminiSection, "ModelEnvironmentVariableName", settings.ModelEnvironmentVariableName);
-            settings.DefaultModelName = ReadGeminiString(geminiSection, "DefaultModelName", settings.DefaultModelName);
-            settings.ApiKeyPlaceholder = ReadGeminiString(geminiSection, "ApiKeyPlaceholder", settings.ApiKeyPlaceholder);
             settings.GenerateContentEndpointTemplate = ReadGeminiString(geminiSection, "GenerateContentEndpointTemplate", settings.GenerateContentEndpointTemplate);
             settings.RequestTimeoutSeconds = ReadGeminiInt(geminiSection, "RequestTimeoutSeconds", settings.RequestTimeoutSeconds);
         }
@@ -295,14 +288,9 @@ Security reference data:
 
     private static void ValidateGeminiSettings(GeminiSettings settings)
     {
-        if (string.IsNullOrWhiteSpace(settings.ApiKeyEnvironmentVariableName))
+        if (string.IsNullOrWhiteSpace(settings.Model))
         {
-            throw new GeminiConfigurationException("Konfigurasi 'Gemini:ApiKeyEnvironmentVariableName' wajib diisi.");
-        }
-
-        if (string.IsNullOrWhiteSpace(settings.ModelEnvironmentVariableName))
-        {
-            throw new GeminiConfigurationException("Konfigurasi 'Gemini:ModelEnvironmentVariableName' wajib diisi.");
+            throw new GeminiConfigurationException("Konfigurasi 'Gemini:Model' wajib diisi.");
         }
 
         if (string.IsNullOrWhiteSpace(settings.GenerateContentEndpointTemplate) || !settings.GenerateContentEndpointTemplate.Contains("{0}", StringComparison.Ordinal))
@@ -775,10 +763,9 @@ Security reference data:
         return baseDirectoryRoot?.FullName ?? Directory.GetCurrentDirectory();
     }
 
-    private static bool IsUsableApiKey(string? apiKey, string? placeholder)
+    private static bool IsUsableApiKey(string? apiKey)
     {
-        return !string.IsNullOrWhiteSpace(apiKey) &&
-               !string.Equals(apiKey, placeholder, StringComparison.OrdinalIgnoreCase);
+        return !string.IsNullOrWhiteSpace(apiKey);
     }
 
     private static string ExtractJsonPayload(string responseText)
@@ -836,10 +823,6 @@ Security reference data:
     {
         public string ApiKey { get; set; } = string.Empty;
         public string Model { get; set; } = string.Empty;
-        public string ApiKeyEnvironmentVariableName { get; set; } = string.Empty;
-        public string ModelEnvironmentVariableName { get; set; } = string.Empty;
-        public string DefaultModelName { get; set; } = string.Empty;
-        public string ApiKeyPlaceholder { get; set; } = string.Empty;
         public string GenerateContentEndpointTemplate { get; set; } = string.Empty;
         public int RequestTimeoutSeconds { get; set; }
     }

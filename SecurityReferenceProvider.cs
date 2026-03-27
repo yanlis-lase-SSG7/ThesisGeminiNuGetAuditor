@@ -6,6 +6,7 @@ namespace GeminiNuGetAuditor;
 
 public static class SecurityReferenceProvider
 {
+    private const string GitHubTokenEnvironmentVariableName = "GITHUB_TOKEN";
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         WriteIndented = true
@@ -190,7 +191,7 @@ public static class SecurityReferenceProvider
             return settings.GitHubToken;
         }
 
-        return Environment.GetEnvironmentVariable(settings.GitHubTokenEnvironmentVariableName) ?? string.Empty;
+        return Environment.GetEnvironmentVariable(GitHubTokenEnvironmentVariableName) ?? string.Empty;
     }
 
     private static SecurityReferenceSettings GetSecurityReferenceSettings()
@@ -215,7 +216,6 @@ public static class SecurityReferenceProvider
             settings.AdvisoryDbFileName = ReadString(section, "AdvisoryDbFileName", settings.AdvisoryDbFileName);
             settings.GitHubGraphQlUrl = ReadString(section, "GitHubGraphQlUrl", settings.GitHubGraphQlUrl);
             settings.GitHubGraphQlNuGetQuery = ReadString(section, "GitHubGraphQlNuGetQuery", settings.GitHubGraphQlNuGetQuery);
-            settings.GitHubTokenEnvironmentVariableName = ReadString(section, "GitHubTokenEnvironmentVariableName", settings.GitHubTokenEnvironmentVariableName);
             settings.GitHubToken = ReadString(section, "GitHubToken", settings.GitHubToken);
             settings.GitHubUserAgentProductName = ReadString(section, "GitHubUserAgentProductName", settings.GitHubUserAgentProductName);
             settings.GitHubUserAgentProductVersion = ReadString(section, "GitHubUserAgentProductVersion", settings.GitHubUserAgentProductVersion);
@@ -241,11 +241,6 @@ public static class SecurityReferenceProvider
         if (string.IsNullOrWhiteSpace(settings.GitHubGraphQlNuGetQuery))
         {
             throw new InvalidOperationException("Konfigurasi 'SecurityReference:GitHubGraphQlNuGetQuery' wajib diisi.");
-        }
-
-        if (string.IsNullOrWhiteSpace(settings.GitHubTokenEnvironmentVariableName))
-        {
-            throw new InvalidOperationException("Konfigurasi 'SecurityReference:GitHubTokenEnvironmentVariableName' wajib diisi.");
         }
 
         if (string.IsNullOrWhiteSpace(settings.GitHubUserAgentProductName) || string.IsNullOrWhiteSpace(settings.GitHubUserAgentProductVersion))
@@ -431,7 +426,6 @@ public static class SecurityReferenceProvider
         public string AdvisoryDbFileName { get; set; } = string.Empty;
         public string GitHubGraphQlUrl { get; set; } = string.Empty;
         public string GitHubGraphQlNuGetQuery { get; set; } = string.Empty;
-        public string GitHubTokenEnvironmentVariableName { get; set; } = string.Empty;
         public string GitHubToken { get; set; } = string.Empty;
         public string GitHubUserAgentProductName { get; set; } = string.Empty;
         public string GitHubUserAgentProductVersion { get; set; } = string.Empty;
