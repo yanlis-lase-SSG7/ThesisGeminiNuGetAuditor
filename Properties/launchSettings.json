@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "GeminiNuGetAuditor": {
+      "commandName": "Project",
+      "commandLineArgs": "-- compare \"D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\DummyAuditTarget\\DummyAuditTarget.csproj\""
+    }
+  }
+}

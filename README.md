@@ -10,7 +10,7 @@ Project ini dibuat untuk:
 - mengambil **security reference data** sebagai ground truth dari beberapa sumber (local file, GitHub GraphQL API, fallback sample)
 - mengirim package + konteks referensi ke Gemini untuk analisis terarah
 - menurunkan risiko halusinasi dengan aturan "Unknown jika tidak ada di referensi"
-- menyimpan hasil audit ke JSON dan CSV untuk analisis kuantitatif (Precision, Recall, F1-Score)
+- menyimpan hasil audit ke JSON dan Excel untuk analisis kuantitatif (Accuracy, Precision, Recall, F1-Score)
 
 ## Business Flow Singkat
 
@@ -27,7 +27,8 @@ Berikut alur bisnis utama project ini:
 6. Hasil dinormalisasi agar 1 package = 1 report.
 7. Aplikasi menyimpan:
    - dataset audit `.json`
-   - dataset metrik `.csv` untuk evaluasi klasifikasi
+   - dataset metrik `.xlsx` (Summary, Detail, Summary Details)
+   - untuk mode compare: workbook komparasi `RAG vs Non-RAG`
 
 ## Detail Alur dari Sudut Pandang User
 
@@ -54,6 +55,8 @@ Setiap package memiliki hasil seperti:
 - `IsGroundedInReference`
 - `ReasoningTrace` (EN)
 - `ReasoningTraceIndonesia` (ID)
+
+`AuditSessionRecord` juga menyertakan `VulnerabilityReportFieldDescriptions` yang berisi deskripsi field dan arti value (khusus field kategorikal/boolean).
 
 ## Detail Alur dari Sudut Pandang Technician
 
@@ -114,8 +117,23 @@ Properti:
 ### Output utama
 
 - file JSON lokal berisi dataset audit lengkap (`AuditSessionRecord`)
-- file CSV metrik klasifikasi per package untuk analisis Precision, Recall, dan F1-Score
+- file Excel metrik klasifikasi per package untuk analisis Accuracy, Precision, Recall, dan F1-Score
 - diagnostics detail di console untuk status retrieval source dan status akses Gemini API
+
+### Output mode compare (`--compare`)
+
+- `audit-<project>-rag-<timestamp>.json`
+- `audit-<project>-nonrag-<timestamp>.json`
+- `metrics-<project>-compare-<timestamp>.xlsx`
+
+Workbook compare berisi sheet `Model Comparison` dengan kriteria penelitian:
+
+- `Precision(RAG) > Precision(Non-RAG)`
+- `FP Ratio(RAG) < FP Ratio(Non-RAG)`
+
+Catatan interpretasi:
+- Status `FAIL` berarti **minimal satu** kriteria di atas tidak terpenuhi pada run tersebut.
+- Jika Non-RAG tidak menghasilkan prediksi positif sama sekali (`TP+FP = 0`), maka `FP Ratio Non-RAG = 0`; pada kondisi ini, sangat sulit bagi RAG untuk memenuhi syarat `FP Ratio(RAG) < FP Ratio(Non-RAG)` kecuali desain evaluasi baseline disesuaikan.
 
 ## Gambaran Arsitektur Saat Ini
 
@@ -134,6 +152,19 @@ Jika ingin memahami project ini dalam 30 detik:
 - project mengambil ground truth dari local file/GitHub API/fallback sample
 - package + referensi dikirim ke Gemini (RAG prompt)
 - hasil audit menyertakan field bilingual EN-ID untuk severity, mitigation, dan reasoning
-- output disimpan ke JSON + CSV, dan console menampilkan diagnostics akses API
+- output disimpan ke JSON + Excel, dan console menampilkan diagnostics akses API
 
-Last Updated : 27 Maret 2026
+## Cara Menjalankan
+
+- Non-RAG:
+  - `GeminiNuGetAuditor.exe --mode=nonrag "D:\Project S2\yanlis-lase-SSG7\ThesisGeminiNuGetAuditor\samples\DummyAuditTarget\DummyAuditTarget.csproj"`
+- RAG:
+  - `GeminiNuGetAuditor.exe --mode=rag "D:\Project S2\yanlis-lase-SSG7\ThesisGeminiNuGetAuditor\samples\DummyAuditTarget\DummyAuditTarget.csproj"`
+- Compare:
+  - `GeminiNuGetAuditor.exe --compare "D:\Project S2\yanlis-lase-SSG7\ThesisGeminiNuGetAuditor\samples\DummyAuditTarget\DummyAuditTarget.csproj"`
+
+Tips saat debugging di Visual Studio:
+- isi argumen di **Debug > Command line arguments**
+- saat prompt `Masukkan path file .csproj...`, masukkan **path saja** bila argumen tidak dikirim dari profile debug
+
+Last Updated : 05 Mei 2026

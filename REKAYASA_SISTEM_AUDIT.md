@@ -1,21 +1,71 @@
 # Dokumentasi Instrumen Penelitian: RAG-Based NuGet Security Auditor
 
 ## 1. Tujuan Sistem
-[cite_start]Membangun instrumen penelitian kuantitatif berbasis .NET 10 untuk menguji akurasi deteksi kerentanan NuGet menggunakan arsitektur Retrieval-Augmented Generation (RAG)[cite: 92, 98].
+Membangun instrumen penelitian kuantitatif berbasis .NET 10 untuk menguji kinerja deteksi kerentanan NuGet menggunakan arsitektur Retrieval-Augmented Generation (RAG), lalu membandingkannya dengan baseline Non-RAG.
 
 ## 2. Arsitektur Solusi (Hulu ke Hilir)
-1. [cite_start]**Extraction**: Membaca file `.csproj` untuk mengambil daftar `PackageReference`[cite: 78].
-2. [cite_start]**Retrieval (The RAG Part)**: Sistem harus mencari referensi data keamanan nyata (seperti GitHub Advisory Database atau NIST) sebagai "Ground Truth" untuk membatasi halusinasi AI[cite: 38, 40].
-3. [cite_start]**Augmentation**: Menggabungkan daftar package dari user dengan data referensi keamanan ke dalam satu prompt terstruktur[cite: 39].
-4. [cite_start]**Generation**: Gemini Pro melakukan reasoning untuk menentukan apakah package tersebut benar-benar berisiko dalam konteks .NET 10[cite: 96].
+1. **Extraction**: Membaca file `.csproj` untuk mengambil daftar `PackageReference`.
+2. **Retrieval (RAG Part)**: Sistem mengambil referensi data keamanan nyata (local advisory file, GitHub Advisory API, fallback advisories) sebagai ground truth.
+3. **Augmentation**: Menggabungkan daftar package dan konteks referensi keamanan dalam prompt terstruktur.
+4. **Generation**: Gemini melakukan penilaian kerentanan package.
+5. **Normalization & Persistence**: Hasil dinormalisasi (1 package = 1 report), disimpan ke JSON, lalu dibentuk metrik evaluasi dalam Excel.
 
 ## 3. Spesifikasi Teknis
-- [cite_start]**Target Framework**: .NET 10[cite: 66].
-- [cite_start]**AI Model**: Gemini Pro (Long-context reasoning enabled)[cite: 36].
-- [cite_start]**Anti-Hallucination Guardrail**: Prompt harus memaksa model untuk menjawab "Unknown" jika data tidak ditemukan di referensi eksternal[cite: 40].
+- **Target Framework**: .NET 10.
+- **AI Model**: Gemini (`gemini-flash-latest` secara default, configurable).
+- **Guardrail Anti-Halusinasi**: Jika package tidak ditemukan pada referensi, model diarahkan untuk menandai `IsVulnerable=false`, `IsGroundedInReference=false`, dan severity Unknown.
+- **Execution Mode**:
+  - `--mode=rag`
+  - `--mode=nonrag`
+  - `--compare` (menjalankan RAG + Non-RAG pada dataset yang sama dalam satu eksekusi)
 
 ## 4. Metrik Penelitian (Performance Metrics)
-Data output harus memungkinkan penghitungan statistik:
-- [cite_start]**Precision**: Rasio temuan celah keamanan yang benar-benar valid[cite: 9, 81].
-- [cite_start]**Recall**: Kemampuan sistem menemukan seluruh celah yang terdaftar di database resmi[cite: 9, 81].
-- [cite_start]**F1-Score**: Keseimbangan antara akurasi dan jangkauan deteksi[cite: 8, 100].
+Evaluasi dihitung menggunakan confusion matrix:
+- **TP**: model menandai rentan dan package ada di referensi.
+- **FP**: model menandai rentan tapi package tidak ada di referensi.
+- **FN**: model tidak menandai rentan padahal package ada di referensi.
+- **TN**: model tidak menandai rentan dan package tidak ada di referensi.
+
+Rumus metrik:
+- **Accuracy** = (TP + TN) / (TP + TN + FP + FN)
+- **Precision** = TP / (TP + FP)
+- **Recall** = TP / (TP + FN)
+- **F1-Score** = 2 × (Precision × Recall) / (Precision + Recall)
+
+## 5. Kriteria Keberhasilan Penelitian
+Sesuai tujuan mitigasi halusinasi AI, penelitian dinyatakan berhasil apabila:
+1. **Precision(RAG) > Precision(Non-RAG)**
+2. **FP Ratio(RAG) < FP Ratio(Non-RAG)**
+
+dengan:
+- **FP Ratio** = FP / (TP + FP)
+
+Status komparasi pada sheet `Model Comparison`:
+- `PASS` untuk tiap kriteria bila terpenuhi
+- `Overall PASS` bila kedua kriteria terpenuhi
+- `FAIL` bila salah satu kriteria tidak terpenuhi
+
+## 6. Alasan Hasil Komparasi Bisa `FAIL`
+Hasil `FAIL` tidak selalu berarti pipeline salah implementasi. Beberapa penyebab empiris yang umum:
+1. **Baseline Non-RAG terlalu konservatif** (hampir tidak memprediksi positif), sehingga `FP` baseline = 0.
+2. Jika `TP+FP` pada baseline = 0, maka `FP Ratio baseline = 0`, sehingga syarat `FP Ratio(RAG) < FP Ratio(Non-RAG)` menjadi sangat ketat.
+3. Variasi respons LLM antar-run (stochasticity) dapat memengaruhi TP/FP jika parameter inferensi tidak dikunci ketat.
+4. Kualitas/kelengkapan context referensi memengaruhi grounding temuan.
+
+## 7. Artefak Output
+Untuk mode compare (`--compare`), sistem menghasilkan:
+- `audit-<project>-rag-<timestamp>.json`
+- `audit-<project>-nonrag-<timestamp>.json`
+- `metrics-<project>-compare-<timestamp>.xlsx`
+
+Workbook compare mencakup:
+- `Model Comparison`
+- `RAG Summary`, `RAG Detail`, `RAG Summary Details`
+- `NonRAG Summary`, `NonRAG Detail`, `NonRAG Summary Details`
+
+## 8. Catatan Metodologis
+Agar hasil komparasi lebih stabil dan representatif untuk publikasi:
+1. Jalankan eksperimen berulang (misalnya 5-10 kali) pada dataset yang sama.
+2. Laporkan rata-rata dan deviasi metrik.
+3. Gunakan set package uji yang memiliki distribusi kasus rentan/non-rentan yang seimbang.
+4. Dokumentasikan konfigurasi model, timeout, retry, dan sumber reference yang dipakai saat run.

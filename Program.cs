@@ -567,7 +567,9 @@ Security reference data:
 
     private static AuditMode ParseExecutionMode(string[] args)
     {
-        var modeArgument = args.FirstOrDefault(x => x.StartsWith("--mode=", StringComparison.OrdinalIgnoreCase));
+        var modeArgument = args.FirstOrDefault(x =>
+            x.StartsWith("--mode=", StringComparison.OrdinalIgnoreCase) ||
+            x.StartsWith("mode=", StringComparison.OrdinalIgnoreCase));
 
         if (string.IsNullOrWhiteSpace(modeArgument))
         {
@@ -586,17 +588,26 @@ Security reference data:
 
     private static bool HasFlag(IEnumerable<string> args, string flag)
     {
-        return args.Any(x => string.Equals(x, flag, StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrWhiteSpace(flag))
+        {
+            return false;
+        }
+
+        var normalizedFlag = flag.TrimStart('-');
+        return args.Any(x =>
+            string.Equals(x, flag, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(x.TrimStart('-'), normalizedFlag, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string ResolveCsprojPath(string[] args)
     {
-        var providedPath = args.FirstOrDefault(x => x.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
+        var providedPath = TryExtractCsprojPathFromTokens(args);
 
         if (string.IsNullOrWhiteSpace(providedPath))
         {
             Console.Write("Masukkan path file .csproj yang akan diaudit: ");
-            providedPath = Console.ReadLine();
+            var rawInput = Console.ReadLine();
+            providedPath = TryExtractCsprojPathFromRawInput(rawInput) ?? rawInput;
         }
 
         if (string.IsNullOrWhiteSpace(providedPath))
@@ -614,6 +625,55 @@ Security reference data:
         }
 
         return fullPath;
+    }
+
+    private static string? TryExtractCsprojPathFromRawInput(string? rawInput)
+    {
+        if (string.IsNullOrWhiteSpace(rawInput))
+        {
+            return null;
+        }
+
+        var trimmed = rawInput.Trim();
+
+        var quotedStart = trimmed.IndexOf('"');
+        if (quotedStart >= 0)
+        {
+            var quotedEnd = trimmed.LastIndexOf('"');
+            if (quotedEnd > quotedStart)
+            {
+                var quotedValue = trimmed.Substring(quotedStart + 1, quotedEnd - quotedStart - 1).Trim();
+                if (quotedValue.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+                {
+                    return quotedValue;
+                }
+            }
+        }
+
+        var csprojIndex = trimmed.IndexOf(".csproj", StringComparison.OrdinalIgnoreCase);
+        if (csprojIndex >= 0)
+        {
+            var startIndex = trimmed.LastIndexOf(' ', csprojIndex);
+            var candidate = (startIndex >= 0 ? trimmed[(startIndex + 1)..] : trimmed).Trim().Trim('"');
+            if (candidate.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+            {
+                return candidate;
+            }
+        }
+
+        var tokens = trimmed
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => x.Trim().Trim('"'))
+            .ToArray();
+
+        return TryExtractCsprojPathFromTokens(tokens);
+    }
+
+    private static string? TryExtractCsprojPathFromTokens(IEnumerable<string> tokens)
+    {
+        return tokens
+            .Select(x => x.Trim().Trim('"'))
+            .FirstOrDefault(x => x.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string TryResolveExistingPath(string providedPath)
