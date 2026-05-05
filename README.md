@@ -1,6 +1,6 @@
 # GeminiNuGetAuditor
 
-`GeminiNuGetAuditor` adalah aplikasi Console berbasis `.NET 8` untuk audit keamanan dependency NuGet pada file `.csproj` dengan pendekatan **Retrieval-Augmented Generation (RAG)**.
+`GeminiNuGetAuditor` adalah aplikasi Console berbasis `.NET 10` untuk audit keamanan dependency NuGet pada file `.csproj` dengan pendekatan **Retrieval-Augmented Generation (RAG)**.
 
 ## Tujuan Project
 

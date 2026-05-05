@@ -337,7 +337,7 @@ Rules:
 - Set `IsGroundedInReference` to true only when the finding exists in the provided security reference data.
 - If a package is not in the reference, set `IsVulnerable` to false, `IsGroundedInReference` to false, and `Severity`/`SeverityIndonesia` to "Unknown"/"Tidak diketahui".
 - Always fill bilingual fields: English and Indonesian versions for severity, mitigation plan, and reasoning trace.
-- Compare these local packages with the provided security reference data. Only flag vulnerabilities if they exist in the reference. If a package is not in the reference, mark it as Unknown. Provide a mitigation plan based on .NET 8/9 security standards.
+- Compare these local packages with the provided security reference data. Only flag vulnerabilities if they exist in the reference. If a package is not in the reference, mark it as Unknown. Provide a mitigation plan based on .NET 10 security standards.
 
 Local packages:
 {{packageText}}
