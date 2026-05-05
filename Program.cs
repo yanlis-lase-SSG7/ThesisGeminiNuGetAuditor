@@ -953,14 +953,38 @@ Security reference data:
         }
 
         var jsonStartIndex = trimmedResponse.IndexOf('{');
+
+        if (jsonStartIndex < 0)
+        {
+            return trimmedResponse;
+        }
+
+        var candidateJson = trimmedResponse[jsonStartIndex..];
+
+        try
+        {
+            var utf8 = Encoding.UTF8.GetBytes(candidateJson);
+            var reader = new Utf8JsonReader(utf8, isFinalBlock: true, state: default);
+            using var _ = JsonDocument.ParseValue(ref reader);
+            var bytesConsumed = (int)reader.BytesConsumed;
+
+            if (bytesConsumed > 0)
+            {
+                return candidateJson[..bytesConsumed];
+            }
+        }
+        catch
+        {
+        }
+
         var jsonEndIndex = trimmedResponse.LastIndexOf('}');
 
-        if (jsonStartIndex >= 0 && jsonEndIndex >= jsonStartIndex)
+        if (jsonEndIndex >= jsonStartIndex)
         {
             return trimmedResponse.Substring(jsonStartIndex, jsonEndIndex - jsonStartIndex + 1);
         }
 
-        return trimmedResponse;
+        return candidateJson;
     }
 
     private static string FormatElapsed(TimeSpan elapsed)
