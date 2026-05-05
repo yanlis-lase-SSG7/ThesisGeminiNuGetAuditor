@@ -10,6 +10,12 @@ namespace GeminiNuGetAuditor;
 
 public class Program
 {
+    private enum AuditMode
+    {
+        Rag,
+        NonRag
+    }
+
     private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
     private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
 
@@ -32,10 +38,13 @@ public class Program
         try
         {
             var geminiSettings = GetGeminiSettings();
+            var executionMode = ParseExecutionMode(args);
+            var compareMode = HasFlag(args, "--compare");
             var csprojPath = ResolveCsprojPath(args);
             var modelName = GetGeminiModelName(geminiSettings);
             Console.WriteLine($"Target project: {csprojPath}");
             Console.WriteLine($"Using Gemini model: {modelName}");
+            Console.WriteLine($"Execution mode: {(compareMode ? "compare" : executionMode.ToString())}");
             Console.WriteLine("Extracting NuGet packages...");
 
             var extractionStopwatch = Stopwatch.StartNew();
@@ -67,30 +76,82 @@ public class Program
             Console.WriteLine("Sending package list to Gemini for security analysis...");
 
             var analysisStopwatch = Stopwatch.StartNew();
+            string metricsExcelPath;
+
+            if (compareMode)
+            {
+                Console.WriteLine("[Compare] Running RAG analysis...");
+                var ragResponse = await AnalyzeWithGeminiWithBatching(
+                    GetGeminiApiKey(geminiSettings),
+                    modelName,
+                    packageReferences,
+                    securityContext,
+                    geminiSettings);
+
+                Console.WriteLine("[Compare] Running non-RAG analysis...");
+                var nonRagResponse = await AnalyzeWithGeminiWithBatching(
+                    GetGeminiApiKey(geminiSettings),
+                    modelName,
+                    packageReferences,
+                    "[]",
+                    geminiSettings);
+
+                analysisStopwatch.Stop();
+                Console.WriteLine($"Gemini analysis completed in {FormatElapsed(analysisStopwatch.Elapsed)}.");
+                Console.WriteLine("Gemini response received. Normalizing audit results...");
+
+                var postProcessingStopwatch = Stopwatch.StartNew();
+                var normalizedRag = NormalizeResponse(packageReferences, ragResponse);
+                var normalizedNonRag = NormalizeResponse(packageReferences, nonRagResponse);
+
+                Console.WriteLine("Saving audit datasets to local JSON files...");
+                var ragOutputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedRag, "rag");
+                var nonRagOutputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedNonRag, "nonrag");
+                metricsExcelPath = SaveComparisonMetricsExcel(csprojPath, normalizedRag, normalizedNonRag, securityContext);
+                postProcessingStopwatch.Stop();
+
+                var ragVulnerableCount = normalizedRag.VulnerabilityReports.Count(x => x.IsVulnerable);
+                var nonRagVulnerableCount = normalizedNonRag.VulnerabilityReports.Count(x => x.IsVulnerable);
+                totalStopwatch.Stop();
+
+                Console.WriteLine($"Comparison completed. {packageReferences.Count} package(s) were analyzed.");
+                Console.WriteLine($"RAG vulnerable detections: {ragVulnerableCount}.");
+                Console.WriteLine($"Non-RAG vulnerable detections: {nonRagVulnerableCount}.");
+                Console.WriteLine($"Post-processing completed in {FormatElapsed(postProcessingStopwatch.Elapsed)}.");
+                Console.WriteLine($"Total execution time: {FormatElapsed(totalStopwatch.Elapsed)}.");
+                Console.WriteLine($"RAG audit result saved to: {ragOutputPath}");
+                Console.WriteLine($"Non-RAG audit result saved to: {nonRagOutputPath}");
+                Console.WriteLine($"Comparison metrics Excel saved to: {metricsExcelPath}");
+                return 0;
+            }
+
+            var analysisContext = executionMode == AuditMode.Rag ? securityContext : "[]";
+            var modeTag = executionMode == AuditMode.Rag ? "rag" : "nonrag";
+
             var geminiResponse = await AnalyzeWithGeminiWithBatching(
                 GetGeminiApiKey(geminiSettings),
                 modelName,
                 packageReferences,
-                securityContext,
+                analysisContext,
                 geminiSettings);
             analysisStopwatch.Stop();
 
             Console.WriteLine($"Gemini analysis completed in {FormatElapsed(analysisStopwatch.Elapsed)}.");
             Console.WriteLine("Gemini response received. Normalizing audit results...");
 
-            var postProcessingStopwatch = Stopwatch.StartNew();
+            var singlePostProcessingStopwatch = Stopwatch.StartNew();
             var normalizedResponse = NormalizeResponse(packageReferences, geminiResponse);
             Console.WriteLine("Saving audit dataset to local JSON file...");
-            var outputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedResponse);
-            var metricsExcelPath = SaveScanMetricsExcel(csprojPath, normalizedResponse, securityContext);
-            postProcessingStopwatch.Stop();
+            var outputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedResponse, modeTag);
+            metricsExcelPath = SaveScanMetricsExcel(csprojPath, normalizedResponse, securityContext, modeTag);
+            singlePostProcessingStopwatch.Stop();
 
             var vulnerableCount = normalizedResponse.VulnerabilityReports.Count(x => x.IsVulnerable);
             totalStopwatch.Stop();
 
             Console.WriteLine($"Audit completed. {packageReferences.Count} package(s) were analyzed.");
             Console.WriteLine($"Potentially vulnerable packages detected: {vulnerableCount}.");
-            Console.WriteLine($"Post-processing completed in {FormatElapsed(postProcessingStopwatch.Elapsed)}.");
+            Console.WriteLine($"Post-processing completed in {FormatElapsed(singlePostProcessingStopwatch.Elapsed)}.");
             Console.WriteLine($"Total execution time: {FormatElapsed(totalStopwatch.Elapsed)}.");
             Console.WriteLine($"Audit result saved to: {outputPath}");
             Console.WriteLine($"Metrics Excel saved to: {metricsExcelPath}");
@@ -504,6 +565,30 @@ Security reference data:
         }
     }
 
+    private static AuditMode ParseExecutionMode(string[] args)
+    {
+        var modeArgument = args.FirstOrDefault(x => x.StartsWith("--mode=", StringComparison.OrdinalIgnoreCase));
+
+        if (string.IsNullOrWhiteSpace(modeArgument))
+        {
+            return AuditMode.Rag;
+        }
+
+        var value = modeArgument.Split('=', 2).LastOrDefault()?.Trim();
+
+        if (string.Equals(value, "nonrag", StringComparison.OrdinalIgnoreCase))
+        {
+            return AuditMode.NonRag;
+        }
+
+        return AuditMode.Rag;
+    }
+
+    private static bool HasFlag(IEnumerable<string> args, string flag)
+    {
+        return args.Any(x => string.Equals(x, flag, StringComparison.OrdinalIgnoreCase));
+    }
+
     private static string ResolveCsprojPath(string[] args)
     {
         var providedPath = args.FirstOrDefault(x => x.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
@@ -718,14 +803,15 @@ Security reference data:
         string csprojPath,
         string modelName,
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
-        GeminiResponse geminiResponse)
+        GeminiResponse geminiResponse,
+        string modeTag)
     {
         var outputDirectory = Path.Combine(GetApplicationRootDirectory(), "audit-results");
         Directory.CreateDirectory(outputDirectory);
 
         var outputFilePath = Path.Combine(
             outputDirectory,
-            $"audit-{Path.GetFileNameWithoutExtension(csprojPath)}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json");
+            $"audit-{Path.GetFileNameWithoutExtension(csprojPath)}-{modeTag}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json");
 
         var sessionRecord = new AuditSessionRecord
         {
@@ -744,7 +830,8 @@ Security reference data:
     private static string SaveScanMetricsExcel(
         string csprojPath,
         GeminiResponse geminiResponse,
-        string securityContext)
+        string securityContext,
+        string modeTag)
     {
         var outputDirectory = Path.Combine(GetApplicationRootDirectory(), "audit-results");
         Directory.CreateDirectory(outputDirectory);
@@ -752,7 +839,7 @@ Security reference data:
         var projectName = Path.GetFileNameWithoutExtension(csprojPath);
         var outputFilePath = Path.Combine(
             outputDirectory,
-            $"metrics-{projectName}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx");
+            $"metrics-{projectName}-{modeTag}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx");
 
         var referencedPackages = ExtractReferencedPackageNames(securityContext);
 
@@ -915,7 +1002,134 @@ Security reference data:
         GeminiResponse geminiResponse,
         string securityContext)
     {
-        return SaveScanMetricsExcel(csprojPath, geminiResponse, securityContext);
+        return SaveScanMetricsExcel(csprojPath, geminiResponse, securityContext, "single");
+    }
+
+    private static string SaveComparisonMetricsExcel(
+        string csprojPath,
+        GeminiResponse ragResponse,
+        GeminiResponse nonRagResponse,
+        string securityContext)
+    {
+        var outputDirectory = Path.Combine(GetApplicationRootDirectory(), "audit-results");
+        Directory.CreateDirectory(outputDirectory);
+
+        var projectName = Path.GetFileNameWithoutExtension(csprojPath);
+        var outputFilePath = Path.Combine(
+            outputDirectory,
+            $"metrics-{projectName}-compare-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx");
+
+        var referencedPackages = ExtractReferencedPackageNames(securityContext);
+
+        var ragTotal = ragResponse.VulnerabilityReports.Count;
+        var ragTp = ragResponse.VulnerabilityReports.Count(x => x.IsVulnerable && referencedPackages.Contains(x.PackageName ?? string.Empty));
+        var ragFp = ragResponse.VulnerabilityReports.Count(x => x.IsVulnerable && !referencedPackages.Contains(x.PackageName ?? string.Empty));
+        var ragFn = ragResponse.VulnerabilityReports.Count(x => !x.IsVulnerable && referencedPackages.Contains(x.PackageName ?? string.Empty));
+        var ragTn = ragTotal - ragTp - ragFp - ragFn;
+        var ragAccuracy = ragTotal > 0 ? (double)(ragTp + ragTn) / ragTotal : 0d;
+        var ragPrecision = ragTp + ragFp > 0 ? (double)ragTp / (ragTp + ragFp) : 0d;
+        var ragRecall = ragTp + ragFn > 0 ? (double)ragTp / (ragTp + ragFn) : 0d;
+        var ragF1 = ragPrecision + ragRecall > 0 ? 2 * ragPrecision * ragRecall / (ragPrecision + ragRecall) : 0d;
+        var ragFpRatio = ragTp + ragFp > 0 ? (double)ragFp / (ragTp + ragFp) : 0d;
+
+        var nonRagTotal = nonRagResponse.VulnerabilityReports.Count;
+        var nonRagTp = nonRagResponse.VulnerabilityReports.Count(x => x.IsVulnerable && referencedPackages.Contains(x.PackageName ?? string.Empty));
+        var nonRagFp = nonRagResponse.VulnerabilityReports.Count(x => x.IsVulnerable && !referencedPackages.Contains(x.PackageName ?? string.Empty));
+        var nonRagFn = nonRagResponse.VulnerabilityReports.Count(x => !x.IsVulnerable && referencedPackages.Contains(x.PackageName ?? string.Empty));
+        var nonRagTn = nonRagTotal - nonRagTp - nonRagFp - nonRagFn;
+        var nonRagAccuracy = nonRagTotal > 0 ? (double)(nonRagTp + nonRagTn) / nonRagTotal : 0d;
+        var nonRagPrecision = nonRagTp + nonRagFp > 0 ? (double)nonRagTp / (nonRagTp + nonRagFp) : 0d;
+        var nonRagRecall = nonRagTp + nonRagFn > 0 ? (double)nonRagTp / (nonRagTp + nonRagFn) : 0d;
+        var nonRagF1 = nonRagPrecision + nonRagRecall > 0 ? 2 * nonRagPrecision * nonRagRecall / (nonRagPrecision + nonRagRecall) : 0d;
+        var nonRagFpRatio = nonRagTp + nonRagFp > 0 ? (double)nonRagFp / (nonRagTp + nonRagFp) : 0d;
+
+        using var workbook = new XLWorkbook();
+
+        var comparisonSheet = workbook.Worksheets.Add("Model Comparison");
+        comparisonSheet.Cell(1, 1).Value = "Model Comparison (RAG vs Non-RAG)";
+        comparisonSheet.Cell(1, 1).Style.Font.Bold = true;
+        comparisonSheet.Cell(1, 1).Style.Font.FontSize = 16;
+
+        comparisonSheet.Cell(3, 1).Value = "Metric";
+        comparisonSheet.Cell(3, 2).Value = "RAG";
+        comparisonSheet.Cell(3, 3).Value = "Non-RAG";
+        comparisonSheet.Cell(3, 4).Value = "Delta (RAG-NonRAG)";
+
+        var metrics = new List<(string Name, double Rag, double NonRag, bool IsPercent)>
+        {
+            ("Accuracy", ragAccuracy, nonRagAccuracy, true),
+            ("Precision", ragPrecision, nonRagPrecision, true),
+            ("Recall", ragRecall, nonRagRecall, true),
+            ("F1-Score", ragF1, nonRagF1, true),
+            ("FP Ratio", ragFpRatio, nonRagFpRatio, true)
+        };
+
+        var row = 4;
+        foreach (var metric in metrics)
+        {
+            comparisonSheet.Cell(row, 1).Value = metric.Name;
+            comparisonSheet.Cell(row, 2).Value = metric.Rag;
+            comparisonSheet.Cell(row, 3).Value = metric.NonRag;
+            comparisonSheet.Cell(row, 4).Value = metric.Rag - metric.NonRag;
+
+            if (metric.IsPercent)
+            {
+                comparisonSheet.Range(row, 2, row, 4).Style.NumberFormat.Format = "0.00%";
+            }
+
+            row++;
+        }
+
+        comparisonSheet.Cell(row + 1, 1).Value = "Success Criteria";
+        comparisonSheet.Cell(row + 1, 1).Style.Font.Bold = true;
+        comparisonSheet.Cell(row + 2, 1).Value = "Precision(RAG) > Precision(Non-RAG)";
+        comparisonSheet.Cell(row + 2, 2).Value = ragPrecision > nonRagPrecision ? "PASS" : "FAIL";
+        comparisonSheet.Cell(row + 3, 1).Value = "FP Ratio(RAG) < FP Ratio(Non-RAG)";
+        comparisonSheet.Cell(row + 3, 2).Value = ragFpRatio < nonRagFpRatio ? "PASS" : "FAIL";
+        comparisonSheet.Cell(row + 4, 1).Value = "Overall";
+        comparisonSheet.Cell(row + 4, 2).Value = ragPrecision > nonRagPrecision && ragFpRatio < nonRagFpRatio ? "PASS" : "FAIL";
+
+        var header = comparisonSheet.Range(3, 1, 3, 4);
+        header.Style.Font.Bold = true;
+        header.Style.Fill.BackgroundColor = XLColor.LightGray;
+        comparisonSheet.Columns().AdjustToContents();
+
+        var ragSheetPath = SaveScanMetricsExcel(csprojPath, ragResponse, securityContext, "rag-temp");
+        var nonRagSheetPath = SaveScanMetricsExcel(csprojPath, nonRagResponse, securityContext, "nonrag-temp");
+
+        using (var ragWorkbook = new XLWorkbook(ragSheetPath))
+        {
+            ragWorkbook.Worksheet("Summary").CopyTo(workbook, "RAG Summary");
+            ragWorkbook.Worksheet("Detail").CopyTo(workbook, "RAG Detail");
+            ragWorkbook.Worksheet("Summary Details").CopyTo(workbook, "RAG Summary Details");
+        }
+
+        using (var nonRagWorkbook = new XLWorkbook(nonRagSheetPath))
+        {
+            nonRagWorkbook.Worksheet("Summary").CopyTo(workbook, "NonRAG Summary");
+            nonRagWorkbook.Worksheet("Detail").CopyTo(workbook, "NonRAG Detail");
+            nonRagWorkbook.Worksheet("Summary Details").CopyTo(workbook, "NonRAG Summary Details");
+        }
+
+        TryDeleteFile(ragSheetPath);
+        TryDeleteFile(nonRagSheetPath);
+
+        workbook.SaveAs(outputFilePath);
+        return outputFilePath;
+    }
+
+    private static void TryDeleteFile(string filePath)
+    {
+        try
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+        catch
+        {
+        }
     }
 
     private static HashSet<string> ExtractReferencedPackageNames(string securityContext)
@@ -1108,7 +1322,7 @@ Security reference data:
                     ["HIGH"] = "Kerentanan parah dengan risiko tinggi; disarankan mitigasi secepatnya.",
                     ["MODERATE"] = "Kerentanan tingkat sedang; perlu mitigasi terencana.",
                     ["LOW"] = "Kerentanan tingkat rendah; dampak terbatas namun tetap perlu diperhatikan.",
-                    ["Unknown"] = "Tingkat keparahan tidak dapat dipastikan dari referensi yang tersedia.",
+                    ["Unknown"] = "Tingkat keparahannya tidak dapat dipastikan dari referensi yang tersedia.",
                     [""] = "Nilai tidak diisi oleh model."
                 }
             },
