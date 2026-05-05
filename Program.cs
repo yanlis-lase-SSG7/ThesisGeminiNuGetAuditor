@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ClosedXML.Excel;
 
 namespace GeminiNuGetAuditor;
 
@@ -81,7 +82,7 @@ public class Program
             var normalizedResponse = NormalizeResponse(packageReferences, geminiResponse);
             Console.WriteLine("Saving audit dataset to local JSON file...");
             var outputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedResponse);
-            var metricsCsvPath = SaveScanMetricsCsv(csprojPath, normalizedResponse, securityContext);
+            var metricsExcelPath = SaveScanMetricsExcel(csprojPath, normalizedResponse, securityContext);
             postProcessingStopwatch.Stop();
 
             var vulnerableCount = normalizedResponse.VulnerabilityReports.Count(x => x.IsVulnerable);
@@ -92,7 +93,7 @@ public class Program
             Console.WriteLine($"Post-processing completed in {FormatElapsed(postProcessingStopwatch.Elapsed)}.");
             Console.WriteLine($"Total execution time: {FormatElapsed(totalStopwatch.Elapsed)}.");
             Console.WriteLine($"Audit result saved to: {outputPath}");
-            Console.WriteLine($"Metrics CSV saved to: {metricsCsvPath}");
+            Console.WriteLine($"Metrics Excel saved to: {metricsExcelPath}");
             return 0;
         }
         catch (GeminiConfigurationException ex)
@@ -732,14 +733,15 @@ Security reference data:
             SourceProjectPath = csprojPath,
             ModelName = modelName,
             ExtractedPackages = packageReferences.ToList(),
-            VulnerabilityReports = geminiResponse.VulnerabilityReports
+            VulnerabilityReports = geminiResponse.VulnerabilityReports,
+            VulnerabilityReportFieldDescriptions = GetVulnerabilityReportFieldDescriptions()
         };
 
         File.WriteAllText(outputFilePath, JsonSerializer.Serialize(sessionRecord, SerializerOptions));
         return outputFilePath;
     }
 
-    private static string SaveScanMetricsCsv(
+    private static string SaveScanMetricsExcel(
         string csprojPath,
         GeminiResponse geminiResponse,
         string securityContext)
@@ -750,11 +752,24 @@ Security reference data:
         var projectName = Path.GetFileNameWithoutExtension(csprojPath);
         var outputFilePath = Path.Combine(
             outputDirectory,
-            $"metrics-{projectName}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv");
+            $"metrics-{projectName}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx");
 
         var referencedPackages = ExtractReferencedPackageNames(securityContext);
-        var builder = new StringBuilder();
-        builder.AppendLine("ProjectName,PackageName,Gemini_Detected,Reference_Exists,Match_Result");
+
+        using var workbook = new XLWorkbook();
+
+        var detailSheet = workbook.Worksheets.Add("Detail");
+        detailSheet.Cell(1, 1).Value = "ProjectName";
+        detailSheet.Cell(1, 2).Value = "PackageName";
+        detailSheet.Cell(1, 3).Value = "CurrentVersion";
+        detailSheet.Cell(1, 4).Value = "Gemini_Detected";
+        detailSheet.Cell(1, 5).Value = "Reference_Exists";
+        detailSheet.Cell(1, 6).Value = "Match_Result";
+        detailSheet.Cell(1, 7).Value = "Severity";
+        detailSheet.Cell(1, 8).Value = "CVE_ID";
+        detailSheet.Cell(1, 9).Value = "Grounded";
+
+        var row = 2;
 
         foreach (var report in geminiResponse.VulnerabilityReports)
         {
@@ -763,16 +778,106 @@ Security reference data:
             var referenceExists = !string.IsNullOrWhiteSpace(packageName) && referencedPackages.Contains(packageName);
             var matchResult = GetMatchResult(geminiDetected, referenceExists);
 
-            builder.AppendLine(string.Join(",",
-                EscapeCsv(projectName),
-                EscapeCsv(packageName),
-                geminiDetected ? "true" : "false",
-                referenceExists ? "true" : "false",
-                EscapeCsv(matchResult)));
+            detailSheet.Cell(row, 1).Value = projectName;
+            detailSheet.Cell(row, 2).Value = packageName;
+            detailSheet.Cell(row, 3).Value = report.CurrentVersion ?? string.Empty;
+            detailSheet.Cell(row, 4).Value = geminiDetected ? "true" : "false";
+            detailSheet.Cell(row, 5).Value = referenceExists ? "true" : "false";
+            detailSheet.Cell(row, 6).Value = matchResult;
+            detailSheet.Cell(row, 7).Value = report.Severity ?? string.Empty;
+            detailSheet.Cell(row, 8).Value = report.CVE_ID ?? string.Empty;
+            detailSheet.Cell(row, 9).Value = report.IsGroundedInReference ? "true" : "false";
+            row++;
         }
 
-        File.WriteAllText(outputFilePath, builder.ToString());
+        var detailHeaderRange = detailSheet.Range(1, 1, 1, 9);
+        detailHeaderRange.Style.Font.Bold = true;
+        detailHeaderRange.Style.Fill.BackgroundColor = XLColor.LightGray;
+        detailSheet.SheetView.FreezeRows(1);
+
+        var detailDataRange = detailSheet.Range(2, 1, Math.Max(2, row - 1), 9);
+        detailDataRange.SetAutoFilter();
+
+        for (var i = 2; i < row; i++)
+        {
+            var matchValue = detailSheet.Cell(i, 6).GetString();
+            if (matchValue == "False Positive" || matchValue == "False Negative")
+            {
+                detailSheet.Range(i, 1, i, 9).Style.Fill.BackgroundColor = XLColor.LightPink;
+            }
+            else if (matchValue == "True Positive")
+            {
+                detailSheet.Range(i, 1, i, 9).Style.Fill.BackgroundColor = XLColor.LightGoldenrodYellow;
+            }
+        }
+
+        detailSheet.Columns().AdjustToContents();
+
+        var summarySheet = workbook.Worksheets.Add("Summary");
+        var total = geminiResponse.VulnerabilityReports.Count;
+        var truePositive = geminiResponse.VulnerabilityReports.Count(x => x.IsVulnerable && referencedPackages.Contains(x.PackageName ?? string.Empty));
+        var falsePositive = geminiResponse.VulnerabilityReports.Count(x => x.IsVulnerable && !referencedPackages.Contains(x.PackageName ?? string.Empty));
+        var falseNegative = geminiResponse.VulnerabilityReports.Count(x => !x.IsVulnerable && referencedPackages.Contains(x.PackageName ?? string.Empty));
+        var trueNegative = total - truePositive - falsePositive - falseNegative;
+        var groundedCount = geminiResponse.VulnerabilityReports.Count(x => x.IsGroundedInReference);
+
+        summarySheet.Cell(1, 1).Value = "Audit Metrics Summary";
+        summarySheet.Cell(1, 1).Style.Font.Bold = true;
+        summarySheet.Cell(1, 1).Style.Font.FontSize = 16;
+
+        summarySheet.Cell(3, 1).Value = "Project";
+        summarySheet.Cell(3, 2).Value = projectName;
+        summarySheet.Cell(4, 1).Value = "Total Packages";
+        summarySheet.Cell(4, 2).Value = total;
+        summarySheet.Cell(5, 1).Value = "Reference Packages";
+        summarySheet.Cell(5, 2).Value = referencedPackages.Count;
+        summarySheet.Cell(6, 1).Value = "Detected Vulnerable";
+        summarySheet.Cell(6, 2).Value = geminiResponse.VulnerabilityReports.Count(x => x.IsVulnerable);
+        summarySheet.Cell(7, 1).Value = "Grounded Findings";
+        summarySheet.Cell(7, 2).Value = groundedCount;
+
+        summarySheet.Cell(9, 1).Value = "Confusion Matrix";
+        summarySheet.Cell(9, 1).Style.Font.Bold = true;
+
+        summarySheet.Cell(10, 1).Value = "True Positive";
+        summarySheet.Cell(10, 2).Value = truePositive;
+        summarySheet.Cell(11, 1).Value = "False Positive";
+        summarySheet.Cell(11, 2).Value = falsePositive;
+        summarySheet.Cell(12, 1).Value = "False Negative";
+        summarySheet.Cell(12, 2).Value = falseNegative;
+        summarySheet.Cell(13, 1).Value = "True Negative";
+        summarySheet.Cell(13, 2).Value = trueNegative;
+
+        var accuracy = total > 0 ? (double)(truePositive + trueNegative) / total : 0d;
+        var precisionDenominator = truePositive + falsePositive;
+        var recallDenominator = truePositive + falseNegative;
+        var precision = precisionDenominator > 0 ? (double)truePositive / precisionDenominator : 0d;
+        var recall = recallDenominator > 0 ? (double)truePositive / recallDenominator : 0d;
+        var f1Denominator = precision + recall;
+        var f1 = f1Denominator > 0 ? 2 * precision * recall / f1Denominator : 0d;
+
+        summarySheet.Cell(15, 1).Value = "Accuracy";
+        summarySheet.Cell(15, 2).Value = accuracy;
+        summarySheet.Cell(16, 1).Value = "Precision";
+        summarySheet.Cell(16, 2).Value = precision;
+        summarySheet.Cell(17, 1).Value = "Recall";
+        summarySheet.Cell(17, 2).Value = recall;
+        summarySheet.Cell(18, 1).Value = "F1-Score";
+        summarySheet.Cell(18, 2).Value = f1;
+
+        summarySheet.Range(15, 2, 18, 2).Style.NumberFormat.Format = "0.00%";
+        summarySheet.Columns().AdjustToContents();
+
+        workbook.SaveAs(outputFilePath);
         return outputFilePath;
+    }
+
+    private static string SaveScanMetricsCsv(
+        string csprojPath,
+        GeminiResponse geminiResponse,
+        string securityContext)
+    {
+        return SaveScanMetricsExcel(csprojPath, geminiResponse, securityContext);
     }
 
     private static HashSet<string> ExtractReferencedPackageNames(string securityContext)
@@ -929,6 +1034,24 @@ Security reference data:
     private static bool IsUsableApiKey(string? apiKey)
     {
         return !string.IsNullOrWhiteSpace(apiKey);
+    }
+
+    private static Dictionary<string, string> GetVulnerabilityReportFieldDescriptions()
+    {
+        return new Dictionary<string, string>
+        {
+            ["PackageName"] = "Nama paket NuGet yang dianalisis.",
+            ["CurrentVersion"] = "Versi paket yang saat ini digunakan pada proyek target.",
+            ["IsVulnerable"] = "Menandakan apakah paket terdeteksi memiliki kerentanan.",
+            ["CVE_ID"] = "Identifier CVE yang terkait dengan kerentanan, jika tersedia.",
+            ["Severity"] = "Tingkat keparahan kerentanan dalam bahasa Inggris.",
+            ["SeverityIndonesia"] = "Tingkat keparahan kerentanan dalam bahasa Indonesia.",
+            ["MitigationPlan"] = "Rencana mitigasi atau rekomendasi perbaikan dalam bahasa Inggris.",
+            ["MitigationPlanIndonesia"] = "Rencana mitigasi atau rekomendasi perbaikan dalam bahasa Indonesia.",
+            ["IsGroundedInReference"] = "Menandakan apakah temuan didukung data referensi keamanan yang disediakan.",
+            ["ReasoningTrace"] = "Ringkasan alasan analisis model dalam bahasa Inggris.",
+            ["ReasoningTraceIndonesia"] = "Ringkasan alasan analisis model dalam bahasa Indonesia."
+        };
     }
 
     private static string ExtractJsonPayload(string responseText)

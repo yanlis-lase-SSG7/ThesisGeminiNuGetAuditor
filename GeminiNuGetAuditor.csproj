@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.104.2" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include=".github\copilot-instructions.md" />
     <None Include="samples\DummyAuditTarget\DummyAuditTarget.csproj" />
   </ItemGroup>
