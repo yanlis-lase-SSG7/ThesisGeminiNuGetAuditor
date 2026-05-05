@@ -868,6 +868,44 @@ Security reference data:
         summarySheet.Range(15, 2, 18, 2).Style.NumberFormat.Format = "0.00%";
         summarySheet.Columns().AdjustToContents();
 
+        var summaryDetailSheet = workbook.Worksheets.Add("Summary Details");
+        summaryDetailSheet.Cell(1, 1).Value = "Metric";
+        summaryDetailSheet.Cell(1, 2).Value = "Value";
+        summaryDetailSheet.Cell(1, 3).Value = "Description";
+
+        var summaryDetails = new List<(string Metric, string Value, string Description)>
+        {
+            ("Project", projectName, "Nama project target yang diaudit."),
+            ("Total Packages", total.ToString(), "Jumlah total package yang dianalisis."),
+            ("Reference Packages", referencedPackages.Count.ToString(), "Jumlah package yang ditemukan pada security reference context."),
+            ("Detected Vulnerable", geminiResponse.VulnerabilityReports.Count(x => x.IsVulnerable).ToString(), "Jumlah package yang ditandai rentan oleh hasil analisis."),
+            ("Grounded Findings", groundedCount.ToString(), "Jumlah temuan dengan IsGroundedInReference = true."),
+            ("True Positive", truePositive.ToString(), "Model menandai rentan dan package memang ada di referensi kerentanan."),
+            ("False Positive", falsePositive.ToString(), "Model menandai rentan tetapi package tidak ada di referensi kerentanan."),
+            ("False Negative", falseNegative.ToString(), "Model tidak menandai rentan padahal package ada di referensi kerentanan."),
+            ("True Negative", trueNegative.ToString(), "Model tidak menandai rentan dan package memang tidak ada di referensi kerentanan."),
+            ("Accuracy", $"{accuracy:P2}", "Proporsi prediksi benar dari seluruh package: (TP + TN) / Total."),
+            ("Precision", $"{precision:P2}", "Ketepatan prediksi rentan: TP / (TP + FP)."),
+            ("Recall", $"{recall:P2}", "Kemampuan menangkap package rentan: TP / (TP + FN)."),
+            ("F1-Score", $"{f1:P2}", "Rata-rata harmonik Precision dan Recall: 2PR / (P + R).")
+        };
+
+        var detailRow = 2;
+        foreach (var item in summaryDetails)
+        {
+            summaryDetailSheet.Cell(detailRow, 1).Value = item.Metric;
+            summaryDetailSheet.Cell(detailRow, 2).Value = item.Value;
+            summaryDetailSheet.Cell(detailRow, 3).Value = item.Description;
+            detailRow++;
+        }
+
+        var summaryDetailHeader = summaryDetailSheet.Range(1, 1, 1, 3);
+        summaryDetailHeader.Style.Font.Bold = true;
+        summaryDetailHeader.Style.Fill.BackgroundColor = XLColor.LightGray;
+        summaryDetailSheet.SheetView.FreezeRows(1);
+        summaryDetailSheet.Range(2, 1, Math.Max(2, detailRow - 1), 3).SetAutoFilter();
+        summaryDetailSheet.Columns().AdjustToContents();
+
         workbook.SaveAs(outputFilePath);
         return outputFilePath;
     }
@@ -1036,21 +1074,82 @@ Security reference data:
         return !string.IsNullOrWhiteSpace(apiKey);
     }
 
-    private static Dictionary<string, string> GetVulnerabilityReportFieldDescriptions()
+    private static Dictionary<string, VulnerabilityFieldDescription> GetVulnerabilityReportFieldDescriptions()
     {
-        return new Dictionary<string, string>
+        return new Dictionary<string, VulnerabilityFieldDescription>
         {
-            ["PackageName"] = "Nama paket NuGet yang dianalisis.",
-            ["CurrentVersion"] = "Versi paket yang saat ini digunakan pada proyek target.",
-            ["IsVulnerable"] = "Menandakan apakah paket terdeteksi memiliki kerentanan.",
-            ["CVE_ID"] = "Identifier CVE yang terkait dengan kerentanan, jika tersedia.",
-            ["Severity"] = "Tingkat keparahan kerentanan dalam bahasa Inggris.",
-            ["SeverityIndonesia"] = "Tingkat keparahan kerentanan dalam bahasa Indonesia.",
-            ["MitigationPlan"] = "Rencana mitigasi atau rekomendasi perbaikan dalam bahasa Inggris.",
-            ["MitigationPlanIndonesia"] = "Rencana mitigasi atau rekomendasi perbaikan dalam bahasa Indonesia.",
-            ["IsGroundedInReference"] = "Menandakan apakah temuan didukung data referensi keamanan yang disediakan.",
-            ["ReasoningTrace"] = "Ringkasan alasan analisis model dalam bahasa Inggris.",
-            ["ReasoningTraceIndonesia"] = "Ringkasan alasan analisis model dalam bahasa Indonesia."
+            ["PackageName"] = new VulnerabilityFieldDescription
+            {
+                Description = "Nama paket NuGet yang dianalisis."
+            },
+            ["CurrentVersion"] = new VulnerabilityFieldDescription
+            {
+                Description = "Versi paket yang saat ini digunakan pada proyek target."
+            },
+            ["IsVulnerable"] = new VulnerabilityFieldDescription
+            {
+                Description = "Status apakah paket terdeteksi rentan berdasarkan analisis.",
+                ValueDescriptions = new Dictionary<string, string>
+                {
+                    ["true"] = "Paket terindikasi memiliki kerentanan.",
+                    ["false"] = "Tidak ada kerentanan yang teridentifikasi untuk paket ini pada referensi yang tersedia."
+                }
+            },
+            ["CVE_ID"] = new VulnerabilityFieldDescription
+            {
+                Description = "Identifier CVE yang terkait dengan kerentanan, jika tersedia."
+            },
+            ["Severity"] = new VulnerabilityFieldDescription
+            {
+                Description = "Tingkat keparahan kerentanan dalam bahasa Inggris.",
+                ValueDescriptions = new Dictionary<string, string>
+                {
+                    ["CRITICAL"] = "Kerentanan sangat parah dengan dampak tinggi; perlu tindakan segera.",
+                    ["HIGH"] = "Kerentanan parah dengan risiko tinggi; disarankan mitigasi secepatnya.",
+                    ["MODERATE"] = "Kerentanan tingkat sedang; perlu mitigasi terencana.",
+                    ["LOW"] = "Kerentanan tingkat rendah; dampak terbatas namun tetap perlu diperhatikan.",
+                    ["Unknown"] = "Tingkat keparahan tidak dapat dipastikan dari referensi yang tersedia.",
+                    [""] = "Nilai tidak diisi oleh model."
+                }
+            },
+            ["SeverityIndonesia"] = new VulnerabilityFieldDescription
+            {
+                Description = "Tingkat keparahan kerentanan dalam bahasa Indonesia.",
+                ValueDescriptions = new Dictionary<string, string>
+                {
+                    ["Kritis"] = "Kerentanan sangat parah dengan dampak tinggi; perlu tindakan segera.",
+                    ["Tinggi"] = "Kerentanan parah dengan risiko tinggi; disarankan mitigasi secepatnya.",
+                    ["Sedang"] = "Kerentanan tingkat sedang; perlu mitigasi terencana.",
+                    ["Rendah"] = "Kerentanan tingkat rendah; dampak terbatas namun tetap perlu diperhatikan.",
+                    ["Tidak diketahui"] = "Tingkat keparahan tidak dapat dipastikan dari referensi yang tersedia.",
+                    [""] = "Nilai tidak diisi oleh model."
+                }
+            },
+            ["MitigationPlan"] = new VulnerabilityFieldDescription
+            {
+                Description = "Rencana mitigasi atau rekomendasi perbaikan dalam bahasa Inggris."
+            },
+            ["MitigationPlanIndonesia"] = new VulnerabilityFieldDescription
+            {
+                Description = "Rencana mitigasi atau rekomendasi perbaikan dalam bahasa Indonesia."
+            },
+            ["IsGroundedInReference"] = new VulnerabilityFieldDescription
+            {
+                Description = "Status apakah temuan didukung oleh data referensi keamanan yang diberikan.",
+                ValueDescriptions = new Dictionary<string, string>
+                {
+                    ["true"] = "Temuan didukung data referensi keamanan (misalnya advisory/CVE dari konteks referensi).",
+                    ["false"] = "Temuan tidak didukung langsung data referensi keamanan yang diberikan; perlu verifikasi lanjutan."
+                }
+            },
+            ["ReasoningTrace"] = new VulnerabilityFieldDescription
+            {
+                Description = "Ringkasan alasan analisis model dalam bahasa Inggris."
+            },
+            ["ReasoningTraceIndonesia"] = new VulnerabilityFieldDescription
+            {
+                Description = "Ringkasan alasan analisis model dalam bahasa Indonesia."
+            }
         };
     }
 

@@ -1,0 +1,823 @@
+{
+  "GeneratedAtUtc": "2026-05-05T07:15:00.8900419+00:00",
+  "SourceProjectPath": "D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\DummyAuditTarget\\DummyAuditTarget.csproj",
+  "ModelName": "gemini-flash-latest",
+  "ExtractedPackages": [
+    {
+      "PackageName": "Newtonsoft.Json",
+      "CurrentVersion": "13.0.3"
+    },
+    {
+      "PackageName": "Serilog",
+      "CurrentVersion": "4.0.1"
+    },
+    {
+      "PackageName": "Dapper",
+      "CurrentVersion": "2.1.35"
+    },
+    {
+      "PackageName": "AdvancedAgilityPack",
+      "CurrentVersion": "1.1.0"
+    },
+    {
+      "PackageName": "Azure.Identity",
+      "CurrentVersion": "1.10.2"
+    },
+    {
+      "PackageName": "Binus.WS.Pattern",
+      "CurrentVersion": "1.0.5"
+    },
+    {
+      "PackageName": "Binus.WS.Pattern.AzureStorage",
+      "CurrentVersion": "1.0.7"
+    },
+    {
+      "PackageName": "Binus.WS.Pattern.MessageQueue",
+      "CurrentVersion": "1.2.0"
+    },
+    {
+      "PackageName": "BuildBundlerMinifier",
+      "CurrentVersion": "3.2.449"
+    },
+    {
+      "PackageName": "ClosedXML",
+      "CurrentVersion": "0.95.4"
+    },
+    {
+      "PackageName": "FastReport.OpenSource",
+      "CurrentVersion": "2021.2.7"
+    },
+    {
+      "PackageName": "FastReport.OpenSource.Export.PdfSimple",
+      "CurrentVersion": "2021.2.0"
+    },
+    {
+      "PackageName": "FastReport.OpenSource.Web",
+      "CurrentVersion": "2021.2.7"
+    },
+    {
+      "PackageName": "itext7",
+      "CurrentVersion": "7.1.16"
+    },
+    {
+      "PackageName": "Microsoft.ApplicationInsights.AspNetCore",
+      "CurrentVersion": "2.14.0"
+    },
+    {
+      "PackageName": "Microsoft.AspNet.Mvc",
+      "CurrentVersion": "5.2.7"
+    },
+    {
+      "PackageName": "Microsoft.AspNetCore.Authentication.OpenIdConnect",
+      "CurrentVersion": "3.1.17"
+    },
+    {
+      "PackageName": "Microsoft.AspNetCore.Http",
+      "CurrentVersion": "2.2.2"
+    },
+    {
+      "PackageName": "Microsoft.AspNetCore.Mvc.Core",
+      "CurrentVersion": "2.2.5"
+    },
+    {
+      "PackageName": "Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation",
+      "CurrentVersion": "3.1.6"
+    },
+    {
+      "PackageName": "Microsoft.EntityFrameworkCore",
+      "CurrentVersion": "3.1.6"
+    },
+    {
+      "PackageName": "Microsoft.EntityFrameworkCore.Design",
+      "CurrentVersion": "3.1.6"
+    },
+    {
+      "PackageName": "Microsoft.EntityFrameworkCore.SqlServer",
+      "CurrentVersion": "3.1.6"
+    },
+    {
+      "PackageName": "Microsoft.Extensions.Caching.StackExchangeRedis",
+      "CurrentVersion": "5.0.1"
+    },
+    {
+      "PackageName": "Microsoft.Identity.Web",
+      "CurrentVersion": "1.15.2"
+    },
+    {
+      "PackageName": "Microsoft.VisualStudio.Web.CodeGeneration.Design",
+      "CurrentVersion": "3.1.5"
+    },
+    {
+      "PackageName": "MimeTypeMapOfficial",
+      "CurrentVersion": "1.0.17"
+    },
+    {
+      "PackageName": "Nancy",
+      "CurrentVersion": "2.0.0"
+    },
+    {
+      "PackageName": "NetCoreAutoLinkDropdown",
+      "CurrentVersion": "1.0.2"
+    },
+    {
+      "PackageName": "Newtonsoft.Json",
+      "CurrentVersion": "13.0.1"
+    },
+    {
+      "PackageName": "PdfSharpCore",
+      "CurrentVersion": "1.2.17"
+    },
+    {
+      "PackageName": "SixLabors.ImageSharp",
+      "CurrentVersion": "2.1.10"
+    },
+    {
+      "PackageName": "starkbank-ecdsa",
+      "CurrentVersion": "1.3.2"
+    },
+    {
+      "PackageName": "Microsoft.Data.SqlClient",
+      "CurrentVersion": "2.1.7"
+    },
+    {
+      "PackageName": "System.Data.SqlClient",
+      "CurrentVersion": "4.8.6"
+    },
+    {
+      "PackageName": "System.Drawing.Common",
+      "CurrentVersion": "4.7.2"
+    },
+    {
+      "PackageName": "System.Globalization.Calendars",
+      "CurrentVersion": "4.3.0"
+    },
+    {
+      "PackageName": "System.Private.ServiceModel",
+      "CurrentVersion": "4.7.0"
+    },
+    {
+      "PackageName": "System.Security.Cryptography.Xml",
+      "CurrentVersion": "4.5.0"
+    },
+    {
+      "PackageName": "System.ServiceModel.Duplex",
+      "CurrentVersion": "4.4.*"
+    },
+    {
+      "PackageName": "System.ServiceModel.Http",
+      "CurrentVersion": "4.4.*"
+    },
+    {
+      "PackageName": "System.ServiceModel.NetTcp",
+      "CurrentVersion": "4.4.*"
+    },
+    {
+      "PackageName": "System.ServiceModel.Security",
+      "CurrentVersion": "4.4.*"
+    },
+    {
+      "PackageName": "System.Text.Encodings.Web",
+      "CurrentVersion": "5.0.1"
+    }
+  ],
+  "VulnerabilityReports": [
+    {
+      "PackageName": "Newtonsoft.Json",
+      "CurrentVersion": "13.0.1",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Safe",
+      "SeverityIndonesia": "Aman",
+      "MitigationPlan": "No action required. Current version is secure based on the reference data.",
+      "MitigationPlanIndonesia": "Tidak ada tindakan yang diperlukan. Versi saat ini aman berdasarkan data referensi.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Current version 13.0.3 is not within the vulnerable range \u003C 13.0.1 specified in the reference.",
+      "ReasoningTraceIndonesia": "Versi saat ini 13.0.3 tidak berada dalam rentang rentan \u003C 13.0.1 yang ditentukan dalam referensi."
+    },
+    {
+      "PackageName": "Serilog",
+      "CurrentVersion": "4.0.1",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Monitor for future security advisories and maintain the package at the latest stable version.",
+      "MitigationPlanIndonesia": "Pantau saran keamanan di masa mendatang dan pertahankan paket pada versi stabil terbaru.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Package is not listed in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak terdaftar dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Dapper",
+      "CurrentVersion": "2.1.35",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Monitor for future security advisories and maintain the package at the latest stable version.",
+      "MitigationPlanIndonesia": "Pantau saran keamanan di masa mendatang dan pertahankan paket pada versi stabil terbaru.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Package is not listed in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak terdaftar dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "AdvancedAgilityPack",
+      "CurrentVersion": "1.1.0",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Monitor for future security advisories and maintain the package at the latest stable version.",
+      "MitigationPlanIndonesia": "Pantau saran keamanan di masa mendatang dan pertahankan paket pada versi stabil terbaru.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Package is not listed in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak terdaftar dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Azure.Identity",
+      "CurrentVersion": "1.10.2",
+      "IsVulnerable": true,
+      "CVE_ID": "CVE-2024-35255",
+      "Severity": "MODERATE",
+      "SeverityIndonesia": "MODERAT",
+      "MitigationPlan": "Update Azure.Identity to version 1.11.4 or higher to resolve identified vulnerabilities.",
+      "MitigationPlanIndonesia": "Perbarui Azure.Identity ke versi 1.11.4 atau yang lebih baru untuk mengatasi kerentanan yang diidentifikasi.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Current version 1.10.2 falls within the vulnerable ranges \u003C 1.11.4 and \u003C 1.11.0 for CVE-2024-35255 and CVE-2024-29992.",
+      "ReasoningTraceIndonesia": "Versi saat ini 1.10.2 termasuk dalam rentang rentan \u003C 1.11.4 dan \u003C 1.11.0 untuk CVE-2024-35255 dan CVE-2024-29992."
+    },
+    {
+      "PackageName": "Binus.WS.Pattern",
+      "CurrentVersion": "1.0.5",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Monitor for future security advisories and maintain the package at the latest stable version.",
+      "MitigationPlanIndonesia": "Pantau saran keamanan di masa mendatang dan pertahankan paket pada versi stabil terbaru.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Package is not listed in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak terdaftar dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Binus.WS.Pattern.AzureStorage",
+      "CurrentVersion": "1.0.7",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Monitor for future security advisories and maintain the package at the latest stable version.",
+      "MitigationPlanIndonesia": "Pantau saran keamanan di masa mendatang dan pertahankan paket pada versi stabil terbaru.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Package is not listed in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak terdaftar dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Binus.WS.Pattern.MessageQueue",
+      "CurrentVersion": "1.2.0",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Monitor for future security advisories and maintain the package at the latest stable version.",
+      "MitigationPlanIndonesia": "Pantau saran keamanan di masa mendatang dan pertahankan paket pada versi stabil terbaru.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Package is not listed in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak terdaftar dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "BuildBundlerMinifier",
+      "CurrentVersion": "3.2.449",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Monitor for future security advisories and maintain the package at the latest stable version.",
+      "MitigationPlanIndonesia": "Pantau saran keamanan di masa mendatang dan pertahankan paket pada versi stabil terbaru.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Package is not listed in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak terdaftar dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "ClosedXML",
+      "CurrentVersion": "0.95.4",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Monitor for future security advisories and maintain the package at the latest stable version.",
+      "MitigationPlanIndonesia": "Pantau saran keamanan di masa mendatang dan pertahankan paket pada versi stabil terbaru.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Package is not listed in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak terdaftar dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "FastReport.OpenSource",
+      "CurrentVersion": "2021.2.7",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Safe",
+      "SeverityIndonesia": "Aman",
+      "MitigationPlan": "No action required. Current version is secure based on the reference data.",
+      "MitigationPlanIndonesia": "Tidak ada tindakan yang diperlukan. Versi saat ini aman berdasarkan data referensi.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Current version 2021.2.7 is not within the vulnerable range \u003C 2020.4.0 specified in the reference.",
+      "ReasoningTraceIndonesia": "Versi saat ini 2021.2.7 tidak berada dalam rentang rentan \u003C 2020.4.0 yang ditentukan dalam referensi."
+    },
+    {
+      "PackageName": "FastReport.OpenSource.Export.PdfSimple",
+      "CurrentVersion": "2021.2.0",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Monitor for future security advisories and maintain the package at the latest stable version.",
+      "MitigationPlanIndonesia": "Pantau saran keamanan di masa mendatang dan pertahankan paket pada versi stabil terbaru.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Package is not listed in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak terdaftar dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "FastReport.OpenSource.Web",
+      "CurrentVersion": "2021.2.7",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Monitor for future security advisories and maintain the package at the latest stable version.",
+      "MitigationPlanIndonesia": "Pantau saran keamanan di masa mendatang dan pertahankan paket pada versi stabil terbaru.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Package is not listed in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak terdaftar dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "itext7",
+      "CurrentVersion": "7.1.16",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Monitor for future security advisories and maintain the package at the latest stable version.",
+      "MitigationPlanIndonesia": "Pantau saran keamanan di masa mendatang dan pertahankan paket pada versi stabil terbaru.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Package is not listed in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak terdaftar dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Microsoft.ApplicationInsights.AspNetCore",
+      "CurrentVersion": "2.14.0",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Monitor for future security advisories and maintain the package at the latest stable version.",
+      "MitigationPlanIndonesia": "Pantau saran keamanan di masa mendatang dan pertahankan paket pada versi stabil terbaru.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Package is not listed in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak terdaftar dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Microsoft.AspNet.Mvc",
+      "CurrentVersion": "5.2.7",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Migrate to ASP.NET Core as part of a .NET 10 transition, as this legacy package is not in the current security reference.",
+      "MitigationPlanIndonesia": "Migrasi ke ASP.NET Core sebagai bagian dari transisi .NET 10, karena paket warisan ini tidak ada dalam referensi keamanan saat ini.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "The package was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Microsoft.AspNetCore.Authentication.OpenIdConnect",
+      "CurrentVersion": "3.1.17",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Update to .NET 10 compatible authentication libraries to ensure modern security protocol support.",
+      "MitigationPlanIndonesia": "Perbarui ke pustaka autentikasi yang kompatibel dengan .NET 10 untuk memastikan dukungan protokol keamanan modern.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "The package was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Microsoft.AspNetCore.Http",
+      "CurrentVersion": "2.2.2",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Safe",
+      "SeverityIndonesia": "Aman",
+      "MitigationPlan": "Maintain version or upgrade to .NET 10 standard libraries. Current version is higher than the vulnerable range (\u003C 2.1.22) identified in reference.",
+      "MitigationPlanIndonesia": "Pertahankan versi atau tingkatkan ke pustaka standar .NET 10. Versi saat ini lebih tinggi dari rentang rentan (\u003C 2.1.22) yang diidentifikasi dalam referensi.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Package is in reference (CVE-2020-1045) but version 2.2.2 is outside the vulnerable range (\u003C 2.1.22).",
+      "ReasoningTraceIndonesia": "Paket ada dalam referensi (CVE-2020-1045) tetapi versi 2.2.2 berada di luar rentang rentan (\u003C 2.1.22)."
+    },
+    {
+      "PackageName": "Microsoft.AspNetCore.Mvc.Core",
+      "CurrentVersion": "2.2.5",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Safe",
+      "SeverityIndonesia": "Aman",
+      "MitigationPlan": "Migrate to .NET 10 to move beyond the end-of-life status of the 2.2 branch.",
+      "MitigationPlanIndonesia": "Migrasi ke .NET 10 untuk beralih dari status akhir masa pakai (end-of-life) cabang 2.2.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Package is in reference, but version 2.2.5 does not fall within the vulnerable ranges for CVE-2017-0248, CVE-2017-8700, or CVE-2017-11879.",
+      "ReasoningTraceIndonesia": "Paket ada dalam referensi, tetapi versi 2.2.5 tidak termasuk dalam rentang rentan untuk CVE-2017-0248, CVE-2017-8700, atau CVE-2017-11879."
+    },
+    {
+      "PackageName": "Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation",
+      "CurrentVersion": "3.1.6",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Update to the version provided by .NET 10 SDK for integrated performance and security.",
+      "MitigationPlanIndonesia": "Perbarui ke versi yang disediakan oleh .NET 10 SDK untuk kinerja dan keamanan yang terintegrasi.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "The package was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Microsoft.EntityFrameworkCore",
+      "CurrentVersion": "3.1.6",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Plan upgrade to EF Core 10.0 to utilize the latest security hardening and performance improvements.",
+      "MitigationPlanIndonesia": "Rencanakan peningkatan ke EF Core 10.0 untuk memanfaatkan penguatan keamanan dan peningkatan kinerja terbaru.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "The package was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Microsoft.EntityFrameworkCore.Design",
+      "CurrentVersion": "3.1.6",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Align with .NET 10 versioning during development tool updates.",
+      "MitigationPlanIndonesia": "Sesuaikan dengan versi .NET 10 selama pembaruan alat pengembangan.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "The package was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Microsoft.EntityFrameworkCore.SqlServer",
+      "CurrentVersion": "3.1.6",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Ensure the SQL Server provider is upgraded in tandem with the core EF framework to .NET 10 standards.",
+      "MitigationPlanIndonesia": "Pastikan penyedia SQL Server ditingkatkan bersamaan dengan kerangka kerja inti EF ke standar .NET 10.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "The package was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Microsoft.Extensions.Caching.StackExchangeRedis",
+      "CurrentVersion": "5.0.1",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Upgrade to a .NET 10 compatible version to leverage improved connection multiplexing and security protocols.",
+      "MitigationPlanIndonesia": "Tingkatkan ke versi yang kompatibel dengan .NET 10 untuk memanfaatkan multiplexing koneksi dan protokol keamanan yang ditingkatkan.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "The package was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Microsoft.Identity.Web",
+      "CurrentVersion": "1.15.2",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Safe",
+      "SeverityIndonesia": "Aman",
+      "MitigationPlan": "Though safe from CVE-2025-32016 (vulnerable range \u003E= 3.2.0, \u003C 3.8.2), consider upgrading to the latest 3.x version for current features.",
+      "MitigationPlanIndonesia": "Meskipun aman dari CVE-2025-32016 (rentang rentan \u003E= 3.2.0, \u003C 3.8.2), pertimbangkan untuk meningkatkan ke versi 3.x terbaru untuk fitur saat ini.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Package is in reference, but current version 1.15.2 is below the vulnerable range specified for CVE-2025-32016.",
+      "ReasoningTraceIndonesia": "Paket ada dalam referensi, tetapi versi saat ini 1.15.2 berada di bawah rentang rentan yang ditentukan untuk CVE-2025-32016."
+    },
+    {
+      "PackageName": "Microsoft.VisualStudio.Web.CodeGeneration.Design",
+      "CurrentVersion": "3.1.5",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Update to the latest tooling version matching .NET 10 to ensure secure code generation templates.",
+      "MitigationPlanIndonesia": "Perbarui ke versi alat terbaru yang sesuai dengan .NET 10 untuk memastikan templat pembuatan kode yang aman.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "The package was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "MimeTypeMapOfficial",
+      "CurrentVersion": "1.0.17",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Monitor for updates; verify if .NET 10 built-in MIME mapping fulfills the application requirements.",
+      "MitigationPlanIndonesia": "Pantau pembaruan; verifikasi apakah pemetaan MIME bawaan .NET 10 memenuhi persyaratan aplikasi.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "The package was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Nancy",
+      "CurrentVersion": "2.0.0",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Safe",
+      "SeverityIndonesia": "Aman",
+      "MitigationPlan": "The package is legacy. Migrate to ASP.NET Core Minimal APIs in .NET 10 for long-term support and security.",
+      "MitigationPlanIndonesia": "Paket ini adalah warisan. Migrasi ke ASP.NET Core Minimal API di .NET 10 untuk dukungan jangka panjang dan keamanan.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Current version 2.0.0 is the first patched version for Nancy and is outside the vulnerable ranges listed.",
+      "ReasoningTraceIndonesia": "Versi saat ini 2.0.0 adalah versi pertama yang diperbaiki untuk Nancy dan berada di luar rentang rentan yang tercantum."
+    },
+    {
+      "PackageName": "NetCoreAutoLinkDropdown",
+      "CurrentVersion": "1.0.2",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Review third-party library necessity and ensure compatibility with .NET 10\u0027s strict security policies.",
+      "MitigationPlanIndonesia": "Tinjau keperluan pustaka pihak ketiga dan pastikan kompatibilitas dengan kebijakan keamanan ketat .NET 10.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "The package was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
+    },
+    {
+      "PackageName": "Newtonsoft.Json",
+      "CurrentVersion": "13.0.1",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Safe",
+      "SeverityIndonesia": "Aman",
+      "MitigationPlan": "No action required. Current version is secure based on the reference data.",
+      "MitigationPlanIndonesia": "Tidak ada tindakan yang diperlukan. Versi saat ini aman berdasarkan data referensi.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Current version 13.0.3 is not within the vulnerable range \u003C 13.0.1 specified in the reference.",
+      "ReasoningTraceIndonesia": "Versi saat ini 13.0.3 tidak berada dalam rentang rentan \u003C 13.0.1 yang ditentukan dalam referensi."
+    },
+    {
+      "PackageName": "PdfSharpCore",
+      "CurrentVersion": "1.2.17",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "No mitigation required based on provided reference data.",
+      "MitigationPlanIndonesia": "Tidak ada mitigasi yang diperlukan berdasarkan data referensi yang disediakan.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Package is not found in the security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan."
+    },
+    {
+      "PackageName": "SixLabors.ImageSharp",
+      "CurrentVersion": "2.1.10",
+      "IsVulnerable": true,
+      "CVE_ID": "CVE-2025-54575",
+      "Severity": "MODERATE",
+      "SeverityIndonesia": "SEDANG",
+      "MitigationPlan": "Upgrade SixLabors.ImageSharp to version 2.1.11 or higher to resolve the infinite loop in GIF decoder. For .NET 10, ensure the library is updated to avoid DoS vulnerabilities.",
+      "MitigationPlanIndonesia": "Tingkatkan SixLabors.ImageSharp ke versi 2.1.11 atau lebih tinggi untuk mengatasi infinite loop pada GIF decoder. Untuk .NET 10, pastikan pustaka diperbarui guna menghindari kerentanan DoS.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Version 2.1.10 falls within the vulnerable range \u0027\u003C 2.1.11\u0027 for CVE-2025-54575 as identified in the reference data.",
+      "ReasoningTraceIndonesia": "Versi 2.1.10 berada dalam rentang rentan \u0027\u003C 2.1.11\u0027 untuk CVE-2025-54575 seperti yang diidentifikasi dalam data referensi."
+    },
+    {
+      "PackageName": "starkbank-ecdsa",
+      "CurrentVersion": "1.3.2",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "None",
+      "SeverityIndonesia": "Tidak ada",
+      "MitigationPlan": "No action required. Current version 1.3.2 is the first patched version for known GHSA-j3jw-j2j8-2wv9 and GHSA-9wx7-jrvc-28mm vulnerabilities.",
+      "MitigationPlanIndonesia": "Tidak ada tindakan yang diperlukan. Versi saat ini 1.3.2 adalah versi pertama yang diperbaiki untuk kerentanan GHSA-j3jw-j2j8-2wv9 dan GHSA-9wx7-jrvc-28mm.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Current version 1.3.2 is equal to the first patched version, so it is no longer vulnerable.",
+      "ReasoningTraceIndonesia": "Versi saat ini 1.3.2 sama dengan versi pertama yang diperbaiki, sehingga tidak lagi rentan."
+    },
+    {
+      "PackageName": "Microsoft.Data.SqlClient",
+      "CurrentVersion": "2.1.7",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "None",
+      "SeverityIndonesia": "Tidak ada",
+      "MitigationPlan": "No action required. Version 2.1.7 is outside the identified vulnerable range (\u003C 2.1.7) for CVE-2024-0056.",
+      "MitigationPlanIndonesia": "Tidak ada tindakan yang diperlukan. Versi 2.1.7 berada di luar rentang rentan yang diidentifikasi (\u003C 2.1.7) untuk CVE-2024-0056.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Reference data indicates vulnerabilities for versions \u003C 2.1.7. Version 2.1.7 is the patch version.",
+      "ReasoningTraceIndonesia": "Data referensi menunjukkan kerentanan untuk versi \u003C 2.1.7. Versi 2.1.7 adalah versi perbaikan."
+    },
+    {
+      "PackageName": "System.Data.SqlClient",
+      "CurrentVersion": "4.8.6",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "None",
+      "SeverityIndonesia": "Tidak ada",
+      "MitigationPlan": "No action required. Version 4.8.6 is the first patched version for CVE-2024-0056.",
+      "MitigationPlanIndonesia": "Tidak ada tindakan yang diperlukan. Versi 4.8.6 adalah versi perbaikan pertama untuk CVE-2024-0056.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Current version is 4.8.6, which matches the FirstPatchedVersion in reference data.",
+      "ReasoningTraceIndonesia": "Versi saat ini adalah 4.8.6, yang sesuai dengan FirstPatchedVersion dalam data referensi."
+    },
+    {
+      "PackageName": "System.Drawing.Common",
+      "CurrentVersion": "4.7.2",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "None",
+      "SeverityIndonesia": "Tidak ada",
+      "MitigationPlan": "No action required. Version 4.7.2 is the first patched version for CVE-2021-24112.",
+      "MitigationPlanIndonesia": "Tidak ada tindakan yang diperlukan. Versi 4.7.2 adalah versi perbaikan pertama untuk CVE-2021-24112.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Reference indicates versions \u003C 4.7.2 are vulnerable. Current version is 4.7.2.",
+      "ReasoningTraceIndonesia": "Referensi menunjukkan versi \u003C 4.7.2 rentan. Versi saat ini adalah 4.7.2."
+    },
+    {
+      "PackageName": "System.Globalization.Calendars",
+      "CurrentVersion": "4.3.0",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "No mitigation required based on provided reference data.",
+      "MitigationPlanIndonesia": "Tidak ada mitigasi yang diperlukan berdasarkan data referensi yang disediakan.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Package is not found in the security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan."
+    },
+    {
+      "PackageName": "System.Private.ServiceModel",
+      "CurrentVersion": "4.7.0",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "None",
+      "SeverityIndonesia": "Tidak ada",
+      "MitigationPlan": "Current version 4.7.0 is safe based on the provided reference ranges.",
+      "MitigationPlanIndonesia": "Versi saat ini 4.7.0 aman berdasarkan rentang referensi yang disediakan.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Vulnerable ranges for this package in the reference data are all below version 4.6.0.",
+      "ReasoningTraceIndonesia": "Rentang rentan untuk paket ini dalam data referensi semuanya di bawah versi 4.6.0."
+    },
+    {
+      "PackageName": "System.Security.Cryptography.Xml",
+      "CurrentVersion": "4.5.0",
+      "IsVulnerable": true,
+      "CVE_ID": "CVE-2022-34716",
+      "Severity": "MODERATE",
+      "SeverityIndonesia": "SEDANG",
+      "MitigationPlan": "Upgrade System.Security.Cryptography.Xml to version 4.7.1 or higher to mitigate information disclosure vulnerabilities. In .NET 10, prefer using the latest stable version from the 9.0\u002B branch if applicable.",
+      "MitigationPlanIndonesia": "Tingkatkan System.Security.Cryptography.Xml ke versi 4.7.1 atau lebih tinggi untuk memitigasi kerentanan pengungkapan informasi. Di .NET 10, lebih baik menggunakan versi stabil terbaru dari cabang 9.0\u002B jika memungkinkan.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Version 4.5.0 is \u003C= 4.7.0, which is flagged as vulnerable to information disclosure (CVE-2022-34716).",
+      "ReasoningTraceIndonesia": "Versi 4.5.0 adalah \u003C= 4.7.0, yang ditandai rentan terhadap pengungkapan informasi (CVE-2022-34716)."
+    },
+    {
+      "PackageName": "System.ServiceModel.Duplex",
+      "CurrentVersion": "4.4.*",
+      "IsVulnerable": true,
+      "CVE_ID": "CVE-2018-0786",
+      "Severity": "HIGH",
+      "SeverityIndonesia": "TINGGI",
+      "MitigationPlan": "Upgrade System.ServiceModel.Duplex to version 4.4.1 (for CVE-2018-0786) and further to 4.4.4 to address CVE-2018-8356. For .NET 10, consider migrating to CoreWCF.",
+      "MitigationPlanIndonesia": "Tingkatkan System.ServiceModel.Duplex ke versi 4.4.1 (untuk CVE-2018-0786) dan lebih lanjut ke 4.4.4 untuk menangani CVE-2018-8356. Untuk .NET 10, pertimbangkan migrasi ke CoreWCF.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Version 4.4.0 matches the vulnerable range \u0027= 4.4.0\u0027 for GHSA-jc8g-xhw5-6x46.",
+      "ReasoningTraceIndonesia": "Versi 4.4.0 cocok dengan rentang rentan \u0027= 4.4.0\u0027 untuk GHSA-jc8g-xhw5-6x46."
+    },
+    {
+      "PackageName": "System.ServiceModel.Http",
+      "CurrentVersion": "4.4.*",
+      "IsVulnerable": true,
+      "CVE_ID": "CVE-2018-0786",
+      "Severity": "HIGH",
+      "SeverityIndonesia": "TINGGI",
+      "MitigationPlan": "Upgrade System.ServiceModel.Http to version 4.4.1 or higher. Version 4.4.4 is recommended to resolve secondary moderate vulnerabilities.",
+      "MitigationPlanIndonesia": "Tingkatkan System.ServiceModel.Http ke versi 4.4.1 atau lebih tinggi. Versi 4.4.4 direkomendasikan untuk menyelesaikan kerentanan sedang sekunder.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Version 4.4.0 matches the vulnerable range \u0027= 4.4.0\u0027 for GHSA-jc8g-xhw5-6x46.",
+      "ReasoningTraceIndonesia": "Versi 4.4.0 cocok dengan rentang rentan \u0027= 4.4.0\u0027 untuk GHSA-jc8g-xhw5-6x46."
+    },
+    {
+      "PackageName": "System.ServiceModel.NetTcp",
+      "CurrentVersion": "4.4.*",
+      "IsVulnerable": true,
+      "CVE_ID": "CVE-2018-0786",
+      "Severity": "HIGH",
+      "SeverityIndonesia": "TINGGI",
+      "MitigationPlan": "Upgrade System.ServiceModel.NetTcp to version 4.4.1 or higher. Version 4.4.4 is the fully patched version for the 4.4 branch.",
+      "MitigationPlanIndonesia": "Tingkatkan System.ServiceModel.NetTcp ke versi 4.4.1 atau lebih tinggi. Versi 4.4.4 adalah versi yang diperbaiki sepenuhnya untuk cabang 4.4.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Version 4.4.0 matches the vulnerable range \u0027= 4.4.0\u0027 for GHSA-jc8g-xhw5-6x46.",
+      "ReasoningTraceIndonesia": "Versi 4.4.0 cocok dengan rentang rentan \u0027= 4.4.0\u0027 untuk GHSA-jc8g-xhw5-6x46."
+    },
+    {
+      "PackageName": "System.ServiceModel.Security",
+      "CurrentVersion": "4.4.*",
+      "IsVulnerable": true,
+      "CVE_ID": "CVE-2018-0786",
+      "Severity": "HIGH",
+      "SeverityIndonesia": "TINGGI",
+      "MitigationPlan": "Upgrade System.ServiceModel.Security to version 4.4.1 or higher. Version 4.4.4 is the recommended patch for the 4.4 branch.",
+      "MitigationPlanIndonesia": "Tingkatkan System.ServiceModel.Security ke versi 4.4.1 atau lebih tinggi. Versi 4.4.4 adalah perbaikan yang direkomendasikan untuk cabang 4.4.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Version 4.4.0 matches the vulnerable range \u0027= 4.4.0\u0027 for GHSA-jc8g-xhw5-6x46.",
+      "ReasoningTraceIndonesia": "Versi 4.4.0 cocok dengan rentang rentan \u0027= 4.4.0\u0027 untuk GHSA-jc8g-xhw5-6x46."
+    },
+    {
+      "PackageName": "System.Text.Encodings.Web",
+      "CurrentVersion": "5.0.1",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "None",
+      "SeverityIndonesia": "Tidak ada",
+      "MitigationPlan": "No action required. Version 5.0.1 is the patch for CVE-2021-26701.",
+      "MitigationPlanIndonesia": "Tidak ada tindakan yang diperlukan. Versi 5.0.1 adalah perbaikan untuk CVE-2021-26701.",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "Version 5.0.1 is above the vulnerable range \u0027= 5.0.0\u0027 for GHSA-ghhp-997w-qr28.",
+      "ReasoningTraceIndonesia": "Versi 5.0.1 berada di atas rentang rentan \u0027= 5.0.0\u0027 untuk GHSA-ghhp-997w-qr28."
+    }
+  ],
+  "VulnerabilityReportFieldDescriptions": {
+    "PackageName": {
+      "Description": "Nama paket NuGet yang dianalisis.",
+      "ValueDescriptions": {}
+    },
+    "CurrentVersion": {
+      "Description": "Versi paket yang saat ini digunakan pada proyek target.",
+      "ValueDescriptions": {}
+    },
+    "IsVulnerable": {
+      "Description": "Status apakah paket terdeteksi rentan berdasarkan analisis.",
+      "ValueDescriptions": {
+        "true": "Paket terindikasi memiliki kerentanan.",
+        "false": "Tidak ada kerentanan yang teridentifikasi untuk paket ini pada referensi yang tersedia."
+      }
+    },
+    "CVE_ID": {
+      "Description": "Identifier CVE yang terkait dengan kerentanan, jika tersedia.",
+      "ValueDescriptions": {}
+    },
+    "Severity": {
+      "Description": "Tingkat keparahan kerentanan dalam bahasa Inggris.",
+      "ValueDescriptions": {
+        "CRITICAL": "Kerentanan sangat parah dengan dampak tinggi; perlu tindakan segera.",
+        "HIGH": "Kerentanan parah dengan risiko tinggi; disarankan mitigasi secepatnya.",
+        "MODERATE": "Kerentanan tingkat sedang; perlu mitigasi terencana.",
+        "LOW": "Kerentanan tingkat rendah; dampak terbatas namun tetap perlu diperhatikan.",
+        "Unknown": "Tingkat keparahan tidak dapat dipastikan dari referensi yang tersedia.",
+        "": "Nilai tidak diisi oleh model."
+      }
+    },
+    "SeverityIndonesia": {
+      "Description": "Tingkat keparahan kerentanan dalam bahasa Indonesia.",
+      "ValueDescriptions": {
+        "Kritis": "Kerentanan sangat parah dengan dampak tinggi; perlu tindakan segera.",
+        "Tinggi": "Kerentanan parah dengan risiko tinggi; disarankan mitigasi secepatnya.",
+        "Sedang": "Kerentanan tingkat sedang; perlu mitigasi terencana.",
+        "Rendah": "Kerentanan tingkat rendah; dampak terbatas namun tetap perlu diperhatikan.",
+        "Tidak diketahui": "Tingkat keparahan tidak dapat dipastikan dari referensi yang tersedia.",
+        "": "Nilai tidak diisi oleh model."
+      }
+    },
+    "MitigationPlan": {
+      "Description": "Rencana mitigasi atau rekomendasi perbaikan dalam bahasa Inggris.",
+      "ValueDescriptions": {}
+    },
+    "MitigationPlanIndonesia": {
+      "Description": "Rencana mitigasi atau rekomendasi perbaikan dalam bahasa Indonesia.",
+      "ValueDescriptions": {}
+    },
+    "IsGroundedInReference": {
+      "Description": "Status apakah temuan didukung oleh data referensi keamanan yang diberikan.",
+      "ValueDescriptions": {
+        "true": "Temuan didukung data referensi keamanan (misalnya advisory/CVE dari konteks referensi).",
+        "false": "Temuan tidak didukung langsung data referensi keamanan yang diberikan; perlu verifikasi lanjutan."
+      }
+    },
+    "ReasoningTrace": {
+      "Description": "Ringkasan alasan analisis model dalam bahasa Inggris.",
+      "ValueDescriptions": {}
+    },
+    "ReasoningTraceIndonesia": {
+      "Description": "Ringkasan alasan analisis model dalam bahasa Indonesia.",
+      "ValueDescriptions": {}
+    }
+  }
+}
