@@ -10,12 +10,6 @@ namespace GeminiNuGetAuditor;
 
 public class Program
 {
-    private enum AuditMode
-    {
-        Rag,
-        NonRag
-    }
-
     private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
     private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
 
@@ -40,6 +34,7 @@ public class Program
             var geminiSettings = GetGeminiSettings();
             var executionMode = ParseExecutionMode(args);
             var compareMode = HasFlag(args, "--compare");
+            var exportCodeBertDataset = HasFlag(args, "--export-codebert-dataset") || HasFlag(args, "--prepare-codebert");
             var csprojPath = ResolveCsprojPath(args);
             var modelName = GetGeminiModelName(geminiSettings);
             Console.WriteLine($"Target project: {csprojPath}");
@@ -73,6 +68,29 @@ public class Program
             }
 
             var securityContext = securityContextResult.Context;
+
+            var groundTruthLabels = GroundTruthProvider.BuildLabels(packageReferences, securityContext);
+
+            if (exportCodeBertDataset)
+            {
+                var datasetResult = CodeBertDatasetExporter.Export(
+                    Path.Combine(GetApplicationRootDirectory(), "audit-results"),
+                    Path.GetFileNameWithoutExtension(csprojPath),
+                    packageReferences,
+                    groundTruthLabels);
+
+                Console.WriteLine("CodeBERT dataset export completed.");
+                Console.WriteLine($"Total records: {datasetResult.TotalRecords}.");
+                Console.WriteLine($"Training/Validation/Testing: {datasetResult.TrainingCount}/{datasetResult.ValidationCount}/{datasetResult.TestingCount}.");
+                Console.WriteLine($"JSON dataset saved to: {datasetResult.JsonPath}");
+                Console.WriteLine($"CSV dataset saved to: {datasetResult.CsvPath}");
+
+                if (!compareMode && executionMode == AuditScenario.CodeBert)
+                {
+                    return 0;
+                }
+            }
+
             Console.WriteLine("Sending package list to Gemini for security analysis...");
 
             var analysisStopwatch = Stopwatch.StartNew();
@@ -86,15 +104,17 @@ public class Program
                     modelName,
                     packageReferences,
                     securityContext,
-                    geminiSettings);
+                    geminiSettings,
+                    AuditScenario.RagLlm);
 
-                Console.WriteLine("[Compare] Running non-RAG analysis...");
-                var nonRagResponse = await AnalyzeWithGeminiWithBatching(
+                Console.WriteLine("[Compare] Running zero-shot analysis...");
+                var zeroShotResponse = await AnalyzeWithGeminiWithBatching(
                     GetGeminiApiKey(geminiSettings),
                     modelName,
                     packageReferences,
                     "[]",
-                    geminiSettings);
+                    geminiSettings,
+                    AuditScenario.ZeroShot);
 
                 analysisStopwatch.Stop();
                 Console.WriteLine($"Gemini analysis completed in {FormatElapsed(analysisStopwatch.Elapsed)}.");
@@ -102,38 +122,44 @@ public class Program
 
                 var postProcessingStopwatch = Stopwatch.StartNew();
                 var normalizedRag = NormalizeResponse(packageReferences, ragResponse);
-                var normalizedNonRag = NormalizeResponse(packageReferences, nonRagResponse);
+                var normalizedZeroShot = NormalizeResponse(packageReferences, zeroShotResponse);
 
                 Console.WriteLine("Saving audit datasets to local JSON files...");
-                var ragOutputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedRag, "rag");
-                var nonRagOutputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedNonRag, "nonrag");
-                metricsExcelPath = SaveComparisonMetricsExcel(csprojPath, normalizedRag, normalizedNonRag, securityContext);
+                var ragOutputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedRag, AuditScenario.RagLlm);
+                var zeroShotOutputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedZeroShot, AuditScenario.ZeroShot);
+                metricsExcelPath = SaveComparisonMetricsExcel(csprojPath, normalizedRag, normalizedZeroShot, securityContext);
                 postProcessingStopwatch.Stop();
 
                 var ragVulnerableCount = normalizedRag.VulnerabilityReports.Count(x => x.IsVulnerable);
-                var nonRagVulnerableCount = normalizedNonRag.VulnerabilityReports.Count(x => x.IsVulnerable);
+                var zeroShotVulnerableCount = normalizedZeroShot.VulnerabilityReports.Count(x => x.IsVulnerable);
                 totalStopwatch.Stop();
 
                 Console.WriteLine($"Comparison completed. {packageReferences.Count} package(s) were analyzed.");
                 Console.WriteLine($"RAG vulnerable detections: {ragVulnerableCount}.");
-                Console.WriteLine($"Non-RAG vulnerable detections: {nonRagVulnerableCount}.");
+                Console.WriteLine($"Zero-shot vulnerable detections: {zeroShotVulnerableCount}.");
                 Console.WriteLine($"Post-processing completed in {FormatElapsed(postProcessingStopwatch.Elapsed)}.");
                 Console.WriteLine($"Total execution time: {FormatElapsed(totalStopwatch.Elapsed)}.");
                 Console.WriteLine($"RAG audit result saved to: {ragOutputPath}");
-                Console.WriteLine($"Non-RAG audit result saved to: {nonRagOutputPath}");
+                Console.WriteLine($"Zero-shot audit result saved to: {zeroShotOutputPath}");
                 Console.WriteLine($"Comparison metrics Excel saved to: {metricsExcelPath}");
                 return 0;
             }
 
-            var analysisContext = executionMode == AuditMode.Rag ? securityContext : "[]";
-            var modeTag = executionMode == AuditMode.Rag ? "rag" : "nonrag";
+            if (executionMode == AuditScenario.CodeBert)
+            {
+                Console.WriteLine("CodeBERT mode only prepares datasets/evaluates imported predictions. Use --export-codebert-dataset to create training/validation/testing files.");
+                return 0;
+            }
+
+            var analysisContext = executionMode == AuditScenario.RagLlm ? securityContext : "[]";
 
             var geminiResponse = await AnalyzeWithGeminiWithBatching(
                 GetGeminiApiKey(geminiSettings),
                 modelName,
                 packageReferences,
                 analysisContext,
-                geminiSettings);
+                geminiSettings,
+                executionMode);
             analysisStopwatch.Stop();
 
             Console.WriteLine($"Gemini analysis completed in {FormatElapsed(analysisStopwatch.Elapsed)}.");
@@ -142,8 +168,8 @@ public class Program
             var singlePostProcessingStopwatch = Stopwatch.StartNew();
             var normalizedResponse = NormalizeResponse(packageReferences, geminiResponse);
             Console.WriteLine("Saving audit dataset to local JSON file...");
-            var outputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedResponse, modeTag);
-            metricsExcelPath = SaveScanMetricsExcel(csprojPath, normalizedResponse, securityContext, modeTag);
+            var outputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedResponse, executionMode);
+            metricsExcelPath = SaveScanMetricsExcel(csprojPath, normalizedResponse, securityContext, GetScenarioTag(executionMode));
             singlePostProcessingStopwatch.Stop();
 
             var vulnerableCount = normalizedResponse.VulnerabilityReports.Count(x => x.IsVulnerable);
@@ -182,7 +208,8 @@ public class Program
             GetGeminiModelName(geminiSettings),
             packageReferences,
             securityContext,
-            geminiSettings);
+            geminiSettings,
+            string.IsNullOrWhiteSpace(securityContext) || securityContext == "[]" ? AuditScenario.ZeroShot : AuditScenario.RagLlm);
     }
 
     public static string GetGeminiApiKey()
@@ -235,12 +262,13 @@ public class Program
         string modelName,
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
         string securityContext,
-        GeminiSettings settings)
+        GeminiSettings settings,
+        AuditScenario scenario)
     {
         if (packageReferences.Count <= settings.MaxPackagesPerRequest)
         {
             var scopedSecurityContext = FilterSecurityContextForPackages(securityContext, packageReferences.Select(x => x.PackageName));
-            return await AnalyzeWithGeminiWithRetry(apiKey, modelName, packageReferences, scopedSecurityContext, settings);
+            return await AnalyzeWithGeminiWithRetry(apiKey, modelName, packageReferences, scopedSecurityContext, settings, scenario);
         }
 
         var batches = packageReferences.Chunk(settings.MaxPackagesPerRequest).ToList();
@@ -254,7 +282,7 @@ public class Program
             var scopedSecurityContext = FilterSecurityContextForPackages(securityContext, batch.Select(x => x.PackageName));
 
             Console.WriteLine($"[Gemini] Processing batch {i + 1}/{batches.Count} ({batch.Length} package(s)). Security context chars={scopedSecurityContext.Length}.");
-            var batchResponse = await AnalyzeWithGeminiWithRetry(apiKey, modelName, batch, scopedSecurityContext, settings);
+            var batchResponse = await AnalyzeWithGeminiWithRetry(apiKey, modelName, batch, scopedSecurityContext, settings, scenario);
 
             if (batchResponse?.VulnerabilityReports is { Count: > 0 })
             {
@@ -273,7 +301,8 @@ public class Program
         string modelName,
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
         string securityContext,
-        GeminiSettings settings)
+        GeminiSettings settings,
+        AuditScenario scenario)
     {
         var maxAttempts = settings.MaxRetryCount + 1;
 
@@ -281,7 +310,7 @@ public class Program
         {
             try
             {
-                return await AnalyzeWithGemini(apiKey, modelName, packageReferences, securityContext, settings);
+                return await AnalyzeWithGemini(apiKey, modelName, packageReferences, securityContext, settings, scenario);
             }
             catch (TimeoutException) when (attempt < maxAttempts)
             {
@@ -347,7 +376,8 @@ public class Program
         string modelName,
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
         string securityContext,
-        GeminiSettings settings)
+        GeminiSettings settings,
+        AuditScenario scenario)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
@@ -363,50 +393,7 @@ public class Program
         httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         httpClient.DefaultRequestHeaders.Add("X-Goog-Api-Key", apiKey);
 
-        var prompt = $$"""
-You are a NuGet security auditor.
-Return ONLY valid JSON.
-Do not return markdown.
-Do not return code fences.
-Do not return explanations.
-Do not return any text before or after the JSON.
-
-The JSON must match this exact C# model structure and property names:
-{
-  "VulnerabilityReports": [
-    {
-      "PackageName": "string",
-      "CurrentVersion": "string",
-      "IsVulnerable": true,
-      "CVE_ID": "string",
-      "Severity": "string",
-      "SeverityIndonesia": "string",
-      "MitigationPlan": "string",
-      "MitigationPlanIndonesia": "string",
-      "IsGroundedInReference": true,
-      "ReasoningTrace": "string",
-      "ReasoningTraceIndonesia": "string"
-    }
-  ]
-}
-
-Rules:
-- Always return a single JSON object.
-- Always include the `VulnerabilityReports` array.
-- Return one item per package.
-- Use empty string for unknown string values.
-- Use false for `IsVulnerable` when no known vulnerability is identified.
-- Set `IsGroundedInReference` to true only when the finding exists in the provided security reference data.
-- If a package is not in the reference, set `IsVulnerable` to false, `IsGroundedInReference` to false, and `Severity`/`SeverityIndonesia` to "Unknown"/"Tidak diketahui".
-- Always fill bilingual fields: English and Indonesian versions for severity, mitigation plan, and reasoning trace.
-- Compare these local packages with the provided security reference data. Only flag vulnerabilities if they exist in the reference. If a package is not in the reference, mark it as Unknown. Provide a mitigation plan based on .NET 10 security standards.
-
-Local packages:
-{{packageText}}
-
-Security reference data:
-{{securityContext}}
-""";
+        var prompt = BuildGeminiPrompt(packageText, securityContext, scenario);
 
         var requestBody = new
         {
@@ -565,7 +552,7 @@ Security reference data:
         }
     }
 
-    private static AuditMode ParseExecutionMode(string[] args)
+    private static AuditScenario ParseExecutionMode(string[] args)
     {
         var modeArgument = args.FirstOrDefault(x =>
             x.StartsWith("--mode=", StringComparison.OrdinalIgnoreCase) ||
@@ -573,17 +560,24 @@ Security reference data:
 
         if (string.IsNullOrWhiteSpace(modeArgument))
         {
-            return AuditMode.Rag;
+            return AuditScenario.RagLlm;
         }
 
         var value = modeArgument.Split('=', 2).LastOrDefault()?.Trim();
 
-        if (string.Equals(value, "nonrag", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(value, "zero-shot", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "zeroshot", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "nonrag", StringComparison.OrdinalIgnoreCase))
         {
-            return AuditMode.NonRag;
+            return AuditScenario.ZeroShot;
         }
 
-        return AuditMode.Rag;
+        if (string.Equals(value, "codebert", StringComparison.OrdinalIgnoreCase))
+        {
+            return AuditScenario.CodeBert;
+        }
+
+        return AuditScenario.RagLlm;
     }
 
     private static bool HasFlag(IEnumerable<string> args, string flag)
@@ -811,6 +805,79 @@ Security reference data:
         return builder.ToString().TrimEnd();
     }
 
+    private static string BuildGeminiPrompt(string packageText, string securityContext, AuditScenario scenario)
+    {
+        var jsonContract = """
+Return ONLY valid JSON.
+Do not return markdown.
+Do not return code fences.
+Do not return explanations outside JSON.
+Do not return any text before or after the JSON.
+
+The JSON must match this exact C# model structure and property names:
+{
+  "VulnerabilityReports": [
+    {
+      "PackageName": "string",
+      "CurrentVersion": "string",
+      "IsVulnerable": true,
+      "CVE_ID": "string",
+      "Severity": "string",
+      "SeverityIndonesia": "string",
+      "MitigationPlan": "string",
+      "MitigationPlanIndonesia": "string",
+      "IsGroundedInReference": true,
+      "ReasoningTrace": "string",
+      "ReasoningTraceIndonesia": "string"
+    }
+  ]
+}
+
+JSON rules:
+- Always return one JSON object.
+- Always include the VulnerabilityReports array.
+- Return exactly one item per package.
+- Use the package name and version exactly as provided.
+- Use empty string for unknown CVE_ID and other unknown string values.
+- Always fill bilingual fields: English and Indonesian versions for Severity, MitigationPlan, and ReasoningTrace.
+- Severity must use English values Critical, High, Moderate, Low, or Unknown.
+- SeverityIndonesia must use Kritis, Tinggi, Sedang, Rendah, or Tidak diketahui.
+""";
+
+        if (scenario == AuditScenario.ZeroShot)
+        {
+            return $$"""
+You are a NuGet security auditor evaluating the Zero-Shot baseline scenario for a controlled experiment.
+Do not use external reference facts, advisory snippets, retrieved context, URLs, or browsing.
+Classify only from the package name/version patterns and your pretrained knowledge.
+Set IsGroundedInReference to false for every item because no retrieval context is provided.
+If you are uncertain, prefer IsVulnerable=false and explain the uncertainty in both reasoning fields.
+
+{{jsonContract}}
+
+Local packages:
+{{packageText}}
+""";
+        }
+
+        return $$"""
+You are a NuGet security auditor evaluating the RAG-LLM scenario for a controlled experiment.
+Use the provided security reference data as ground-truth context from GitHub Advisory/local DB.
+Only mark IsVulnerable=true when the package is supported by the provided reference context.
+Set IsGroundedInReference=true only when the finding is directly supported by the reference context.
+If a package is absent from the reference context, set IsVulnerable=false, IsGroundedInReference=false, Severity=Unknown, and SeverityIndonesia=Tidak diketahui.
+Provide mitigation based on the patched version or advisory context when available.
+
+{{jsonContract}}
+
+Local packages:
+{{packageText}}
+
+Security reference data:
+{{securityContext}}
+""";
+    }
+
     private static GeminiResponse NormalizeResponse(
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
         GeminiResponse? geminiResponse)
@@ -864,20 +931,21 @@ Security reference data:
         string modelName,
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
         GeminiResponse geminiResponse,
-        string modeTag)
+        AuditScenario scenario)
     {
         var outputDirectory = Path.Combine(GetApplicationRootDirectory(), "audit-results");
         Directory.CreateDirectory(outputDirectory);
 
         var outputFilePath = Path.Combine(
             outputDirectory,
-            $"audit-{Path.GetFileNameWithoutExtension(csprojPath)}-{modeTag}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json");
+            $"audit-{Path.GetFileNameWithoutExtension(csprojPath)}-{GetScenarioTag(scenario)}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json");
 
         var sessionRecord = new AuditSessionRecord
         {
             GeneratedAtUtc = DateTimeOffset.UtcNow,
             SourceProjectPath = csprojPath,
             ModelName = modelName,
+            Scenario = scenario,
             ExtractedPackages = packageReferences.ToList(),
             VulnerabilityReports = geminiResponse.VulnerabilityReports,
             VulnerabilityReportFieldDescriptions = GetVulnerabilityReportFieldDescriptions()
@@ -1316,6 +1384,17 @@ Security reference data:
         }
 
         return "True Negative";
+    }
+
+    private static string GetScenarioTag(AuditScenario scenario)
+    {
+        return scenario switch
+        {
+            AuditScenario.RagLlm => "rag-llm",
+            AuditScenario.ZeroShot => "zero-shot",
+            AuditScenario.CodeBert => "codebert",
+            _ => "unknown"
+        };
     }
 
     private static string EscapeCsv(string value)

@@ -8,6 +8,8 @@ namespace GeminiNuGetAuditor;
 public static class SecurityReferenceProvider
 {
     private const string GitHubTokenEnvironmentVariableName = "GITHUB_TOKEN";
+    private const int GitHubRequestTimeoutSeconds = 30;
+    private const int GitHubMaxAttempts = 3;
     private static readonly JsonDocumentOptions InputJsonOptions = new()
     {
         CommentHandling = JsonCommentHandling.Skip,
@@ -179,6 +181,7 @@ public static class SecurityReferenceProvider
         }
 
         using var httpClient = new HttpClient();
+        httpClient.Timeout = TimeSpan.FromSeconds(GitHubRequestTimeoutSeconds);
         httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue(settings.GitHubUserAgentProductName, settings.GitHubUserAgentProductVersion));
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", githubToken);
         httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -189,7 +192,7 @@ public static class SecurityReferenceProvider
 
         foreach (var packageName in packageSet)
         {
-            var apiResponse = await QueryNuGetAdvisoriesFromGitHubAsync(httpClient, settings.GitHubGraphQlUrl, settings.GitHubGraphQlNuGetQuery, packageName, cancellationToken);
+            var apiResponse = await QueryNuGetAdvisoriesFromGitHubWithRetryAsync(httpClient, settings.GitHubGraphQlUrl, settings.GitHubGraphQlNuGetQuery, packageName, cancellationToken);
 
             if (apiResponse.StatusCode.HasValue)
             {
@@ -220,6 +223,52 @@ public static class SecurityReferenceProvider
             Context = JsonSerializer.Serialize(results, SerializerOptions),
             Diagnostics = diagnostics
         };
+    }
+
+    private static async Task<GitHubPackageQueryResult> QueryNuGetAdvisoriesFromGitHubWithRetryAsync(
+        HttpClient httpClient,
+        string gitHubGraphQlUrl,
+        string gitHubGraphQlNuGetQuery,
+        string packageName,
+        CancellationToken cancellationToken)
+    {
+        GitHubPackageQueryResult? lastResult = null;
+
+        for (var attempt = 1; attempt <= GitHubMaxAttempts; attempt++)
+        {
+            lastResult = await QueryNuGetAdvisoriesFromGitHubAsync(
+                httpClient,
+                gitHubGraphQlUrl,
+                gitHubGraphQlNuGetQuery,
+                packageName,
+                cancellationToken);
+
+            if (!IsTransientGitHubResult(lastResult) || attempt == GitHubMaxAttempts)
+            {
+                return lastResult;
+            }
+
+            var delay = TimeSpan.FromMilliseconds(750 * attempt);
+            await Task.Delay(delay, cancellationToken);
+        }
+
+        return lastResult ?? new GitHubPackageQueryResult
+        {
+            StatusCode = null,
+            Records = new List<SecurityAdvisoryRecord>(),
+            ErrorMessage = "GitHub API request failed before a response was produced."
+        };
+    }
+
+    private static bool IsTransientGitHubResult(GitHubPackageQueryResult result)
+    {
+        if (!result.StatusCode.HasValue)
+        {
+            return true;
+        }
+
+        return result.StatusCode.Value == HttpStatusCode.TooManyRequests ||
+               (int)result.StatusCode.Value >= 500;
     }
 
     private static async Task<GitHubPackageQueryResult> QueryNuGetAdvisoriesFromGitHubAsync(

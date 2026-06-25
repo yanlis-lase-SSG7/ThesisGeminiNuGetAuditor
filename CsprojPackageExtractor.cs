@@ -9,17 +9,32 @@ public static class CsprojPackageExtractor
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
-        var document = XDocument.Load(filePath);
+        if (!File.Exists(filePath))
+        {
+            throw new FileNotFoundException("The .csproj file was not found.", filePath);
+        }
+
+        XDocument document;
+        try
+        {
+            document = XDocument.Load(filePath, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException)
+        {
+            throw new InvalidOperationException($"Unable to parse .csproj file '{filePath}'.", ex);
+        }
 
         return document
             .Descendants()
             .Where(x => x.Name.LocalName == "PackageReference")
             .Select(x => new NuGetPackageReference
             {
-                PackageName = x.Attribute("Include")?.Value ?? x.Attribute("Update")?.Value ?? string.Empty,
-                CurrentVersion = x.Attribute("Version")?.Value ?? x.Elements().FirstOrDefault(e => e.Name.LocalName == "Version")?.Value ?? "Not specified"
+                PackageName = ReadPackageName(x),
+                CurrentVersion = ReadPackageVersion(x)
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.PackageName))
+            .GroupBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
             .ToList();
     }
 
@@ -41,5 +56,29 @@ public static class CsprojPackageExtractor
         }
 
         return builder.ToString().TrimEnd();
+    }
+
+    private static string ReadPackageName(XElement element)
+    {
+        return element.Attribute("Include")?.Value?.Trim()
+            ?? element.Attribute("Update")?.Value?.Trim()
+            ?? element.Attribute("Remove")?.Value?.Trim()
+            ?? string.Empty;
+    }
+
+    private static string ReadPackageVersion(XElement element)
+    {
+        var attributeVersion = element.Attribute("Version")?.Value?.Trim();
+        if (!string.IsNullOrWhiteSpace(attributeVersion))
+        {
+            return attributeVersion;
+        }
+
+        var childVersion = element.Elements()
+            .FirstOrDefault(e => e.Name.LocalName == "Version")
+            ?.Value
+            ?.Trim();
+
+        return string.IsNullOrWhiteSpace(childVersion) ? "Not specified" : childVersion;
     }
 }
