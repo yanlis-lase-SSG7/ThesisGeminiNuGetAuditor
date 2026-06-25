@@ -24,39 +24,7 @@ public static class CodeBertDatasetExporter
 
         Directory.CreateDirectory(outputDirectory);
 
-        var labelLookup = groundTruthLabels
-            .GroupBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
-
-        var records = new List<CodeBertDatasetRecord>();
-        var orderedPackages = packageReferences
-            .Where(x => !string.IsNullOrWhiteSpace(x.PackageName))
-            .OrderBy(x => StableHash($"{x.PackageName}@{x.CurrentVersion}"))
-            .ToList();
-
-        foreach (var package in orderedPackages)
-        {
-            labelLookup.TryGetValue(package.PackageName, out var label);
-            var baseRecord = CreateRecord(package, label, package.PackageName, package.CurrentVersion, "original");
-            records.Add(baseRecord);
-
-            records.Add(CreateRecord(
-                package,
-                label,
-                package.PackageName,
-                NormalizeVersionForMutation(package.CurrentVersion),
-                "semantic_version_normalization"));
-
-            records.Add(CreateRecord(
-                package,
-                label,
-                $"{package.PackageName}.SafeDummy",
-                "1.0.0",
-                "safe_dummy_dependency",
-                forcedLabel: false));
-        }
-
-        AssignSplits(records);
+        var records = BuildDatasetRecords(packageReferences, groundTruthLabels);
 
         var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
         var jsonPath = Path.Combine(outputDirectory, $"codebert-dataset-{projectName}-{timestamp}.json");
@@ -74,6 +42,47 @@ public static class CodeBertDatasetExporter
             ValidationCount = records.Count(x => x.Split == "validation"),
             TestingCount = records.Count(x => x.Split == "testing")
         };
+    }
+
+    public static List<CodeBertDatasetRecord> BuildDatasetRecords(
+        IReadOnlyCollection<NuGetPackageReference> packageReferences,
+        IReadOnlyCollection<GroundTruthLabel> groundTruthLabels)
+    {
+        ArgumentNullException.ThrowIfNull(packageReferences);
+        ArgumentNullException.ThrowIfNull(groundTruthLabels);
+
+        var labelLookup = groundTruthLabels
+            .Where(x => !string.IsNullOrWhiteSpace(x.PackageName))
+            .GroupBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+        var records = new List<CodeBertDatasetRecord>();
+        var orderedPackages = packageReferences
+            .Where(x => !string.IsNullOrWhiteSpace(x.PackageName))
+            .OrderBy(x => StableHash($"{x.PackageName}@{x.CurrentVersion}"))
+            .ToList();
+
+        foreach (var package in orderedPackages)
+        {
+            labelLookup.TryGetValue(package.PackageName, out var label);
+            records.Add(CreateRecord(package, label, package.PackageName, package.CurrentVersion, "original"));
+            records.Add(CreateRecord(
+                package,
+                label,
+                package.PackageName,
+                NormalizeVersionForMutation(package.CurrentVersion),
+                "semantic_version_normalization"));
+            records.Add(CreateRecord(
+                package,
+                label,
+                $"{package.PackageName}.SafeDummy",
+                "1.0.0",
+                "safe_dummy_dependency",
+                forcedLabel: false));
+        }
+
+        AssignSplits(records);
+        return records;
     }
 
     private static CodeBertDatasetRecord CreateRecord(

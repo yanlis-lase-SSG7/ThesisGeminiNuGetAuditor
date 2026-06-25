@@ -1,4 +1,6 @@
-﻿using System.Diagnostics;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -12,6 +14,15 @@ public class Program
 {
     private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
     private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
+    private const int SequentialMaxDegreeOfParallelism = 1;
+    private const int GeminiGlobalConcurrencyLimit = 1;
+    private const int HardDelayAfterProjectMilliseconds = 15000;
+
+    private static readonly object ConsoleLock = new();
+    private static readonly SemaphoreSlim GeminiRequestGate = new(GeminiGlobalConcurrencyLimit, GeminiGlobalConcurrencyLimit);
+    private static readonly ConcurrentBag<GeminiApiDiagnostic> GeminiApiDiagnostics = new();
+    private static readonly ConcurrentQueue<ConsoleLogEntry> ConsoleLogEntries = new();
+    private static long ConsoleLogSequence;
 
     private static readonly JsonDocumentOptions AppSettingsJsonOptions = new()
     {
@@ -27,189 +38,135 @@ public class Program
 
     public static async Task<int> Main(string[] args)
     {
+        InstallConsoleCapture();
         var totalStopwatch = Stopwatch.StartNew();
 
         try
         {
             var geminiSettings = GetGeminiSettings();
-            var executionMode = ParseExecutionMode(args);
-            var compareMode = HasFlag(args, "--compare");
-            var exportCodeBertDataset = HasFlag(args, "--export-codebert-dataset") || HasFlag(args, "--prepare-codebert");
-            var csprojPath = ResolveCsprojPath(args);
-            var modelName = GetGeminiModelName(geminiSettings);
-            Console.WriteLine($"Target project: {csprojPath}");
-            Console.WriteLine($"Using Gemini model: {modelName}");
-            Console.WriteLine($"Execution mode: {(compareMode ? "compare" : executionMode.ToString())}");
-            Console.WriteLine("Extracting NuGet packages...");
+            var apiKey = GetGeminiApiKey(geminiSettings);
+            var configuredModelName = GetGeminiModelName(geminiSettings);
+            var modelName = await ResolveUsableGeminiModelNameAsync(apiKey, configuredModelName, geminiSettings);
+            var rootFolder = PromptForAuditFolder();
+            var csprojFiles = FindCsprojFiles(rootFolder);
 
-            var extractionStopwatch = Stopwatch.StartNew();
-            var packageReferences = CsprojPackageExtractor.ExtractPackageReferences(csprojPath);
-            extractionStopwatch.Stop();
-
-            Console.WriteLine($"Extraction completed in {FormatElapsed(extractionStopwatch.Elapsed)}.");
-
-            if (packageReferences.Count == 0)
+            if (csprojFiles.Count == 0)
             {
-                Console.WriteLine("No PackageReference entries were found in the target .csproj file.");
-                Console.WriteLine("Gemini request was skipped because there are no NuGet packages to analyze.");
+                WriteLine($"No .csproj files were found under: {rootFolder}");
                 return 0;
             }
 
-            Console.WriteLine($"Found {packageReferences.Count} package(s) to analyze.");
-            Console.WriteLine("Retrieving security reference context...");
-            var securityContextResult = SecurityReferenceProvider.GetSecurityContextWithDiagnostics(
-                packageReferences.Select(x => x.PackageName).ToList());
+            var outputDirectory = Path.Combine(GetApplicationRootDirectory(), "audit-results");
+            Directory.CreateDirectory(outputDirectory);
 
-            Console.WriteLine($"Security reference source: {securityContextResult.Source}");
+            WriteLine($"Audit root folder: {rootFolder}");
+            WriteLine($"Found {csprojFiles.Count} .csproj file(s).");
+            WriteLine($"Using Gemini model: {modelName}");
+            var runTimestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmssfff");
+            var artifactSet = CreateArtifactSet(outputDirectory, runTimestamp);
+            var checkpointDirectory = Path.Combine(outputDirectory, "checkpoints");
+            Directory.CreateDirectory(checkpointDirectory);
 
-            foreach (var detail in securityContextResult.Diagnostics)
+            var completedCheckpointResults = LoadSuccessfulCheckpointResults(checkpointDirectory, csprojFiles);
+            var completedProjectPaths = completedCheckpointResults
+                .Select(x => Path.GetFullPath(x.ProjectPath))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var pendingCsprojFiles = csprojFiles
+                .Where(path => !completedProjectPaths.Contains(Path.GetFullPath(path)))
+                .ToList();
+
+            WriteLine($"Max concurrent project processing: {SequentialMaxDegreeOfParallelism}");
+            WriteLine($"Global Gemini request concurrency: {GeminiGlobalConcurrencyLimit}");
+            WriteLine($"Hard delay after each processed project: {HardDelayAfterProjectMilliseconds / 1000} seconds.");
+            WriteLine($"Checkpoint directory: {checkpointDirectory}");
+            WriteLine($"Successful checkpoint(s) loaded for resume: {completedCheckpointResults.Count}.");
+            WriteLine($"Pending .csproj file(s) to process in this run: {pendingCsprojFiles.Count}.");
+            WriteLine("Starting sequential checkpointed evaluation: RAG-LLM, Zero-Shot, and CodeBERT dataset export.");
+
+            var results = completedCheckpointResults
+                .OrderBy(x => x.ProjectPath, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            SaveFinalAuditArtifacts(artifactSet, rootFolder, modelName, results);
+
+            for (var index = 0; index < pendingCsprojFiles.Count; index++)
             {
-                Console.WriteLine($"[Retrieval] {detail}");
-            }
+                var csprojPath = pendingCsprojFiles[index];
+                WriteLine($"Processing project {index + 1}/{pendingCsprojFiles.Count}: {csprojPath}");
 
-            var securityContext = securityContextResult.Context;
+                var result = await ProcessProjectAsync(
+                    csprojPath,
+                    apiKey,
+                    modelName,
+                    geminiSettings,
+                    outputDirectory,
+                    CancellationToken.None);
 
-            var groundTruthLabels = GroundTruthProvider.BuildLabels(packageReferences, securityContext);
+                SaveProjectCheckpoint(checkpointDirectory, result);
+                results.RemoveAll(x => string.Equals(x.ProjectPath, result.ProjectPath, StringComparison.OrdinalIgnoreCase));
+                results.Add(result);
+                results = results
+                    .OrderBy(x => x.ProjectPath, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
 
-            if (exportCodeBertDataset)
-            {
-                var datasetResult = CodeBertDatasetExporter.Export(
-                    Path.Combine(GetApplicationRootDirectory(), "audit-results"),
-                    Path.GetFileNameWithoutExtension(csprojPath),
-                    packageReferences,
-                    groundTruthLabels);
+                SaveFinalAuditArtifacts(artifactSet, rootFolder, modelName, results);
+                WriteLine($"Checkpoint and aggregate reports saved after project: {result.ProjectKey}");
 
-                Console.WriteLine("CodeBERT dataset export completed.");
-                Console.WriteLine($"Total records: {datasetResult.TotalRecords}.");
-                Console.WriteLine($"Training/Validation/Testing: {datasetResult.TrainingCount}/{datasetResult.ValidationCount}/{datasetResult.TestingCount}.");
-                Console.WriteLine($"JSON dataset saved to: {datasetResult.JsonPath}");
-                Console.WriteLine($"CSV dataset saved to: {datasetResult.CsvPath}");
-
-                if (!compareMode && executionMode == AuditScenario.CodeBert)
+                if (index < pendingCsprojFiles.Count - 1)
                 {
-                    return 0;
+                    WriteLine($"Waiting {HardDelayAfterProjectMilliseconds / 1000} seconds before the next project to reduce Gemini TPM/RPM pressure.");
+                    await Task.Delay(HardDelayAfterProjectMilliseconds);
                 }
             }
 
-            Console.WriteLine("Sending package list to Gemini for security analysis...");
-
-            var analysisStopwatch = Stopwatch.StartNew();
-            string metricsExcelPath;
-
-            if (compareMode)
-            {
-                Console.WriteLine("[Compare] Running RAG analysis...");
-                var ragResponse = await AnalyzeWithGeminiWithBatching(
-                    GetGeminiApiKey(geminiSettings),
-                    modelName,
-                    packageReferences,
-                    securityContext,
-                    geminiSettings,
-                    AuditScenario.RagLlm);
-
-                Console.WriteLine("[Compare] Running zero-shot analysis...");
-                var zeroShotResponse = await AnalyzeWithGeminiWithBatching(
-                    GetGeminiApiKey(geminiSettings),
-                    modelName,
-                    packageReferences,
-                    "[]",
-                    geminiSettings,
-                    AuditScenario.ZeroShot);
-
-                analysisStopwatch.Stop();
-                Console.WriteLine($"Gemini analysis completed in {FormatElapsed(analysisStopwatch.Elapsed)}.");
-                Console.WriteLine("Gemini response received. Normalizing audit results...");
-
-                var postProcessingStopwatch = Stopwatch.StartNew();
-                var normalizedRag = NormalizeResponse(packageReferences, ragResponse);
-                var normalizedZeroShot = NormalizeResponse(packageReferences, zeroShotResponse);
-
-                Console.WriteLine("Saving audit datasets to local JSON files...");
-                var ragOutputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedRag, AuditScenario.RagLlm);
-                var zeroShotOutputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedZeroShot, AuditScenario.ZeroShot);
-                metricsExcelPath = SaveComparisonMetricsExcel(csprojPath, normalizedRag, normalizedZeroShot, securityContext);
-                postProcessingStopwatch.Stop();
-
-                var ragVulnerableCount = normalizedRag.VulnerabilityReports.Count(x => x.IsVulnerable);
-                var zeroShotVulnerableCount = normalizedZeroShot.VulnerabilityReports.Count(x => x.IsVulnerable);
-                totalStopwatch.Stop();
-
-                Console.WriteLine($"Comparison completed. {packageReferences.Count} package(s) were analyzed.");
-                Console.WriteLine($"RAG vulnerable detections: {ragVulnerableCount}.");
-                Console.WriteLine($"Zero-shot vulnerable detections: {zeroShotVulnerableCount}.");
-                Console.WriteLine($"Post-processing completed in {FormatElapsed(postProcessingStopwatch.Elapsed)}.");
-                Console.WriteLine($"Total execution time: {FormatElapsed(totalStopwatch.Elapsed)}.");
-                Console.WriteLine($"RAG audit result saved to: {ragOutputPath}");
-                Console.WriteLine($"Zero-shot audit result saved to: {zeroShotOutputPath}");
-                Console.WriteLine($"Comparison metrics Excel saved to: {metricsExcelPath}");
-                return 0;
-            }
-
-            if (executionMode == AuditScenario.CodeBert)
-            {
-                Console.WriteLine("CodeBERT mode only prepares datasets/evaluates imported predictions. Use --export-codebert-dataset to create training/validation/testing files.");
-                return 0;
-            }
-
-            var analysisContext = executionMode == AuditScenario.RagLlm ? securityContext : "[]";
-
-            var geminiResponse = await AnalyzeWithGeminiWithBatching(
-                GetGeminiApiKey(geminiSettings),
-                modelName,
-                packageReferences,
-                analysisContext,
-                geminiSettings,
-                executionMode);
-            analysisStopwatch.Stop();
-
-            Console.WriteLine($"Gemini analysis completed in {FormatElapsed(analysisStopwatch.Elapsed)}.");
-            Console.WriteLine("Gemini response received. Normalizing audit results...");
-
-            var singlePostProcessingStopwatch = Stopwatch.StartNew();
-            var normalizedResponse = NormalizeResponse(packageReferences, geminiResponse);
-            Console.WriteLine("Saving audit dataset to local JSON file...");
-            var outputPath = SaveAuditResult(csprojPath, modelName, packageReferences, normalizedResponse, executionMode);
-            metricsExcelPath = SaveScanMetricsExcel(csprojPath, normalizedResponse, securityContext, GetScenarioTag(executionMode));
-            singlePostProcessingStopwatch.Stop();
-
-            var vulnerableCount = normalizedResponse.VulnerabilityReports.Count(x => x.IsVulnerable);
             totalStopwatch.Stop();
+            WriteLine("Batch audit completed.");
+            WriteLine($"Succeeded projects: {results.Count(IsProjectFullySuccessfulForResume)}.");
+            WriteLine($"Incomplete/API_FAILED projects: {results.Count(x => !IsProjectFullySuccessfulForResume(x))}.");
+            WriteLine($"Total elapsed time: {FormatElapsed(totalStopwatch.Elapsed)}.");
+            WriteLine($"RAG-LLM JSON report: {artifactSet.RagJsonPath}");
+            WriteLine($"Zero-Shot JSON report: {artifactSet.ZeroShotJsonPath}");
+            WriteLine($"CodeBERT JSON report: {artifactSet.CodeBertJsonPath}");
+            WriteLine($"Comprehensive Excel report: {artifactSet.ExcelReportPath}");
+            WriteLine($"Gemini API diagnostics JSON: {artifactSet.ApiDiagnosticsJsonPath}");
+            WriteLine($"Console execution log JSON: {artifactSet.ConsoleLogJsonPath}");
+            SaveConsoleLogJson(artifactSet.ConsoleLogJsonPath);
 
-            Console.WriteLine($"Audit completed. {packageReferences.Count} package(s) were analyzed.");
-            Console.WriteLine($"Potentially vulnerable packages detected: {vulnerableCount}.");
-            Console.WriteLine($"Post-processing completed in {FormatElapsed(singlePostProcessingStopwatch.Elapsed)}.");
-            Console.WriteLine($"Total execution time: {FormatElapsed(totalStopwatch.Elapsed)}.");
-            Console.WriteLine($"Audit result saved to: {outputPath}");
-            Console.WriteLine($"Metrics Excel saved to: {metricsExcelPath}");
-            return 0;
+            return results.Any(x => !IsProjectFullySuccessfulForResume(x)) ? 2 : 0;
         }
         catch (GeminiConfigurationException ex)
         {
-            Console.Error.WriteLine($"Gemini configuration error: {ex.Message}");
-            return 1;
-        }
-        catch (TimeoutException ex)
-        {
-            Console.Error.WriteLine($"Gemini request timeout: {ex.Message}");
+            WriteError($"Gemini configuration error: {ex.Message}");
             return 1;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Audit failed: {ex.Message}");
+            WriteError($"Batch audit failed: {ex.Message}");
             return 1;
         }
     }
 
-    public static Task<GeminiResponse?> AnalyzeWithGemini(IReadOnlyCollection<NuGetPackageReference> packageReferences, string securityContext)
+    public static Task<GeminiResponse?> AnalyzeWithGemini(
+        IReadOnlyCollection<NuGetPackageReference> packageReferences,
+        string securityContext)
     {
         var geminiSettings = GetGeminiSettings();
-        return AnalyzeWithGemini(
-            GetGeminiApiKey(geminiSettings),
-            GetGeminiModelName(geminiSettings),
+        var scenario = string.IsNullOrWhiteSpace(securityContext) || securityContext.Trim() == "[]"
+            ? AuditScenario.ZeroShot
+            : AuditScenario.RagLlm;
+        var apiKey = GetGeminiApiKey(geminiSettings);
+        var modelName = ResolveUsableGeminiModelNameAsync(apiKey, GetGeminiModelName(geminiSettings), geminiSettings)
+            .GetAwaiter()
+            .GetResult();
+
+        return AnalyzeWithGeminiWithBatching(
+            apiKey,
+            modelName,
             packageReferences,
             securityContext,
             geminiSettings,
-            string.IsNullOrWhiteSpace(securityContext) || securityContext == "[]" ? AuditScenario.ZeroShot : AuditScenario.RagLlm);
+            scenario,
+            CancellationToken.None);
     }
 
     public static string GetGeminiApiKey()
@@ -220,6 +177,611 @@ public class Program
     public static string GetGeminiModelName()
     {
         return GetGeminiModelName(GetGeminiSettings());
+    }
+
+    private static async Task<string> ResolveUsableGeminiModelNameAsync(
+        string apiKey,
+        string configuredModelName,
+        GeminiSettings settings)
+    {
+        var configured = NormalizeModelName(configuredModelName);
+        var generateCapableModels = await TryListGeminiGenerateContentModelsAsync(apiKey, settings);
+
+        if (generateCapableModels.Count == 0)
+        {
+            WriteLine($"[Gemini] Could not list available models. Using configured model: {configured}");
+            return configured;
+        }
+
+        if (generateCapableModels.Contains(configured))
+        {
+            return configured;
+        }
+
+        var preferredModels = new[]
+        {
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-flash-latest",
+            "gemini-pro-latest"
+        };
+
+        var selected = preferredModels.FirstOrDefault(generateCapableModels.Contains)
+            ?? generateCapableModels.First();
+
+        WriteLine($"[Gemini] Configured model '{configured}' is not available for generateContent. Using '{selected}' instead.");
+        return selected;
+    }
+
+    private static async Task<HashSet<string>> TryListGeminiGenerateContentModelsAsync(
+        string apiKey,
+        GeminiSettings settings)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            using var httpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(Math.Max(10, settings.RequestTimeoutSeconds))
+            };
+            httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            httpClient.DefaultRequestHeaders.Add("X-Goog-Api-Key", apiKey);
+
+            var modelsEndpoint = BuildGeminiModelsEndpoint(settings.GenerateContentEndpointTemplate);
+            using var response = await httpClient.GetAsync(modelsEndpoint);
+            var responseContent = await response.Content.ReadAsStringAsync();
+            AddGeminiApiDiagnostic(new GeminiApiDiagnostic
+            {
+                TimestampUtc = DateTimeOffset.UtcNow,
+                Operation = "ListModels",
+                Endpoint = modelsEndpoint,
+                ModelName = string.Empty,
+                Scenario = string.Empty,
+                PackageCount = 0,
+                HttpStatusCode = (int)response.StatusCode,
+                HttpStatusDescription = response.StatusCode.ToString(),
+                Success = response.IsSuccessStatusCode,
+                ResponseHeaders = CollectHeaders(response),
+                RateLimitHeaders = CollectRateLimitHeaders(response),
+                ResponsePreview = TruncateForDisplay(responseContent, 1000)
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                WriteLine($"[Gemini] ListModels failed: HTTP {(int)response.StatusCode} ({response.StatusCode}).");
+                return result;
+            }
+
+            var payload = JsonSerializer.Deserialize<GeminiModelListResponse>(responseContent, SerializerOptions);
+
+            foreach (var model in payload?.Models ?? new List<GeminiModelMetadata>())
+            {
+                if (model.SupportedGenerationMethods.Any(x => string.Equals(x, "generateContent", StringComparison.OrdinalIgnoreCase)))
+                {
+                    var normalized = NormalizeModelName(model.Name);
+                    if (!string.IsNullOrWhiteSpace(normalized))
+                    {
+                        result.Add(normalized);
+                    }
+                }
+            }
+
+            WriteLine($"[Gemini] generateContent-capable models discovered: {result.Count}.");
+        }
+        catch (Exception ex)
+        {
+            AddGeminiApiDiagnostic(new GeminiApiDiagnostic
+            {
+                TimestampUtc = DateTimeOffset.UtcNow,
+                Operation = "ListModels",
+                Endpoint = BuildGeminiModelsEndpoint(settings.GenerateContentEndpointTemplate),
+                Success = false,
+                ErrorMessage = ex.Message
+            });
+            WriteLine($"[Gemini] ListModels skipped because it failed: {ex.Message}");
+        }
+
+        return result;
+    }
+
+    private static string BuildGeminiModelsEndpoint(string generateContentEndpointTemplate)
+    {
+        var marker = "/models/{0}:generateContent";
+        var markerIndex = generateContentEndpointTemplate.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+
+        if (markerIndex > 0)
+        {
+            return generateContentEndpointTemplate[..markerIndex] + "/models";
+        }
+
+        return "https://generativelanguage.googleapis.com/v1beta/models";
+    }
+
+    private static string NormalizeModelName(string modelName)
+    {
+        if (string.IsNullOrWhiteSpace(modelName))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = modelName.Trim();
+        return trimmed.StartsWith("models/", StringComparison.OrdinalIgnoreCase)
+            ? trimmed["models/".Length..]
+            : trimmed;
+    }
+
+    private static async Task<ProjectAuditResult> ProcessProjectAsync(
+        string csprojPath,
+        string apiKey,
+        string modelName,
+        GeminiSettings geminiSettings,
+        string outputDirectory,
+        CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var projectName = Path.GetFileNameWithoutExtension(csprojPath);
+        var projectKey = BuildProjectKey(csprojPath);
+        var result = new ProjectAuditResult
+        {
+            ProjectName = projectName,
+            ProjectKey = projectKey,
+            ProjectPath = csprojPath,
+            StartedAtUtc = DateTimeOffset.UtcNow
+        };
+
+        try
+        {
+            WriteLine($"[{projectKey}] Extracting packages...");
+            var packageReferences = CsprojPackageExtractor.ExtractPackageReferences(csprojPath);
+            result.PackageCount = packageReferences.Count;
+            result.ExtractedPackages = packageReferences.ToList();
+
+            if (packageReferences.Count == 0)
+            {
+                result.Success = true;
+                result.Messages.Add("No PackageReference entries were found. Project skipped.");
+                WriteLine($"[{projectKey}] No PackageReference entries were found. Skipping scenarios.");
+                return result;
+            }
+
+            WriteLine($"[{projectKey}] Found {packageReferences.Count} package(s). Starting scenarios sequentially.");
+
+            var zeroShotResult = await RunGeminiScenarioSafelyAsync(
+                projectKey,
+                AuditScenario.ZeroShot,
+                apiKey,
+                modelName,
+                geminiSettings,
+                packageReferences,
+                "[]",
+                cancellationToken);
+            result.Scenarios.Add(zeroShotResult);
+
+            var securityContextResult = await SecurityReferenceProvider.GetSecurityContextWithDiagnosticsAsync(
+                packageReferences.Select(x => x.PackageName).ToList(),
+                cancellationToken);
+            result.SecurityReferenceSource = securityContextResult.Source;
+            result.RetrievalDiagnostics.AddRange(securityContextResult.Diagnostics);
+
+            foreach (var diagnostic in securityContextResult.Diagnostics)
+            {
+                WriteLine($"[{projectKey}] [Retrieval] {diagnostic}");
+            }
+
+            var securityContext = securityContextResult.Context;
+            var groundTruthLabels = GroundTruthProvider.BuildLabels(packageReferences, securityContext);
+            result.GroundTruthLabels = groundTruthLabels.ToList();
+
+            var ragResult = await RunGeminiScenarioSafelyAsync(
+                projectKey,
+                AuditScenario.RagLlm,
+                apiKey,
+                modelName,
+                geminiSettings,
+                packageReferences,
+                securityContext,
+                cancellationToken);
+            result.Scenarios.Add(ragResult);
+
+            foreach (var scenarioResult in result.Scenarios)
+            {
+                if (scenarioResult.Response is null)
+                {
+                    scenarioResult.Status = "API_FAILED";
+                    scenarioResult.ExcludedFromMetrics = true;
+                    scenarioResult.MetricExclusionReason = "Prediksi LLM tidak tersedia karena API gagal setelah retry. Skenario ini tidak dimasukkan ke confusion matrix untuk menjaga integritas evaluasi.";
+                    result.Messages.Add($"{scenarioResult.Scenario} marked API_FAILED and excluded from metrics. {scenarioResult.ErrorMessage}");
+                    continue;
+                }
+
+                var metrics = ModelEvaluator.Calculate(
+                    $"{projectKey}:{GetScenarioDisplayName(scenarioResult.Scenario)}",
+                    scenarioResult.Response.VulnerabilityReports,
+                    groundTruthLabels);
+
+                scenarioResult.Metrics = metrics;
+            }
+
+            try
+            {
+                result.CodeBertRecords = CodeBertDatasetExporter.BuildDatasetRecords(packageReferences, groundTruthLabels);
+                result.Messages.Add($"CodeBERT records prepared: {result.CodeBertRecords.Count}.");
+            }
+            catch (Exception ex)
+            {
+                result.Messages.Add($"CodeBERT dataset preparation failed: {ex.Message}");
+            }
+
+            result.Success = IsProjectFullySuccessfulForResume(result);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            result.Success = false;
+            result.ErrorMessage = ex.Message;
+            WriteError($"[{projectKey}] Project failed: {ex.Message}");
+            return result;
+        }
+        finally
+        {
+            stopwatch.Stop();
+            result.CompletedAtUtc = DateTimeOffset.UtcNow;
+            result.ElapsedSeconds = stopwatch.Elapsed.TotalSeconds;
+            WriteLine($"[{projectKey}] Completed in {FormatElapsed(stopwatch.Elapsed)}.");
+        }
+    }
+
+    private static async Task<ScenarioAuditResult> RunGeminiScenarioSafelyAsync(
+        string projectKey,
+        AuditScenario scenario,
+        string apiKey,
+        string modelName,
+        GeminiSettings settings,
+        IReadOnlyCollection<NuGetPackageReference> packageReferences,
+        string securityContext,
+        CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var result = new ScenarioAuditResult
+        {
+            Scenario = scenario,
+            StartedAtUtc = DateTimeOffset.UtcNow
+        };
+
+        try
+        {
+            WriteLine($"[{projectKey}] [{GetScenarioDisplayName(scenario)}] Starting Gemini inference.");
+            var response = await AnalyzeWithGeminiWithBatching(
+                apiKey,
+                modelName,
+                packageReferences,
+                securityContext,
+                settings,
+                scenario,
+                cancellationToken);
+
+            if (response is null)
+            {
+                throw new GeminiApiFailedException("Gemini tidak mengembalikan payload prediksi setelah seluruh retry selesai.");
+            }
+
+            result.Response = NormalizeResponse(packageReferences, response);
+            result.Status = "SUCCESS";
+            result.ExcludedFromMetrics = false;
+            result.Success = true;
+            result.VulnerableCount = result.Response.VulnerabilityReports.Count(x => x.IsVulnerable);
+            WriteLine($"[{projectKey}] [{GetScenarioDisplayName(scenario)}] Finished. Vulnerable detections: {result.VulnerableCount}.");
+        }
+        catch (Exception ex)
+        {
+            result.Success = false;
+            result.Status = "API_FAILED";
+            result.ExcludedFromMetrics = true;
+            result.MetricExclusionReason = "Prediksi LLM tidak tersedia karena API gagal setelah retry. Tidak ada fallback ke Ground Truth.";
+            result.ErrorMessage = ex.Message;
+            WriteError($"[{projectKey}] [{GetScenarioDisplayName(scenario)}] Failed: {ex.Message}");
+        }
+        finally
+        {
+            stopwatch.Stop();
+            result.CompletedAtUtc = DateTimeOffset.UtcNow;
+            result.ElapsedSeconds = stopwatch.Elapsed.TotalSeconds;
+        }
+
+        return result;
+    }
+
+    private static async Task<GeminiResponse?> AnalyzeWithGeminiWithBatching(
+        string apiKey,
+        string modelName,
+        IReadOnlyCollection<NuGetPackageReference> packageReferences,
+        string securityContext,
+        GeminiSettings settings,
+        AuditScenario scenario,
+        CancellationToken cancellationToken)
+    {
+        if (packageReferences.Count <= settings.MaxPackagesPerRequest)
+        {
+            var scopedSecurityContext = scenario == AuditScenario.RagLlm
+                ? FilterSecurityContextForPackages(securityContext, packageReferences.Select(x => x.PackageName))
+                : "[]";
+
+            return await AnalyzeWithGeminiWithRetry(
+                apiKey,
+                modelName,
+                packageReferences,
+                scopedSecurityContext,
+                settings,
+                scenario,
+                cancellationToken);
+        }
+
+        var batches = packageReferences.Chunk(settings.MaxPackagesPerRequest).ToList();
+        var mergedReports = new List<VulnerabilityReport>();
+
+        for (var i = 0; i < batches.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var batch = batches[i];
+            var scopedSecurityContext = scenario == AuditScenario.RagLlm
+                ? FilterSecurityContextForPackages(securityContext, batch.Select(x => x.PackageName))
+                : "[]";
+
+            WriteLine($"[Gemini] {GetScenarioDisplayName(scenario)} batch {i + 1}/{batches.Count}, packages={batch.Length}.");
+            var batchResponse = await AnalyzeWithGeminiWithRetry(
+                apiKey,
+                modelName,
+                batch,
+                scopedSecurityContext,
+                settings,
+                scenario,
+                cancellationToken);
+
+            if (batchResponse?.VulnerabilityReports is { Count: > 0 })
+            {
+                mergedReports.AddRange(batchResponse.VulnerabilityReports);
+            }
+        }
+
+        return new GeminiResponse
+        {
+            VulnerabilityReports = mergedReports
+        };
+    }
+
+    private static async Task<GeminiResponse?> AnalyzeWithGeminiWithRetry(
+        string apiKey,
+        string modelName,
+        IReadOnlyCollection<NuGetPackageReference> packageReferences,
+        string securityContext,
+        GeminiSettings settings,
+        AuditScenario scenario,
+        CancellationToken cancellationToken)
+    {
+        var maxAttempts = settings.MaxRetryCount + 1;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                return await AnalyzeWithGemini(
+                    apiKey,
+                    modelName,
+                    packageReferences,
+                    securityContext,
+                    settings,
+                    scenario,
+                    cancellationToken);
+            }
+            catch (TimeoutException ex) when (attempt < maxAttempts)
+            {
+                var delay = CalculateBackoffDelay(settings.RetryDelayMilliseconds, attempt);
+                WriteLine($"[Gemini] Timeout attempt {attempt}/{maxAttempts}: {ex.Message}. Retrying in {delay.TotalMilliseconds:0}ms.");
+                await Task.Delay(delay, cancellationToken);
+            }
+            catch (HttpRequestException ex) when (attempt < maxAttempts && IsTransientStatusCode(ex.StatusCode))
+            {
+                var delay = CalculateBackoffDelay(settings.RetryDelayMilliseconds, attempt);
+                WriteLine($"[Gemini] Transient HTTP attempt {attempt}/{maxAttempts}: {ex.StatusCode}. Retrying in {delay.TotalMilliseconds:0}ms.");
+                await Task.Delay(delay, cancellationToken);
+            }
+        }
+
+        throw new GeminiApiFailedException($"Gemini API failed after {maxAttempts} attempt(s). No prediction was produced.");
+    }
+
+    private static async Task<GeminiResponse?> AnalyzeWithGemini(
+        string apiKey,
+        string modelName,
+        IReadOnlyCollection<NuGetPackageReference> packageReferences,
+        string securityContext,
+        GeminiSettings settings,
+        AuditScenario scenario,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        ArgumentNullException.ThrowIfNull(packageReferences);
+        ArgumentException.ThrowIfNullOrWhiteSpace(securityContext);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var packageText = BuildPackagePrompt(packageReferences);
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageText);
+
+        await GeminiRequestGate.WaitAsync(cancellationToken);
+        var requestStopwatch = Stopwatch.StartNew();
+        var endpoint = string.Format(settings.GenerateContentEndpointTemplate, modelName);
+
+        try
+        {
+            using var httpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(settings.RequestTimeoutSeconds)
+            };
+            httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            httpClient.DefaultRequestHeaders.Add("X-Goog-Api-Key", apiKey);
+
+            var prompt = BuildGeminiPrompt(packageText, securityContext, scenario);
+            var requestBody = new
+            {
+                contents = new[]
+                {
+                    new
+                    {
+                        parts = new[]
+                        {
+                            new { text = prompt }
+                        }
+                    }
+                },
+                generationConfig = new
+                {
+                    responseMimeType = "application/json"
+                }
+            };
+
+            using var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+            using var response = await httpClient.PostAsync(endpoint, content, cancellationToken);
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            requestStopwatch.Stop();
+            AddGeminiApiDiagnostic(new GeminiApiDiagnostic
+            {
+                TimestampUtc = DateTimeOffset.UtcNow,
+                Operation = "GenerateContent",
+                Endpoint = endpoint,
+                ModelName = modelName,
+                Scenario = GetScenarioDisplayName(scenario),
+                PackageCount = packageReferences.Count,
+                HttpStatusCode = (int)response.StatusCode,
+                HttpStatusDescription = response.StatusCode.ToString(),
+                Success = response.IsSuccessStatusCode,
+                ElapsedMilliseconds = requestStopwatch.Elapsed.TotalMilliseconds,
+                ResponseHeaders = CollectHeaders(response),
+                RateLimitHeaders = CollectRateLimitHeaders(response),
+                ResponsePreview = TruncateForDisplay(responseContent, 1000)
+            });
+
+            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            {
+                throw new GeminiConfigurationException("API key Gemini tidak valid atau tidak memiliki akses ke model yang dipakai.");
+            }
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                throw new GeminiConfigurationException(
+                    $"Model Gemini '{modelName}' tidak ditemukan. Response: {TruncateForDisplay(responseContent)}");
+            }
+
+            if (response.StatusCode == HttpStatusCode.TooManyRequests || (int)response.StatusCode >= 500)
+            {
+                throw new HttpRequestException(
+                    $"Gemini transient response: {(int)response.StatusCode} ({response.StatusCode}).",
+                    null,
+                    response.StatusCode);
+            }
+
+            response.EnsureSuccessStatusCode();
+
+            var geminiApiResponse = JsonSerializer.Deserialize<GeminiApiResponse>(responseContent, SerializerOptions);
+            var json = geminiApiResponse?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text;
+
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                WriteLine("[Gemini] Response payload is empty.");
+                return null;
+            }
+
+            return JsonSerializer.Deserialize<GeminiResponse>(ExtractJsonPayload(json), SerializerOptions);
+        }
+        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            requestStopwatch.Stop();
+            AddGeminiApiDiagnostic(new GeminiApiDiagnostic
+            {
+                TimestampUtc = DateTimeOffset.UtcNow,
+                Operation = "GenerateContent",
+                Endpoint = endpoint,
+                ModelName = modelName,
+                Scenario = GetScenarioDisplayName(scenario),
+                PackageCount = packageReferences.Count,
+                Success = false,
+                ElapsedMilliseconds = requestStopwatch.Elapsed.TotalMilliseconds,
+                ErrorMessage = ex.Message
+            });
+            throw new TimeoutException($"Permintaan ke Gemini melebihi batas waktu {settings.RequestTimeoutSeconds:0} detik.", ex);
+        }
+        catch (Exception ex)
+        {
+            requestStopwatch.Stop();
+            AddGeminiApiDiagnostic(new GeminiApiDiagnostic
+            {
+                TimestampUtc = DateTimeOffset.UtcNow,
+                Operation = "GenerateContent",
+                Endpoint = endpoint,
+                ModelName = modelName,
+                Scenario = GetScenarioDisplayName(scenario),
+                PackageCount = packageReferences.Count,
+                Success = false,
+                ElapsedMilliseconds = requestStopwatch.Elapsed.TotalMilliseconds,
+                ErrorMessage = ex.Message
+            });
+            throw;
+        }
+        finally
+        {
+            GeminiRequestGate.Release();
+        }
+    }
+
+    private static string PromptForAuditFolder()
+    {
+        while (true)
+        {
+            Console.Write("Please enter the folder path containing the .csproj files to audit: ");
+            var input = Console.ReadLine();
+            AddConsoleLog("stdin", input ?? string.Empty, true);
+            var folderPath = TrimPathInput(input);
+
+            if (string.IsNullOrWhiteSpace(folderPath))
+            {
+                WriteLine("Folder path is required.");
+                continue;
+            }
+
+            var fullPath = Path.GetFullPath(folderPath);
+            if (!Directory.Exists(fullPath))
+            {
+                WriteLine($"Folder does not exist: {fullPath}");
+                continue;
+            }
+
+            return fullPath;
+        }
+    }
+
+    private static IReadOnlyList<string> FindCsprojFiles(string rootFolder)
+    {
+        return Directory.EnumerateFiles(rootFolder, "*.csproj", SearchOption.AllDirectories)
+            .Where(path => !IsIgnoredProjectPath(path))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static bool IsIgnoredProjectPath(string path)
+    {
+        var normalized = path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+        return normalized.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) ||
+               normalized.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string TrimPathInput(string? input)
+    {
+        return string.IsNullOrWhiteSpace(input)
+            ? string.Empty
+            : input.Trim().Trim('"');
     }
 
     private static string GetGeminiApiKey(GeminiSettings settings)
@@ -257,202 +819,6 @@ public class Program
         throw new GeminiConfigurationException("Konfigurasi model Gemini tidak valid. Isi 'Gemini:Model'.");
     }
 
-    private static async Task<GeminiResponse?> AnalyzeWithGeminiWithBatching(
-        string apiKey,
-        string modelName,
-        IReadOnlyCollection<NuGetPackageReference> packageReferences,
-        string securityContext,
-        GeminiSettings settings,
-        AuditScenario scenario)
-    {
-        if (packageReferences.Count <= settings.MaxPackagesPerRequest)
-        {
-            var scopedSecurityContext = FilterSecurityContextForPackages(securityContext, packageReferences.Select(x => x.PackageName));
-            return await AnalyzeWithGeminiWithRetry(apiKey, modelName, packageReferences, scopedSecurityContext, settings, scenario);
-        }
-
-        var batches = packageReferences.Chunk(settings.MaxPackagesPerRequest).ToList();
-        Console.WriteLine($"[Gemini] Large package list detected. Using batching: {batches.Count} batch(es), up to {settings.MaxPackagesPerRequest} package(s) per batch.");
-
-        var mergedReports = new List<VulnerabilityReport>();
-
-        for (var i = 0; i < batches.Count; i++)
-        {
-            var batch = batches[i];
-            var scopedSecurityContext = FilterSecurityContextForPackages(securityContext, batch.Select(x => x.PackageName));
-
-            Console.WriteLine($"[Gemini] Processing batch {i + 1}/{batches.Count} ({batch.Length} package(s)). Security context chars={scopedSecurityContext.Length}.");
-            var batchResponse = await AnalyzeWithGeminiWithRetry(apiKey, modelName, batch, scopedSecurityContext, settings, scenario);
-
-            if (batchResponse?.VulnerabilityReports is { Count: > 0 })
-            {
-                mergedReports.AddRange(batchResponse.VulnerabilityReports);
-            }
-        }
-
-        return new GeminiResponse
-        {
-            VulnerabilityReports = mergedReports
-        };
-    }
-
-    private static async Task<GeminiResponse?> AnalyzeWithGeminiWithRetry(
-        string apiKey,
-        string modelName,
-        IReadOnlyCollection<NuGetPackageReference> packageReferences,
-        string securityContext,
-        GeminiSettings settings,
-        AuditScenario scenario)
-    {
-        var maxAttempts = settings.MaxRetryCount + 1;
-
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            try
-            {
-                return await AnalyzeWithGemini(apiKey, modelName, packageReferences, securityContext, settings, scenario);
-            }
-            catch (TimeoutException) when (attempt < maxAttempts)
-            {
-                var delay = settings.RetryDelayMilliseconds * attempt;
-                Console.WriteLine($"[Gemini] Timeout at attempt {attempt}/{maxAttempts}. Retrying in {delay}ms...");
-                await Task.Delay(delay);
-            }
-            catch (HttpRequestException ex) when (attempt < maxAttempts && IsTransientStatusCode(ex.StatusCode))
-            {
-                var delay = settings.RetryDelayMilliseconds * attempt;
-                Console.WriteLine($"[Gemini] Transient HTTP error at attempt {attempt}/{maxAttempts}: {ex.StatusCode}. Retrying in {delay}ms...");
-                await Task.Delay(delay);
-            }
-        }
-
-        return null;
-    }
-
-    private static bool IsTransientStatusCode(HttpStatusCode? statusCode)
-    {
-        if (!statusCode.HasValue)
-        {
-            return true;
-        }
-
-        return statusCode == HttpStatusCode.TooManyRequests || (int)statusCode.Value >= 500;
-    }
-
-    private static string FilterSecurityContextForPackages(string securityContext, IEnumerable<string> packageNames)
-    {
-        if (string.IsNullOrWhiteSpace(securityContext))
-        {
-            return "[]";
-        }
-
-        var packageSet = new HashSet<string>(
-            packageNames.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()),
-            StringComparer.OrdinalIgnoreCase);
-
-        if (packageSet.Count == 0)
-        {
-            return "[]";
-        }
-
-        using var document = JsonDocument.Parse(securityContext, AppSettingsJsonOptions);
-        var matched = new List<JsonElement>();
-
-        foreach (var advisory in GetAdvisoriesFromSecurityContext(document.RootElement))
-        {
-            var packageName = TryGetPackageNameFromSecurityContext(advisory);
-
-            if (!string.IsNullOrWhiteSpace(packageName) && packageSet.Contains(packageName))
-            {
-                matched.Add(advisory.Clone());
-            }
-        }
-
-        return JsonSerializer.Serialize(matched, SerializerOptions);
-    }
-
-    private static async Task<GeminiResponse?> AnalyzeWithGemini(
-        string apiKey,
-        string modelName,
-        IReadOnlyCollection<NuGetPackageReference> packageReferences,
-        string securityContext,
-        GeminiSettings settings,
-        AuditScenario scenario)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
-        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        ArgumentNullException.ThrowIfNull(packageReferences);
-        ArgumentException.ThrowIfNullOrWhiteSpace(securityContext);
-        ArgumentNullException.ThrowIfNull(settings);
-
-        var packageText = BuildPackagePrompt(packageReferences);
-        ArgumentException.ThrowIfNullOrWhiteSpace(packageText);
-
-        using var httpClient = new HttpClient();
-        httpClient.Timeout = TimeSpan.FromSeconds(settings.RequestTimeoutSeconds);
-        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        httpClient.DefaultRequestHeaders.Add("X-Goog-Api-Key", apiKey);
-
-        var prompt = BuildGeminiPrompt(packageText, securityContext, scenario);
-
-        var requestBody = new
-        {
-            contents = new[]
-            {
-                new
-                {
-                    parts = new[]
-                    {
-                        new { text = prompt }
-                    }
-                }
-            },
-            generationConfig = new
-            {
-                responseMimeType = "application/json"
-            }
-        };
-
-        using var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-        try
-        {
-            var endpoint = string.Format(settings.GenerateContentEndpointTemplate, modelName);
-            Console.WriteLine($"[Gemini] Endpoint: {endpoint}");
-            using var response = await httpClient.PostAsync(endpoint, content);
-            Console.WriteLine($"[Gemini] HTTP {(int)response.StatusCode} ({response.StatusCode})");
-            var responseContent = await response.Content.ReadAsStringAsync();
-
-            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-            {
-                throw new GeminiConfigurationException("API key Gemini tidak valid atau tidak memiliki akses ke model yang dipakai.");
-            }
-
-            if (response.StatusCode == HttpStatusCode.NotFound)
-            {
-                throw new GeminiConfigurationException(
-                    $"Model Gemini '{modelName}' tidak ditemukan. Coba gunakan model lain melalui environment variable '{GeminiModelEnvironmentVariableName}' atau konfigurasi 'Gemini:Model'. Response: {TruncateForDisplay(responseContent)}");
-            }
-
-            response.EnsureSuccessStatusCode();
-
-            var geminiApiResponse = JsonSerializer.Deserialize<GeminiApiResponse>(responseContent, SerializerOptions);
-            var json = geminiApiResponse?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text;
-
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                Console.WriteLine("[Gemini] Response payload is empty.");
-                return null;
-            }
-
-            Console.WriteLine("[Gemini] Response payload parsed successfully.");
-            return JsonSerializer.Deserialize<GeminiResponse>(ExtractJsonPayload(json), SerializerOptions);
-        }
-        catch (TaskCanceledException ex)
-        {
-            throw new TimeoutException($"Permintaan ke Gemini melebihi batas waktu {settings.RequestTimeoutSeconds:0} detik.", ex);
-        }
-    }
-
     private static GeminiSettings GetGeminiSettings()
     {
         var settings = new GeminiSettings();
@@ -467,7 +833,8 @@ public class Program
             using var stream = File.OpenRead(appSettingsPath);
             using var document = JsonDocument.Parse(stream, AppSettingsJsonOptions);
 
-            if (!document.RootElement.TryGetProperty("Gemini", out var geminiSection) || geminiSection.ValueKind != JsonValueKind.Object)
+            if (!document.RootElement.TryGetProperty("Gemini", out var geminiSection) ||
+                geminiSection.ValueKind != JsonValueKind.Object)
             {
                 continue;
             }
@@ -492,7 +859,8 @@ public class Program
             throw new GeminiConfigurationException("Konfigurasi 'Gemini:Model' wajib diisi.");
         }
 
-        if (string.IsNullOrWhiteSpace(settings.GenerateContentEndpointTemplate) || !settings.GenerateContentEndpointTemplate.Contains("{0}", StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(settings.GenerateContentEndpointTemplate) ||
+            !settings.GenerateContentEndpointTemplate.Contains("{0}", StringComparison.Ordinal))
         {
             throw new GeminiConfigurationException("Konfigurasi 'Gemini:GenerateContentEndpointTemplate' wajib diisi dan harus mengandung placeholder '{0}' untuk nama model.");
         }
@@ -552,245 +920,125 @@ public class Program
         }
     }
 
-    private static AuditScenario ParseExecutionMode(string[] args)
+    private static string FilterSecurityContextForPackages(string securityContext, IEnumerable<string> packageNames)
     {
-        var modeArgument = args.FirstOrDefault(x =>
-            x.StartsWith("--mode=", StringComparison.OrdinalIgnoreCase) ||
-            x.StartsWith("mode=", StringComparison.OrdinalIgnoreCase));
-
-        if (string.IsNullOrWhiteSpace(modeArgument))
+        if (string.IsNullOrWhiteSpace(securityContext))
         {
-            return AuditScenario.RagLlm;
+            return "[]";
         }
 
-        var value = modeArgument.Split('=', 2).LastOrDefault()?.Trim();
+        var packageSet = new HashSet<string>(
+            packageNames.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()),
+            StringComparer.OrdinalIgnoreCase);
 
-        if (string.Equals(value, "zero-shot", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(value, "zeroshot", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(value, "nonrag", StringComparison.OrdinalIgnoreCase))
+        if (packageSet.Count == 0)
         {
-            return AuditScenario.ZeroShot;
+            return "[]";
         }
 
-        if (string.Equals(value, "codebert", StringComparison.OrdinalIgnoreCase))
+        try
         {
-            return AuditScenario.CodeBert;
-        }
+            using var document = JsonDocument.Parse(securityContext, AppSettingsJsonOptions);
+            var matched = new List<JsonElement>();
 
-        return AuditScenario.RagLlm;
-    }
-
-    private static bool HasFlag(IEnumerable<string> args, string flag)
-    {
-        if (string.IsNullOrWhiteSpace(flag))
-        {
-            return false;
-        }
-
-        var normalizedFlag = flag.TrimStart('-');
-        return args.Any(x =>
-            string.Equals(x, flag, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(x.TrimStart('-'), normalizedFlag, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static string ResolveCsprojPath(string[] args)
-    {
-        var providedPath = TryExtractCsprojPathFromTokens(args);
-
-        if (string.IsNullOrWhiteSpace(providedPath))
-        {
-            Console.Write("Masukkan path file .csproj yang akan diaudit: ");
-            var rawInput = Console.ReadLine();
-            providedPath = TryExtractCsprojPathFromRawInput(rawInput) ?? rawInput;
-        }
-
-        if (string.IsNullOrWhiteSpace(providedPath))
-        {
-            throw new InvalidOperationException("Path file .csproj wajib diisi.");
-        }
-
-        var fullPath = TryResolveExistingPath(providedPath);
-
-        if (!File.Exists(fullPath))
-        {
-            throw new FileNotFoundException(
-                "File .csproj tidak ditemukan. Gunakan path absolut atau path relatif dari folder project/solution.",
-                fullPath);
-        }
-
-        return fullPath;
-    }
-
-    private static string? TryExtractCsprojPathFromRawInput(string? rawInput)
-    {
-        if (string.IsNullOrWhiteSpace(rawInput))
-        {
-            return null;
-        }
-
-        var trimmed = rawInput.Trim();
-
-        var quotedStart = trimmed.IndexOf('"');
-        if (quotedStart >= 0)
-        {
-            var quotedEnd = trimmed.LastIndexOf('"');
-            if (quotedEnd > quotedStart)
+            foreach (var advisory in GetAdvisoriesFromSecurityContext(document.RootElement))
             {
-                var quotedValue = trimmed.Substring(quotedStart + 1, quotedEnd - quotedStart - 1).Trim();
-                if (quotedValue.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+                var packageName = TryGetPackageNameFromSecurityContext(advisory);
+
+                if (!string.IsNullOrWhiteSpace(packageName) && packageSet.Contains(packageName))
                 {
-                    return quotedValue;
+                    matched.Add(advisory.Clone());
+                }
+            }
+
+            return JsonSerializer.Serialize(matched, SerializerOptions);
+        }
+        catch (JsonException)
+        {
+            return "[]";
+        }
+    }
+
+    private static IEnumerable<JsonElement> GetAdvisoriesFromSecurityContext(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in root.EnumerateArray())
+            {
+                yield return item;
+            }
+
+            yield break;
+        }
+
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            yield break;
+        }
+
+        if (root.TryGetProperty("advisories", out var advisories) && advisories.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in advisories.EnumerateArray())
+            {
+                yield return item;
+            }
+
+            yield break;
+        }
+
+        if (root.TryGetProperty("vulnerabilities", out var vulnerabilities) && vulnerabilities.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in vulnerabilities.EnumerateArray())
+            {
+                yield return item;
+            }
+        }
+    }
+
+    private static string TryGetPackageNameFromSecurityContext(JsonElement advisory)
+    {
+        if (advisory.ValueKind != JsonValueKind.Object)
+        {
+            return string.Empty;
+        }
+
+        if (advisory.TryGetProperty("PackageName", out var packageName) && packageName.ValueKind == JsonValueKind.String)
+        {
+            return packageName.GetString() ?? string.Empty;
+        }
+
+        if (advisory.TryGetProperty("packageName", out var camelCasePackageName) && camelCasePackageName.ValueKind == JsonValueKind.String)
+        {
+            return camelCasePackageName.GetString() ?? string.Empty;
+        }
+
+        if (advisory.TryGetProperty("package", out var package))
+        {
+            if (package.ValueKind == JsonValueKind.String)
+            {
+                return package.GetString() ?? string.Empty;
+            }
+
+            if (package.ValueKind == JsonValueKind.Object)
+            {
+                if (package.TryGetProperty("name", out var nestedName) && nestedName.ValueKind == JsonValueKind.String)
+                {
+                    return nestedName.GetString() ?? string.Empty;
+                }
+
+                if (package.TryGetProperty("Name", out var nestedPascalName) && nestedPascalName.ValueKind == JsonValueKind.String)
+                {
+                    return nestedPascalName.GetString() ?? string.Empty;
                 }
             }
         }
 
-        var csprojIndex = trimmed.IndexOf(".csproj", StringComparison.OrdinalIgnoreCase);
-        if (csprojIndex >= 0)
+        if (advisory.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String)
         {
-            var startIndex = trimmed.LastIndexOf(' ', csprojIndex);
-            var candidate = (startIndex >= 0 ? trimmed[(startIndex + 1)..] : trimmed).Trim().Trim('"');
-            if (candidate.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-            {
-                return candidate;
-            }
+            return name.GetString() ?? string.Empty;
         }
 
-        var tokens = trimmed
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(x => x.Trim().Trim('"'))
-            .ToArray();
-
-        return TryExtractCsprojPathFromTokens(tokens);
-    }
-
-    private static string? TryExtractCsprojPathFromTokens(IEnumerable<string> tokens)
-    {
-        return tokens
-            .Select(x => x.Trim().Trim('"'))
-            .FirstOrDefault(x => x.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static string TryResolveExistingPath(string providedPath)
-    {
-        if (Path.IsPathRooted(providedPath))
-        {
-            return Path.GetFullPath(providedPath);
-        }
-
-        var searchRoots = GetSearchRoots().ToList();
-        var candidatePaths = new List<string>
-        {
-            Path.GetFullPath(providedPath, Directory.GetCurrentDirectory()),
-            Path.GetFullPath(providedPath, AppContext.BaseDirectory)
-        };
-
-        foreach (var searchRoot in searchRoots)
-        {
-            candidatePaths.AddRange(GetParentDirectoryCandidates(searchRoot, providedPath));
-        }
-
-        if (!HasDirectorySeparator(providedPath))
-        {
-            foreach (var searchRoot in searchRoots)
-            {
-                candidatePaths.AddRange(FindFileByNameUnderDirectory(providedPath, searchRoot));
-            }
-        }
-
-        return candidatePaths
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault(File.Exists)
-            ?? Path.GetFullPath(providedPath, Directory.GetCurrentDirectory());
-    }
-
-    private static IEnumerable<string> GetParentDirectoryCandidates(string startDirectory, string providedPath)
-    {
-        var directory = new DirectoryInfo(Path.GetFullPath(startDirectory));
-
-        while (directory is not null)
-        {
-            yield return Path.Combine(directory.FullName, providedPath);
-            directory = directory.Parent;
-        }
-    }
-
-    private static IEnumerable<string> GetSearchRoots()
-    {
-        var currentDirectory = new DirectoryInfo(Path.GetFullPath(Directory.GetCurrentDirectory()));
-        var baseDirectory = new DirectoryInfo(Path.GetFullPath(AppContext.BaseDirectory));
-
-        return new[]
-        {
-            FindWorkspaceRoot(currentDirectory)?.FullName,
-            FindWorkspaceRoot(baseDirectory)?.FullName,
-            currentDirectory.FullName,
-            baseDirectory.FullName
-        }
-        .Where(x => !string.IsNullOrWhiteSpace(x))
-        .Distinct(StringComparer.OrdinalIgnoreCase)!;
-    }
-
-    private static DirectoryInfo? FindWorkspaceRoot(DirectoryInfo? startDirectory)
-    {
-        var directory = startDirectory;
-
-        while (directory is not null)
-        {
-            var hasGitDirectory = Directory.Exists(Path.Combine(directory.FullName, ".git"));
-            var hasSolutionFile = Directory.EnumerateFiles(directory.FullName, "*.sln", SearchOption.TopDirectoryOnly).Any();
-            var hasProjectFile = Directory.EnumerateFiles(directory.FullName, "*.csproj", SearchOption.TopDirectoryOnly).Any();
-
-            if (hasGitDirectory || hasSolutionFile || hasProjectFile)
-            {
-                return directory;
-            }
-
-            directory = directory.Parent;
-        }
-
-        return startDirectory;
-    }
-
-    private static IEnumerable<string> FindFileByNameUnderDirectory(string fileName, string rootDirectory)
-    {
-        var pendingDirectories = new Stack<string>();
-        pendingDirectories.Push(Path.GetFullPath(rootDirectory));
-
-        while (pendingDirectories.Count > 0)
-        {
-            var currentDirectory = pendingDirectories.Pop();
-            string[] fileMatches;
-            string[] childDirectories;
-
-            try
-            {
-                fileMatches = Directory.GetFiles(currentDirectory, fileName, SearchOption.TopDirectoryOnly);
-                childDirectories = Directory.GetDirectories(currentDirectory, "*", SearchOption.TopDirectoryOnly);
-            }
-            catch (UnauthorizedAccessException)
-            {
-                continue;
-            }
-            catch (DirectoryNotFoundException)
-            {
-                continue;
-            }
-
-            foreach (var match in fileMatches)
-            {
-                yield return match;
-            }
-
-            foreach (var childDirectory in childDirectories)
-            {
-                pendingDirectories.Push(childDirectory);
-            }
-        }
-    }
-
-    private static bool HasDirectorySeparator(string path)
-    {
-        return path.Contains(Path.DirectorySeparatorChar) || path.Contains(Path.AltDirectorySeparatorChar);
+        return string.Empty;
     }
 
     private static string BuildPackagePrompt(IEnumerable<NuGetPackageReference> packageReferences)
@@ -887,38 +1135,37 @@ Security reference data:
             .GroupBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
 
-        var normalizedReports = packageReferences
-            .Select(packageReference =>
+        var normalizedReports = packageReferences.Select(packageReference =>
+        {
+            if (reportLookup.TryGetValue(packageReference.PackageName, out var report))
             {
-                if (reportLookup.TryGetValue(packageReference.PackageName, out var report))
-                {
-                    report.PackageName = packageReference.PackageName;
-                    report.CurrentVersion = packageReference.CurrentVersion;
-                    report.CVE_ID ??= string.Empty;
-                    report.Severity ??= string.Empty;
-                    report.SeverityIndonesia ??= string.Empty;
-                    report.MitigationPlan ??= string.Empty;
-                    report.MitigationPlanIndonesia ??= string.Empty;
-                    report.ReasoningTrace ??= string.Empty;
-                    report.ReasoningTraceIndonesia ??= string.Empty;
-                    return report;
-                }
+                report.PackageName = packageReference.PackageName;
+                report.CurrentVersion = packageReference.CurrentVersion;
+                report.CVE_ID ??= string.Empty;
+                report.Severity ??= string.Empty;
+                report.SeverityIndonesia ??= string.Empty;
+                report.MitigationPlan ??= string.Empty;
+                report.MitigationPlanIndonesia ??= string.Empty;
+                report.ReasoningTrace ??= string.Empty;
+                report.ReasoningTraceIndonesia ??= string.Empty;
+                return report;
+            }
 
-                return new VulnerabilityReport
-                {
-                    PackageName = packageReference.PackageName,
-                    CurrentVersion = packageReference.CurrentVersion,
-                    IsVulnerable = false,
-                    CVE_ID = string.Empty,
-                    Severity = string.Empty,
-                    SeverityIndonesia = string.Empty,
-                    MitigationPlan = string.Empty,
-                    MitigationPlanIndonesia = string.Empty,
-                    ReasoningTrace = string.Empty,
-                    ReasoningTraceIndonesia = string.Empty
-                };
-            })
-            .ToList();
+            return new VulnerabilityReport
+            {
+                PackageName = packageReference.PackageName,
+                CurrentVersion = packageReference.CurrentVersion,
+                IsVulnerable = false,
+                CVE_ID = string.Empty,
+                Severity = "Unknown",
+                SeverityIndonesia = "Tidak diketahui",
+                MitigationPlan = string.Empty,
+                MitigationPlanIndonesia = string.Empty,
+                IsGroundedInReference = false,
+                ReasoningTrace = string.Empty,
+                ReasoningTraceIndonesia = string.Empty
+            };
+        }).ToList();
 
         return new GeminiResponse
         {
@@ -927,18 +1174,19 @@ Security reference data:
     }
 
     private static string SaveAuditResult(
+        string outputDirectory,
         string csprojPath,
         string modelName,
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
         GeminiResponse geminiResponse,
-        AuditScenario scenario)
+        AuditScenario scenario,
+        string projectKey)
     {
-        var outputDirectory = Path.Combine(GetApplicationRootDirectory(), "audit-results");
         Directory.CreateDirectory(outputDirectory);
 
         var outputFilePath = Path.Combine(
             outputDirectory,
-            $"audit-{Path.GetFileNameWithoutExtension(csprojPath)}-{GetScenarioTag(scenario)}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json");
+            $"audit-{projectKey}-{GetScenarioTag(scenario)}-{DateTime.UtcNow:yyyyMMdd-HHmmssfff}.json");
 
         var sessionRecord = new AuditSessionRecord
         {
@@ -951,439 +1199,653 @@ Security reference data:
             VulnerabilityReportFieldDescriptions = GetVulnerabilityReportFieldDescriptions()
         };
 
-        File.WriteAllText(outputFilePath, JsonSerializer.Serialize(sessionRecord, SerializerOptions));
+        File.WriteAllText(outputFilePath, JsonSerializer.Serialize(sessionRecord, SerializerOptions), Encoding.UTF8);
         return outputFilePath;
     }
 
-    private static string SaveScanMetricsExcel(
-        string csprojPath,
-        GeminiResponse geminiResponse,
-        string securityContext,
-        string modeTag)
+    private static FinalArtifactSet CreateArtifactSet(string outputDirectory, string timestamp)
     {
-        var outputDirectory = Path.Combine(GetApplicationRootDirectory(), "audit-results");
         Directory.CreateDirectory(outputDirectory);
+        return new FinalArtifactSet
+        {
+            RagJsonPath = Path.Combine(outputDirectory, $"audit-rag-llm-{timestamp}.json"),
+            ZeroShotJsonPath = Path.Combine(outputDirectory, $"audit-zero-shot-{timestamp}.json"),
+            CodeBertJsonPath = Path.Combine(outputDirectory, $"audit-codebert-{timestamp}.json"),
+            ExcelReportPath = Path.Combine(outputDirectory, $"audit-comprehensive-report-{timestamp}.xlsx"),
+            ApiDiagnosticsJsonPath = Path.Combine(outputDirectory, $"api-diagnostics-{timestamp}.json"),
+            ConsoleLogJsonPath = Path.Combine(outputDirectory, $"console-execution-log-{timestamp}.json")
+        };
+    }
 
-        var projectName = Path.GetFileNameWithoutExtension(csprojPath);
-        var outputFilePath = Path.Combine(
-            outputDirectory,
-            $"metrics-{projectName}-{modeTag}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx");
+    private static void SaveFinalAuditArtifacts(
+        FinalArtifactSet artifactSet,
+        string rootFolder,
+        string modelName,
+        IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var ragReport = BuildScenarioJsonReport(rootFolder, modelName, AuditScenario.RagLlm, results);
+        var zeroShotReport = BuildScenarioJsonReport(rootFolder, modelName, AuditScenario.ZeroShot, results);
+        var codeBertReport = BuildCodeBertJsonReport(rootFolder, modelName, results);
 
-        var referencedPackages = ExtractReferencedPackageNames(securityContext);
+        File.WriteAllText(artifactSet.RagJsonPath, JsonSerializer.Serialize(ragReport, SerializerOptions), Encoding.UTF8);
+        File.WriteAllText(artifactSet.ZeroShotJsonPath, JsonSerializer.Serialize(zeroShotReport, SerializerOptions), Encoding.UTF8);
+        File.WriteAllText(artifactSet.CodeBertJsonPath, JsonSerializer.Serialize(codeBertReport, SerializerOptions), Encoding.UTF8);
+        File.WriteAllText(artifactSet.ApiDiagnosticsJsonPath, JsonSerializer.Serialize(BuildApiDiagnosticsReport(rootFolder, modelName), SerializerOptions), Encoding.UTF8);
+        SaveComprehensiveExcelReport(artifactSet.ExcelReportPath, rootFolder, modelName, results);
+    }
 
+    private static IReadOnlyList<ProjectAuditResult> LoadSuccessfulCheckpointResults(
+        string checkpointDirectory,
+        IReadOnlyCollection<string> csprojFiles)
+    {
+        Directory.CreateDirectory(checkpointDirectory);
+        var allowedProjectPaths = csprojFiles
+            .Select(Path.GetFullPath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var results = new List<ProjectAuditResult>();
+
+        foreach (var checkpointPath in Directory.EnumerateFiles(checkpointDirectory, "*.json", SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                var json = File.ReadAllText(checkpointPath, Encoding.UTF8);
+                var result = JsonSerializer.Deserialize<ProjectAuditResult>(json, SerializerOptions);
+
+                if (result is null ||
+                    string.IsNullOrWhiteSpace(result.ProjectPath) ||
+                    !allowedProjectPaths.Contains(Path.GetFullPath(result.ProjectPath)))
+                {
+                    continue;
+                }
+
+                if (!IsProjectFullySuccessfulForResume(result))
+                {
+                    WriteLine($"[Checkpoint] Existing checkpoint is not complete and will be reprocessed: {checkpointPath}");
+                    continue;
+                }
+
+                result.Success = true;
+                results.Add(result);
+                WriteLine($"[Checkpoint] Loaded successful checkpoint and will skip: {result.ProjectPath}");
+            }
+            catch (Exception ex)
+            {
+                WriteLine($"[Checkpoint] Ignoring unreadable checkpoint '{checkpointPath}': {ex.Message}");
+            }
+        }
+
+        return results
+            .GroupBy(x => Path.GetFullPath(x.ProjectPath), StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.OrderByDescending(r => r.CompletedAtUtc).First())
+            .OrderBy(x => x.ProjectPath, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static void SaveProjectCheckpoint(string checkpointDirectory, ProjectAuditResult result)
+    {
+        Directory.CreateDirectory(checkpointDirectory);
+        var checkpointPath = Path.Combine(checkpointDirectory, $"{SanitizeFileName(result.ProjectKey)}.json");
+        File.WriteAllText(checkpointPath, JsonSerializer.Serialize(result, SerializerOptions), Encoding.UTF8);
+        WriteLine($"[{result.ProjectKey}] Checkpoint saved: {checkpointPath}");
+    }
+
+    private static bool IsProjectFullySuccessfulForResume(ProjectAuditResult result)
+    {
+        var rag = result.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.RagLlm);
+        var zeroShot = result.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.ZeroShot);
+
+        if (result.PackageCount == 0 && result.Success && result.ErrorMessage.Length == 0)
+        {
+            return true;
+        }
+
+        return result.ErrorMessage.Length == 0 &&
+               result.PackageCount >= 0 &&
+               result.CodeBertRecords.Count > 0 &&
+               rag is { Success: true, Response: not null } &&
+               zeroShot is { Success: true, Response: not null };
+    }
+
+    private static ScenarioJsonReport BuildScenarioJsonReport(
+        string rootFolder,
+        string modelName,
+        AuditScenario scenario,
+        IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var projectReports = results
+            .Select(project => new ProjectScenarioJsonReport
+            {
+                ProjectName = project.ProjectName,
+                ProjectKey = project.ProjectKey,
+                ProjectPath = project.ProjectPath,
+                PackageCount = project.PackageCount,
+                ExtractedPackages = project.ExtractedPackages,
+                GroundTruthLabels = project.GroundTruthLabels,
+                SecurityReferenceSource = project.SecurityReferenceSource,
+                RetrievalDiagnostics = project.RetrievalDiagnostics,
+                Scenario = scenario,
+                ScenarioResult = project.Scenarios.FirstOrDefault(x => x.Scenario == scenario),
+                ScenarioStatus = project.Scenarios.FirstOrDefault(x => x.Scenario == scenario)?.Status ?? "NOT_RUN",
+                ExcludedFromMetrics = project.Scenarios.FirstOrDefault(x => x.Scenario == scenario)?.ExcludedFromMetrics ?? true,
+                MetricExclusionReason = project.Scenarios.FirstOrDefault(x => x.Scenario == scenario)?.MetricExclusionReason ?? "Scenario was not executed.",
+                VulnerabilityReports = project.Scenarios.FirstOrDefault(x => x.Scenario == scenario)?.Response?.VulnerabilityReports ?? new List<VulnerabilityReport>(),
+                Metrics = project.Scenarios.FirstOrDefault(x => x.Scenario == scenario)?.Metrics,
+                Messages = project.Messages
+            })
+            .ToList();
+
+        return new ScenarioJsonReport
+        {
+            GeneratedAtUtc = DateTimeOffset.UtcNow,
+            RootFolder = rootFolder,
+            ModelName = modelName,
+            Scenario = scenario,
+            ProjectCount = results.Count,
+            SucceededProjectCount = projectReports.Count(x => x.ScenarioResult?.Success == true),
+            FailedProjectCount = projectReports.Count(x => x.ScenarioResult?.Success != true),
+            TotalExtractedPackages = projectReports.Sum(x => x.ExtractedPackages.Count),
+            TotalVulnerabilityReports = projectReports.Sum(x => x.VulnerabilityReports.Count),
+            VulnerableFindingCount = projectReports.Sum(x => x.VulnerabilityReports.Count(r => r.IsVulnerable)),
+            GroundedFindingCount = projectReports.Sum(x => x.VulnerabilityReports.Count(r => r.IsGroundedInReference)),
+            VulnerabilityReportFieldDescriptions = GetVulnerabilityReportFieldDescriptions(),
+            MetricFormulaDescriptions = GetMetricFormulaDescriptions(),
+            VulnerabilityReports = projectReports
+                .SelectMany(project => project.VulnerabilityReports.Select(report => new ProjectVulnerabilityReport
+                {
+                    ProjectName = project.ProjectName,
+                    ProjectKey = project.ProjectKey,
+                    ProjectPath = project.ProjectPath,
+                    PackageName = report.PackageName,
+                    CurrentVersion = report.CurrentVersion,
+                    IsVulnerable = report.IsVulnerable,
+                    CVE_ID = report.CVE_ID,
+                    Severity = report.Severity,
+                    SeverityIndonesia = report.SeverityIndonesia,
+                    MitigationPlan = report.MitigationPlan,
+                    MitigationPlanIndonesia = report.MitigationPlanIndonesia,
+                    IsGroundedInReference = report.IsGroundedInReference,
+                    ReasoningTrace = report.ReasoningTrace,
+                    ReasoningTraceIndonesia = report.ReasoningTraceIndonesia
+                }))
+                .ToList(),
+            Projects = projectReports
+        };
+    }
+
+    private static ApiDiagnosticsReport BuildApiDiagnosticsReport(string rootFolder, string modelName)
+    {
+        var diagnostics = GeminiApiDiagnostics
+            .OrderBy(x => x.TimestampUtc)
+            .ToList();
+
+        return new ApiDiagnosticsReport
+        {
+            GeneratedAtUtc = DateTimeOffset.UtcNow,
+            RootFolder = rootFolder,
+            ModelName = modelName,
+            TotalCalls = diagnostics.Count,
+            SuccessfulCalls = diagnostics.Count(x => x.Success),
+            FailedCalls = diagnostics.Count(x => !x.Success),
+            RateLimitHeaderObservations = diagnostics
+                .Where(x => x.RateLimitHeaders.Count > 0)
+                .Select(x => new RateLimitObservation
+                {
+                    TimestampUtc = x.TimestampUtc,
+                    Operation = x.Operation,
+                    Scenario = x.Scenario,
+                    ModelName = x.ModelName,
+                    HttpStatusCode = x.HttpStatusCode,
+                    Headers = x.RateLimitHeaders
+                })
+                .ToList(),
+            Diagnostics = diagnostics
+        };
+    }
+
+    private static CodeBertJsonReport BuildCodeBertJsonReport(
+        string rootFolder,
+        string modelName,
+        IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var projectReports = results
+            .Select(project => new ProjectCodeBertJsonReport
+            {
+                ProjectName = project.ProjectName,
+                ProjectKey = project.ProjectKey,
+                ProjectPath = project.ProjectPath,
+                PackageCount = project.PackageCount,
+                SecurityReferenceSource = project.SecurityReferenceSource,
+                TotalRecords = project.CodeBertRecords.Count,
+                TrainingCount = project.CodeBertRecords.Count(x => x.Split == "training"),
+                ValidationCount = project.CodeBertRecords.Count(x => x.Split == "validation"),
+                TestingCount = project.CodeBertRecords.Count(x => x.Split == "testing"),
+                Records = project.CodeBertRecords
+            })
+            .ToList();
+
+        return new CodeBertJsonReport
+        {
+            GeneratedAtUtc = DateTimeOffset.UtcNow,
+            RootFolder = rootFolder,
+            ModelName = modelName,
+            ProjectCount = results.Count,
+            TotalRecords = projectReports.Sum(x => x.TotalRecords),
+            TrainingCount = projectReports.Sum(x => x.TrainingCount),
+            ValidationCount = projectReports.Sum(x => x.ValidationCount),
+            TestingCount = projectReports.Sum(x => x.TestingCount),
+            SplitStrategy = "70% training, 15% validation, 15% testing. For very small datasets, each split is preserved when possible.",
+            AugmentationStrategy = "original, semantic_version_normalization, and safe_dummy_dependency records generated from parsed NuGet dependencies and ground-truth labels.",
+            DatasetFieldDescriptions = GetCodeBertDatasetFieldDescriptions(),
+            Projects = projectReports
+        };
+    }
+
+    private static void SaveComprehensiveExcelReport(
+        string outputFilePath,
+        string rootFolder,
+        string modelName,
+        IReadOnlyCollection<ProjectAuditResult> results)
+    {
         using var workbook = new XLWorkbook();
+        WriteRunSummarySheet(workbook, rootFolder, modelName, results);
+        WriteProjectStatusSheet(workbook, results);
+        WriteScenarioMetricsSheet(workbook, results);
+        WriteFindingDetailSheet(workbook, results);
+        WriteGroundTruthSheet(workbook, results);
+        WriteCodeBertSheet(workbook, results);
+        WriteRetrievalDiagnosticsSheet(workbook, results);
+        WriteFieldDescriptionsSheet(workbook);
+        WriteMetricDefinitionsSheet(workbook);
+        workbook.SaveAs(outputFilePath);
+    }
 
-        var detailSheet = workbook.Worksheets.Add("Detail");
-        detailSheet.Cell(1, 1).Value = "ProjectName";
-        detailSheet.Cell(1, 2).Value = "PackageName";
-        detailSheet.Cell(1, 3).Value = "CurrentVersion";
-        detailSheet.Cell(1, 4).Value = "Gemini_Detected";
-        detailSheet.Cell(1, 5).Value = "Reference_Exists";
-        detailSheet.Cell(1, 6).Value = "Match_Result";
-        detailSheet.Cell(1, 7).Value = "Severity";
-        detailSheet.Cell(1, 8).Value = "CVE_ID";
-        detailSheet.Cell(1, 9).Value = "Grounded";
+    private static void WriteRunSummarySheet(
+        XLWorkbook workbook,
+        string rootFolder,
+        string modelName,
+        IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var sheet = workbook.Worksheets.Add("Run Summary");
+        var metrics = results.SelectMany(x => x.Scenarios).Select(x => x.Metrics).Where(x => x is not null).Cast<EvaluationMetrics>().ToList();
+
+        var rows = new List<(string Metric, string Value)>
+        {
+            ("GeneratedAtUtc", DateTimeOffset.UtcNow.ToString("O")),
+            ("RootFolder", rootFolder),
+            ("GeminiModel", modelName),
+            ("ExecutionMode", "Sequential checkpointed execution"),
+            ("MaxDegreeOfParallelism", SequentialMaxDegreeOfParallelism.ToString()),
+            ("HardDelayAfterEachProcessedProjectSeconds", (HardDelayAfterProjectMilliseconds / 1000).ToString()),
+            ("ProjectCount", results.Count.ToString()),
+            ("FullySuccessfulProjects", results.Count(IsProjectFullySuccessfulForResume).ToString()),
+            ("IncompleteOrApiFailedProjects", results.Count(x => !IsProjectFullySuccessfulForResume(x)).ToString()),
+            ("RagLlmProjectResults", results.Count(x => x.Scenarios.Any(s => s.Scenario == AuditScenario.RagLlm && s.Success)).ToString()),
+            ("ZeroShotProjectResults", results.Count(x => x.Scenarios.Any(s => s.Scenario == AuditScenario.ZeroShot && s.Success)).ToString()),
+            ("ApiFailedScenarioResults", results.SelectMany(x => x.Scenarios).Count(s => s.Status == "API_FAILED").ToString()),
+            ("MetricExclusionPolicy", "Scenario with API_FAILED or missing LLM prediction is excluded from confusion matrix; no Ground Truth fallback is used."),
+            ("CodeBertRecords", results.Sum(x => x.CodeBertRecords.Count).ToString()),
+            ("MetricRows", metrics.Count.ToString())
+        };
+
+        sheet.Cell(1, 1).Value = "Metric";
+        sheet.Cell(1, 2).Value = "Value";
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            sheet.Cell(i + 2, 1).Value = rows[i].Metric;
+            sheet.Cell(i + 2, 2).Value = rows[i].Value;
+        }
+
+        FormatUsedRangeAsTable(sheet, 2);
+    }
+
+    private static void WriteProjectStatusSheet(XLWorkbook workbook, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var sheet = workbook.Worksheets.Add("Project Status");
+        var headers = new[]
+        {
+            "ProjectName", "ProjectKey", "ProjectPath", "PackageCount", "Success", "SecurityReferenceSource",
+            "RagStatus", "RagSuccess", "RagExcludedFromMetrics", "RagMetricExclusionReason",
+            "ZeroShotStatus", "ZeroShotSuccess", "ZeroShotExcludedFromMetrics", "ZeroShotMetricExclusionReason",
+            "CodeBertRecords", "ElapsedSeconds", "ErrorMessage"
+        };
+        WriteHeaders(sheet, headers);
 
         var row = 2;
-
-        foreach (var report in geminiResponse.VulnerabilityReports)
+        foreach (var project in results)
         {
-            var packageName = report.PackageName ?? string.Empty;
-            var geminiDetected = report.IsVulnerable;
-            var referenceExists = !string.IsNullOrWhiteSpace(packageName) && referencedPackages.Contains(packageName);
-            var matchResult = GetMatchResult(geminiDetected, referenceExists);
-
-            detailSheet.Cell(row, 1).Value = projectName;
-            detailSheet.Cell(row, 2).Value = packageName;
-            detailSheet.Cell(row, 3).Value = report.CurrentVersion ?? string.Empty;
-            detailSheet.Cell(row, 4).Value = geminiDetected ? "true" : "false";
-            detailSheet.Cell(row, 5).Value = referenceExists ? "true" : "false";
-            detailSheet.Cell(row, 6).Value = matchResult;
-            detailSheet.Cell(row, 7).Value = report.Severity ?? string.Empty;
-            detailSheet.Cell(row, 8).Value = report.CVE_ID ?? string.Empty;
-            detailSheet.Cell(row, 9).Value = report.IsGroundedInReference ? "true" : "false";
+            sheet.Cell(row, 1).Value = project.ProjectName;
+            sheet.Cell(row, 2).Value = project.ProjectKey;
+            sheet.Cell(row, 3).Value = project.ProjectPath;
+            sheet.Cell(row, 4).Value = project.PackageCount;
+            sheet.Cell(row, 5).Value = project.Success;
+            sheet.Cell(row, 6).Value = project.SecurityReferenceSource;
+            var rag = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.RagLlm);
+            var zeroShot = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.ZeroShot);
+            sheet.Cell(row, 7).Value = rag?.Status ?? "NOT_RUN";
+            sheet.Cell(row, 8).Value = rag?.Success ?? false;
+            sheet.Cell(row, 9).Value = rag?.ExcludedFromMetrics ?? true;
+            sheet.Cell(row, 10).Value = rag?.MetricExclusionReason ?? string.Empty;
+            sheet.Cell(row, 11).Value = zeroShot?.Status ?? "NOT_RUN";
+            sheet.Cell(row, 12).Value = zeroShot?.Success ?? false;
+            sheet.Cell(row, 13).Value = zeroShot?.ExcludedFromMetrics ?? true;
+            sheet.Cell(row, 14).Value = zeroShot?.MetricExclusionReason ?? string.Empty;
+            sheet.Cell(row, 15).Value = project.CodeBertRecords.Count;
+            sheet.Cell(row, 16).Value = project.ElapsedSeconds;
+            sheet.Cell(row, 17).Value = project.ErrorMessage;
             row++;
         }
 
-        var detailHeaderRange = detailSheet.Range(1, 1, 1, 9);
-        detailHeaderRange.Style.Font.Bold = true;
-        detailHeaderRange.Style.Fill.BackgroundColor = XLColor.LightGray;
-        detailSheet.SheetView.FreezeRows(1);
+        FormatUsedRangeAsTable(sheet, headers.Length);
+    }
 
-        var detailDataRange = detailSheet.Range(2, 1, Math.Max(2, row - 1), 9);
-        detailDataRange.SetAutoFilter();
+    private static void WriteScenarioMetricsSheet(XLWorkbook workbook, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var sheet = workbook.Worksheets.Add("Scenario Metrics");
+        var headers = new[] { "ProjectName", "ProjectKey", "Scenario", "Total", "TP", "TN", "FP", "FN", "Accuracy", "Precision", "Recall", "F1Score", "FalsePositiveRatio" };
+        WriteHeaders(sheet, headers);
 
-        for (var i = 2; i < row; i++)
+        var row = 2;
+        foreach (var project in results)
         {
-            var matchValue = detailSheet.Cell(i, 6).GetString();
-            if (matchValue == "False Positive" || matchValue == "False Negative")
+            foreach (var scenario in project.Scenarios.Where(x => x.Metrics is not null))
             {
-                detailSheet.Range(i, 1, i, 9).Style.Fill.BackgroundColor = XLColor.LightPink;
-            }
-            else if (matchValue == "True Positive")
-            {
-                detailSheet.Range(i, 1, i, 9).Style.Fill.BackgroundColor = XLColor.LightGoldenrodYellow;
+                var metrics = scenario.Metrics!;
+                sheet.Cell(row, 1).Value = project.ProjectName;
+                sheet.Cell(row, 2).Value = project.ProjectKey;
+                sheet.Cell(row, 3).Value = GetScenarioDisplayName(scenario.Scenario);
+                sheet.Cell(row, 4).Value = metrics.Total;
+                sheet.Cell(row, 5).Value = metrics.TruePositive;
+                sheet.Cell(row, 6).Value = metrics.TrueNegative;
+                sheet.Cell(row, 7).Value = metrics.FalsePositive;
+                sheet.Cell(row, 8).Value = metrics.FalseNegative;
+                sheet.Cell(row, 9).Value = metrics.Accuracy;
+                sheet.Cell(row, 10).Value = metrics.Precision;
+                sheet.Cell(row, 11).Value = metrics.Recall;
+                sheet.Cell(row, 12).Value = metrics.F1Score;
+                sheet.Cell(row, 13).Value = metrics.FalsePositiveRatio;
+                row++;
             }
         }
 
-        detailSheet.Columns().AdjustToContents();
-
-        var summarySheet = workbook.Worksheets.Add("Summary");
-        var total = geminiResponse.VulnerabilityReports.Count;
-        var truePositive = geminiResponse.VulnerabilityReports.Count(x => x.IsVulnerable && referencedPackages.Contains(x.PackageName ?? string.Empty));
-        var falsePositive = geminiResponse.VulnerabilityReports.Count(x => x.IsVulnerable && !referencedPackages.Contains(x.PackageName ?? string.Empty));
-        var falseNegative = geminiResponse.VulnerabilityReports.Count(x => !x.IsVulnerable && referencedPackages.Contains(x.PackageName ?? string.Empty));
-        var trueNegative = total - truePositive - falsePositive - falseNegative;
-        var groundedCount = geminiResponse.VulnerabilityReports.Count(x => x.IsGroundedInReference);
-
-        summarySheet.Cell(1, 1).Value = "Audit Metrics Summary";
-        summarySheet.Cell(1, 1).Style.Font.Bold = true;
-        summarySheet.Cell(1, 1).Style.Font.FontSize = 16;
-
-        summarySheet.Cell(3, 1).Value = "Project";
-        summarySheet.Cell(3, 2).Value = projectName;
-        summarySheet.Cell(4, 1).Value = "Total Packages";
-        summarySheet.Cell(4, 2).Value = total;
-        summarySheet.Cell(5, 1).Value = "Reference Packages";
-        summarySheet.Cell(5, 2).Value = referencedPackages.Count;
-        summarySheet.Cell(6, 1).Value = "Detected Vulnerable";
-        summarySheet.Cell(6, 2).Value = geminiResponse.VulnerabilityReports.Count(x => x.IsVulnerable);
-        summarySheet.Cell(7, 1).Value = "Grounded Findings";
-        summarySheet.Cell(7, 2).Value = groundedCount;
-
-        summarySheet.Cell(9, 1).Value = "Confusion Matrix";
-        summarySheet.Cell(9, 1).Style.Font.Bold = true;
-
-        summarySheet.Cell(10, 1).Value = "True Positive";
-        summarySheet.Cell(10, 2).Value = truePositive;
-        summarySheet.Cell(11, 1).Value = "False Positive";
-        summarySheet.Cell(11, 2).Value = falsePositive;
-        summarySheet.Cell(12, 1).Value = "False Negative";
-        summarySheet.Cell(12, 2).Value = falseNegative;
-        summarySheet.Cell(13, 1).Value = "True Negative";
-        summarySheet.Cell(13, 2).Value = trueNegative;
-
-        var accuracy = total > 0 ? (double)(truePositive + trueNegative) / total : 0d;
-        var precisionDenominator = truePositive + falsePositive;
-        var recallDenominator = truePositive + falseNegative;
-        var precision = precisionDenominator > 0 ? (double)truePositive / precisionDenominator : 0d;
-        var recall = recallDenominator > 0 ? (double)truePositive / recallDenominator : 0d;
-        var f1Denominator = precision + recall;
-        var f1 = f1Denominator > 0 ? 2 * precision * recall / f1Denominator : 0d;
-
-        summarySheet.Cell(15, 1).Value = "Accuracy";
-        summarySheet.Cell(15, 2).Value = accuracy;
-        summarySheet.Cell(16, 1).Value = "Precision";
-        summarySheet.Cell(16, 2).Value = precision;
-        summarySheet.Cell(17, 1).Value = "Recall";
-        summarySheet.Cell(17, 2).Value = recall;
-        summarySheet.Cell(18, 1).Value = "F1-Score";
-        summarySheet.Cell(18, 2).Value = f1;
-
-        summarySheet.Range(15, 2, 18, 2).Style.NumberFormat.Format = "0.00%";
-        summarySheet.Columns().AdjustToContents();
-
-        var summaryDetailSheet = workbook.Worksheets.Add("Summary Details");
-        summaryDetailSheet.Cell(1, 1).Value = "Metric";
-        summaryDetailSheet.Cell(1, 2).Value = "Value";
-        summaryDetailSheet.Cell(1, 3).Value = "Description";
-
-        var summaryDetails = new List<(string Metric, string Value, string Description)>
+        if (row > 2)
         {
-            ("Project", projectName, "Nama project target yang diaudit."),
-            ("Total Packages", total.ToString(), "Jumlah total package yang dianalisis."),
-            ("Reference Packages", referencedPackages.Count.ToString(), "Jumlah package yang ditemukan pada security reference context."),
-            ("Detected Vulnerable", geminiResponse.VulnerabilityReports.Count(x => x.IsVulnerable).ToString(), "Jumlah package yang ditandai rentan oleh hasil analisis."),
-            ("Grounded Findings", groundedCount.ToString(), "Jumlah temuan dengan IsGroundedInReference = true."),
-            ("True Positive", truePositive.ToString(), "Model menandai rentan dan package memang ada di referensi kerentanan."),
-            ("False Positive", falsePositive.ToString(), "Model menandai rentan tetapi package tidak ada di referensi kerentanan."),
-            ("False Negative", falseNegative.ToString(), "Model tidak menandai rentan padahal package ada di referensi kerentanan."),
-            ("True Negative", trueNegative.ToString(), "Model tidak menandai rentan dan package memang tidak ada di referensi kerentanan."),
-            ("Accuracy", $"{accuracy:P2}", "Proporsi prediksi benar dari seluruh package: (TP + TN) / Total."),
-            ("Precision", $"{precision:P2}", "Ketepatan prediksi rentan: TP / (TP + FP)."),
-            ("Recall", $"{recall:P2}", "Kemampuan menangkap package rentan: TP / (TP + FN)."),
-            ("F1-Score", $"{f1:P2}", "Rata-rata harmonik Precision dan Recall: 2PR / (P + R).")
+            sheet.Range(2, 9, row - 1, 13).Style.NumberFormat.Format = "0.00%";
+        }
+
+        FormatUsedRangeAsTable(sheet, headers.Length);
+    }
+
+    private static void WriteFindingDetailSheet(XLWorkbook workbook, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var sheet = workbook.Worksheets.Add("Finding Detail");
+        var headers = new[]
+        {
+            "ProjectName", "ProjectKey", "Scenario", "PackageName", "CurrentVersion", "PredictedVulnerable",
+            "GroundTruthVulnerable", "MatchResult", "CVE_ID", "Severity", "SeverityIndonesia", "Grounded",
+            "MitigationPlan", "MitigationPlanIndonesia", "ReasoningTrace", "ReasoningTraceIndonesia",
+            "GroundTruthSeverity", "GroundTruthAdvisoryId", "GroundTruthVulnerableRange", "GroundTruthFirstPatchedVersion", "GroundTruthReferenceUrl"
         };
+        WriteHeaders(sheet, headers);
 
-        var detailRow = 2;
-        foreach (var item in summaryDetails)
+        var row = 2;
+        foreach (var project in results)
         {
-            summaryDetailSheet.Cell(detailRow, 1).Value = item.Metric;
-            summaryDetailSheet.Cell(detailRow, 2).Value = item.Value;
-            summaryDetailSheet.Cell(detailRow, 3).Value = item.Description;
-            detailRow++;
+            foreach (var scenario in project.Scenarios.Where(x => x.Metrics is not null))
+            {
+                var reportLookup = scenario.Response?.VulnerabilityReports
+                    .Where(x => !string.IsNullOrWhiteSpace(x.PackageName))
+                    .GroupBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase)
+                    ?? new Dictionary<string, VulnerabilityReport>(StringComparer.OrdinalIgnoreCase);
+                var groundTruthLookup = project.GroundTruthLabels
+                    .Where(x => !string.IsNullOrWhiteSpace(x.PackageName))
+                    .GroupBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+                foreach (var record in scenario.Metrics!.Records)
+                {
+                    reportLookup.TryGetValue(record.PackageName, out var report);
+                    groundTruthLookup.TryGetValue(record.PackageName, out var groundTruth);
+                    sheet.Cell(row, 1).Value = project.ProjectName;
+                    sheet.Cell(row, 2).Value = project.ProjectKey;
+                    sheet.Cell(row, 3).Value = GetScenarioDisplayName(scenario.Scenario);
+                    sheet.Cell(row, 4).Value = record.PackageName;
+                    sheet.Cell(row, 5).Value = record.CurrentVersion;
+                    sheet.Cell(row, 6).Value = record.PredictedVulnerable;
+                    sheet.Cell(row, 7).Value = record.GroundTruthVulnerable;
+                    sheet.Cell(row, 8).Value = record.MatchResult;
+                    sheet.Cell(row, 9).Value = record.CVE_ID;
+                    sheet.Cell(row, 10).Value = record.Severity;
+                    sheet.Cell(row, 11).Value = report?.SeverityIndonesia ?? string.Empty;
+                    sheet.Cell(row, 12).Value = record.IsGroundedInReference;
+                    sheet.Cell(row, 13).Value = report?.MitigationPlan ?? string.Empty;
+                    sheet.Cell(row, 14).Value = report?.MitigationPlanIndonesia ?? string.Empty;
+                    sheet.Cell(row, 15).Value = report?.ReasoningTrace ?? string.Empty;
+                    sheet.Cell(row, 16).Value = report?.ReasoningTraceIndonesia ?? string.Empty;
+                    sheet.Cell(row, 17).Value = groundTruth?.Severity ?? string.Empty;
+                    sheet.Cell(row, 18).Value = groundTruth?.AdvisoryId ?? string.Empty;
+                    sheet.Cell(row, 19).Value = groundTruth?.VulnerableVersionRange ?? string.Empty;
+                    sheet.Cell(row, 20).Value = groundTruth?.FirstPatchedVersion ?? string.Empty;
+                    sheet.Cell(row, 21).Value = groundTruth?.ReferenceUrl ?? string.Empty;
+                    row++;
+                }
+            }
         }
 
-        var summaryDetailHeader = summaryDetailSheet.Range(1, 1, 1, 3);
-        summaryDetailHeader.Style.Font.Bold = true;
-        summaryDetailHeader.Style.Fill.BackgroundColor = XLColor.LightGray;
-        summaryDetailSheet.SheetView.FreezeRows(1);
-        summaryDetailSheet.Range(2, 1, Math.Max(2, detailRow - 1), 3).SetAutoFilter();
-        summaryDetailSheet.Columns().AdjustToContents();
-
-        workbook.SaveAs(outputFilePath);
-        return outputFilePath;
+        FormatUsedRangeAsTable(sheet, headers.Length);
     }
 
-    private static string SaveScanMetricsCsv(
-        string csprojPath,
-        GeminiResponse geminiResponse,
-        string securityContext)
+    private static void WriteCodeBertSheet(XLWorkbook workbook, IReadOnlyCollection<ProjectAuditResult> results)
     {
-        return SaveScanMetricsExcel(csprojPath, geminiResponse, securityContext, "single");
+        var sheet = workbook.Worksheets.Add("CodeBERT Dataset");
+        var headers = new[]
+        {
+            "ProjectName", "ProjectKey", "Split", "PackageName", "CurrentVersion", "MutatedPackageName",
+            "MutatedVersion", "Label", "LabelId", "AugmentationType", "CVE_ID", "Severity", "AdvisoryId", "CsprojSnippet"
+        };
+        WriteHeaders(sheet, headers);
+
+        var row = 2;
+        foreach (var project in results)
+        {
+            foreach (var record in project.CodeBertRecords)
+            {
+                sheet.Cell(row, 1).Value = project.ProjectName;
+                sheet.Cell(row, 2).Value = project.ProjectKey;
+                sheet.Cell(row, 3).Value = record.Split;
+                sheet.Cell(row, 4).Value = record.PackageName;
+                sheet.Cell(row, 5).Value = record.CurrentVersion;
+                sheet.Cell(row, 6).Value = record.MutatedPackageName;
+                sheet.Cell(row, 7).Value = record.MutatedVersion;
+                sheet.Cell(row, 8).Value = record.Label;
+                sheet.Cell(row, 9).Value = record.LabelId;
+                sheet.Cell(row, 10).Value = record.AugmentationType;
+                sheet.Cell(row, 11).Value = record.CVE_ID;
+                sheet.Cell(row, 12).Value = record.Severity;
+                sheet.Cell(row, 13).Value = record.AdvisoryId;
+                sheet.Cell(row, 14).Value = record.CsprojSnippet;
+                row++;
+            }
+        }
+
+        FormatUsedRangeAsTable(sheet, headers.Length);
     }
 
-    private static string SaveComparisonMetricsExcel(
-        string csprojPath,
-        GeminiResponse ragResponse,
-        GeminiResponse nonRagResponse,
-        string securityContext)
+    private static void WriteGroundTruthSheet(XLWorkbook workbook, IReadOnlyCollection<ProjectAuditResult> results)
     {
-        var outputDirectory = Path.Combine(GetApplicationRootDirectory(), "audit-results");
-        Directory.CreateDirectory(outputDirectory);
+        var sheet = workbook.Worksheets.Add("Ground Truth");
+        var headers = new[]
+        {
+            "ProjectName", "ProjectKey", "PackageName", "CurrentVersion", "IsVulnerable",
+            "CVE_ID", "Severity", "AdvisoryId", "VulnerableVersionRange", "FirstPatchedVersion", "ReferenceUrl"
+        };
+        WriteHeaders(sheet, headers);
 
+        var row = 2;
+        foreach (var project in results)
+        {
+            foreach (var label in project.GroundTruthLabels)
+            {
+                sheet.Cell(row, 1).Value = project.ProjectName;
+                sheet.Cell(row, 2).Value = project.ProjectKey;
+                sheet.Cell(row, 3).Value = label.PackageName;
+                sheet.Cell(row, 4).Value = label.CurrentVersion;
+                sheet.Cell(row, 5).Value = label.IsVulnerable;
+                sheet.Cell(row, 6).Value = label.CVE_ID;
+                sheet.Cell(row, 7).Value = label.Severity;
+                sheet.Cell(row, 8).Value = label.AdvisoryId;
+                sheet.Cell(row, 9).Value = label.VulnerableVersionRange;
+                sheet.Cell(row, 10).Value = label.FirstPatchedVersion;
+                sheet.Cell(row, 11).Value = label.ReferenceUrl;
+                row++;
+            }
+        }
+
+        FormatUsedRangeAsTable(sheet, headers.Length);
+    }
+
+    private static void WriteRetrievalDiagnosticsSheet(XLWorkbook workbook, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var sheet = workbook.Worksheets.Add("Retrieval Diagnostics");
+        var headers = new[] { "ProjectName", "ProjectKey", "Source", "Diagnostic" };
+        WriteHeaders(sheet, headers);
+
+        var row = 2;
+        foreach (var project in results)
+        {
+            foreach (var diagnostic in project.RetrievalDiagnostics)
+            {
+                sheet.Cell(row, 1).Value = project.ProjectName;
+                sheet.Cell(row, 2).Value = project.ProjectKey;
+                sheet.Cell(row, 3).Value = project.SecurityReferenceSource;
+                sheet.Cell(row, 4).Value = diagnostic;
+                row++;
+            }
+        }
+
+        FormatUsedRangeAsTable(sheet, headers.Length);
+    }
+
+    private static void WriteFieldDescriptionsSheet(XLWorkbook workbook)
+    {
+        var sheet = workbook.Worksheets.Add("Field Descriptions");
+        var headers = new[] { "Field", "Description", "Value", "ValueDescription" };
+        WriteHeaders(sheet, headers);
+
+        var row = 2;
+        foreach (var field in GetVulnerabilityReportFieldDescriptions())
+        {
+            if (field.Value.ValueDescriptions.Count == 0)
+            {
+                sheet.Cell(row, 1).Value = field.Key;
+                sheet.Cell(row, 2).Value = field.Value.Description;
+                row++;
+                continue;
+            }
+
+            foreach (var valueDescription in field.Value.ValueDescriptions)
+            {
+                sheet.Cell(row, 1).Value = field.Key;
+                sheet.Cell(row, 2).Value = field.Value.Description;
+                sheet.Cell(row, 3).Value = valueDescription.Key;
+                sheet.Cell(row, 4).Value = valueDescription.Value;
+                row++;
+            }
+        }
+
+        FormatUsedRangeAsTable(sheet, headers.Length);
+    }
+
+    private static void WriteMetricDefinitionsSheet(XLWorkbook workbook)
+    {
+        var sheet = workbook.Worksheets.Add("Metric Definitions");
+        var headers = new[] { "Metric", "Formula", "Description" };
+        WriteHeaders(sheet, headers);
+
+        var row = 2;
+        foreach (var item in GetMetricFormulaDescriptions())
+        {
+            sheet.Cell(row, 1).Value = item.Key;
+            sheet.Cell(row, 2).Value = item.Value.Formula;
+            sheet.Cell(row, 3).Value = item.Value.Description;
+            row++;
+        }
+
+        FormatUsedRangeAsTable(sheet, headers.Length);
+    }
+
+    private static void WriteHeaders(IXLWorksheet sheet, IReadOnlyList<string> headers)
+    {
+        for (var i = 0; i < headers.Count; i++)
+        {
+            sheet.Cell(1, i + 1).Value = headers[i];
+        }
+    }
+
+    private static void FormatUsedRangeAsTable(IXLWorksheet sheet, int columnCount)
+    {
+        var lastRow = Math.Max(1, sheet.LastRowUsed()?.RowNumber() ?? 1);
+        var range = sheet.Range(1, 1, lastRow, columnCount);
+        range.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        range.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+        sheet.Range(1, 1, 1, columnCount).Style.Font.Bold = true;
+        sheet.Range(1, 1, 1, columnCount).Style.Fill.BackgroundColor = XLColor.LightGray;
+        sheet.SheetView.FreezeRows(1);
+        range.SetAutoFilter();
+        sheet.Columns().AdjustToContents();
+    }
+
+    private static string BuildProjectKey(string csprojPath)
+    {
         var projectName = Path.GetFileNameWithoutExtension(csprojPath);
-        var outputFilePath = Path.Combine(
-            outputDirectory,
-            $"metrics-{projectName}-compare-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx");
-
-        var referencedPackages = ExtractReferencedPackageNames(securityContext);
-
-        var ragTotal = ragResponse.VulnerabilityReports.Count;
-        var ragTp = ragResponse.VulnerabilityReports.Count(x => x.IsVulnerable && referencedPackages.Contains(x.PackageName ?? string.Empty));
-        var ragFp = ragResponse.VulnerabilityReports.Count(x => x.IsVulnerable && !referencedPackages.Contains(x.PackageName ?? string.Empty));
-        var ragFn = ragResponse.VulnerabilityReports.Count(x => !x.IsVulnerable && referencedPackages.Contains(x.PackageName ?? string.Empty));
-        var ragTn = ragTotal - ragTp - ragFp - ragFn;
-        var ragAccuracy = ragTotal > 0 ? (double)(ragTp + ragTn) / ragTotal : 0d;
-        var ragPrecision = ragTp + ragFp > 0 ? (double)ragTp / (ragTp + ragFp) : 0d;
-        var ragRecall = ragTp + ragFn > 0 ? (double)ragTp / (ragTp + ragFn) : 0d;
-        var ragF1 = ragPrecision + ragRecall > 0 ? 2 * ragPrecision * ragRecall / (ragPrecision + ragRecall) : 0d;
-        var ragFpRatio = ragTp + ragFp > 0 ? (double)ragFp / (ragTp + ragFp) : 0d;
-
-        var nonRagTotal = nonRagResponse.VulnerabilityReports.Count;
-        var nonRagTp = nonRagResponse.VulnerabilityReports.Count(x => x.IsVulnerable && referencedPackages.Contains(x.PackageName ?? string.Empty));
-        var nonRagFp = nonRagResponse.VulnerabilityReports.Count(x => x.IsVulnerable && !referencedPackages.Contains(x.PackageName ?? string.Empty));
-        var nonRagFn = nonRagResponse.VulnerabilityReports.Count(x => !x.IsVulnerable && referencedPackages.Contains(x.PackageName ?? string.Empty));
-        var nonRagTn = nonRagTotal - nonRagTp - nonRagFp - nonRagFn;
-        var nonRagAccuracy = nonRagTotal > 0 ? (double)(nonRagTp + nonRagTn) / nonRagTotal : 0d;
-        var nonRagPrecision = nonRagTp + nonRagFp > 0 ? (double)nonRagTp / (nonRagTp + nonRagFp) : 0d;
-        var nonRagRecall = nonRagTp + nonRagFn > 0 ? (double)nonRagTp / (nonRagTp + nonRagFn) : 0d;
-        var nonRagF1 = nonRagPrecision + nonRagRecall > 0 ? 2 * nonRagPrecision * nonRagRecall / (nonRagPrecision + nonRagRecall) : 0d;
-        var nonRagFpRatio = nonRagTp + nonRagFp > 0 ? (double)nonRagFp / (nonRagTp + nonRagFp) : 0d;
-
-        using var workbook = new XLWorkbook();
-
-        var comparisonSheet = workbook.Worksheets.Add("Model Comparison");
-        comparisonSheet.Cell(1, 1).Value = "Model Comparison (RAG vs Non-RAG)";
-        comparisonSheet.Cell(1, 1).Style.Font.Bold = true;
-        comparisonSheet.Cell(1, 1).Style.Font.FontSize = 16;
-
-        comparisonSheet.Cell(3, 1).Value = "Metric";
-        comparisonSheet.Cell(3, 2).Value = "RAG";
-        comparisonSheet.Cell(3, 3).Value = "Non-RAG";
-        comparisonSheet.Cell(3, 4).Value = "Delta (RAG-NonRAG)";
-
-        var metrics = new List<(string Name, double Rag, double NonRag, bool IsPercent)>
-        {
-            ("Accuracy", ragAccuracy, nonRagAccuracy, true),
-            ("Precision", ragPrecision, nonRagPrecision, true),
-            ("Recall", ragRecall, nonRagRecall, true),
-            ("F1-Score", ragF1, nonRagF1, true),
-            ("FP Ratio", ragFpRatio, nonRagFpRatio, true)
-        };
-
-        var row = 4;
-        foreach (var metric in metrics)
-        {
-            comparisonSheet.Cell(row, 1).Value = metric.Name;
-            comparisonSheet.Cell(row, 2).Value = metric.Rag;
-            comparisonSheet.Cell(row, 3).Value = metric.NonRag;
-            comparisonSheet.Cell(row, 4).Value = metric.Rag - metric.NonRag;
-
-            if (metric.IsPercent)
-            {
-                comparisonSheet.Range(row, 2, row, 4).Style.NumberFormat.Format = "0.00%";
-            }
-
-            row++;
-        }
-
-        comparisonSheet.Cell(row + 1, 1).Value = "Success Criteria";
-        comparisonSheet.Cell(row + 1, 1).Style.Font.Bold = true;
-        comparisonSheet.Cell(row + 2, 1).Value = "Precision(RAG) > Precision(Non-RAG)";
-        comparisonSheet.Cell(row + 2, 2).Value = ragPrecision > nonRagPrecision ? "PASS" : "FAIL";
-        comparisonSheet.Cell(row + 3, 1).Value = "FP Ratio(RAG) < FP Ratio(Non-RAG)";
-        comparisonSheet.Cell(row + 3, 2).Value = ragFpRatio < nonRagFpRatio ? "PASS" : "FAIL";
-        comparisonSheet.Cell(row + 4, 1).Value = "Overall";
-        comparisonSheet.Cell(row + 4, 2).Value = ragPrecision > nonRagPrecision && ragFpRatio < nonRagFpRatio ? "PASS" : "FAIL";
-
-        var header = comparisonSheet.Range(3, 1, 3, 4);
-        header.Style.Font.Bold = true;
-        header.Style.Fill.BackgroundColor = XLColor.LightGray;
-        comparisonSheet.Columns().AdjustToContents();
-
-        var ragSheetPath = SaveScanMetricsExcel(csprojPath, ragResponse, securityContext, "rag-temp");
-        var nonRagSheetPath = SaveScanMetricsExcel(csprojPath, nonRagResponse, securityContext, "nonrag-temp");
-
-        using (var ragWorkbook = new XLWorkbook(ragSheetPath))
-        {
-            ragWorkbook.Worksheet("Summary").CopyTo(workbook, "RAG Summary");
-            ragWorkbook.Worksheet("Detail").CopyTo(workbook, "RAG Detail");
-            ragWorkbook.Worksheet("Summary Details").CopyTo(workbook, "RAG Summary Details");
-        }
-
-        using (var nonRagWorkbook = new XLWorkbook(nonRagSheetPath))
-        {
-            nonRagWorkbook.Worksheet("Summary").CopyTo(workbook, "NonRAG Summary");
-            nonRagWorkbook.Worksheet("Detail").CopyTo(workbook, "NonRAG Detail");
-            nonRagWorkbook.Worksheet("Summary Details").CopyTo(workbook, "NonRAG Summary Details");
-        }
-
-        TryDeleteFile(ragSheetPath);
-        TryDeleteFile(nonRagSheetPath);
-
-        workbook.SaveAs(outputFilePath);
-        return outputFilePath;
+        var hash = StableHash(Path.GetFullPath(csprojPath)).ToString("X8");
+        return SanitizeFileName($"{projectName}-{hash}");
     }
 
-    private static void TryDeleteFile(string filePath)
+    private static string SanitizeFileName(string value)
     {
-        try
+        var invalid = Path.GetInvalidFileNameChars().ToHashSet();
+        var builder = new StringBuilder(value.Length);
+
+        foreach (var character in value)
         {
-            if (File.Exists(filePath))
-            {
-                File.Delete(filePath);
-            }
+            builder.Append(invalid.Contains(character) ? '-' : character);
         }
-        catch
+
+        return builder.ToString();
+    }
+
+    private static int StableHash(string value)
+    {
+        unchecked
         {
+            var hash = 17;
+            foreach (var character in value ?? string.Empty)
+            {
+                hash = (hash * 31) + character;
+            }
+
+            return hash & int.MaxValue;
         }
     }
 
-    private static HashSet<string> ExtractReferencedPackageNames(string securityContext)
+    private static TimeSpan CalculateBackoffDelay(int baseDelayMilliseconds, int attempt)
     {
-        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        if (string.IsNullOrWhiteSpace(securityContext))
-        {
-            return result;
-        }
-
-        using var document = JsonDocument.Parse(securityContext);
-
-        foreach (var advisory in GetAdvisoriesFromSecurityContext(document.RootElement))
-        {
-            var packageName = TryGetPackageNameFromSecurityContext(advisory);
-
-            if (!string.IsNullOrWhiteSpace(packageName))
-            {
-                result.Add(packageName);
-            }
-        }
-
-        return result;
+        var exponential = Math.Pow(2, Math.Max(0, attempt - 1));
+        var jitter = Random.Shared.Next(100, 500);
+        var delay = Math.Min(30000, (int)(baseDelayMilliseconds * exponential) + jitter);
+        return TimeSpan.FromMilliseconds(delay);
     }
 
-    private static IEnumerable<JsonElement> GetAdvisoriesFromSecurityContext(JsonElement root)
+    private static bool IsTransientStatusCode(HttpStatusCode? statusCode)
     {
-        if (root.ValueKind == JsonValueKind.Array)
+        if (!statusCode.HasValue)
         {
-            foreach (var item in root.EnumerateArray())
-            {
-                yield return item;
-            }
-
-            yield break;
+            return true;
         }
 
-        if (root.ValueKind != JsonValueKind.Object)
-        {
-            yield break;
-        }
-
-        if (root.TryGetProperty("advisories", out var advisories) && advisories.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var item in advisories.EnumerateArray())
-            {
-                yield return item;
-            }
-
-            yield break;
-        }
-
-        if (root.TryGetProperty("vulnerabilities", out var vulnerabilities) && vulnerabilities.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var item in vulnerabilities.EnumerateArray())
-            {
-                yield return item;
-            }
-        }
-    }
-
-    private static string TryGetPackageNameFromSecurityContext(JsonElement advisory)
-    {
-        if (advisory.ValueKind != JsonValueKind.Object)
-        {
-            return string.Empty;
-        }
-
-        if (advisory.TryGetProperty("PackageName", out var packageName) && packageName.ValueKind == JsonValueKind.String)
-        {
-            return packageName.GetString() ?? string.Empty;
-        }
-
-        if (advisory.TryGetProperty("packageName", out var camelCasePackageName) && camelCasePackageName.ValueKind == JsonValueKind.String)
-        {
-            return camelCasePackageName.GetString() ?? string.Empty;
-        }
-
-        if (advisory.TryGetProperty("package", out var package))
-        {
-            if (package.ValueKind == JsonValueKind.String)
-            {
-                return package.GetString() ?? string.Empty;
-            }
-
-            if (package.ValueKind == JsonValueKind.Object)
-            {
-                if (package.TryGetProperty("name", out var nestedName) && nestedName.ValueKind == JsonValueKind.String)
-                {
-                    return nestedName.GetString() ?? string.Empty;
-                }
-
-                if (package.TryGetProperty("Name", out var nestedPascalName) && nestedPascalName.ValueKind == JsonValueKind.String)
-                {
-                    return nestedPascalName.GetString() ?? string.Empty;
-                }
-            }
-        }
-
-        if (advisory.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String)
-        {
-            return name.GetString() ?? string.Empty;
-        }
-
-        return string.Empty;
-    }
-
-    private static string GetMatchResult(bool geminiDetected, bool referenceExists)
-    {
-        if (geminiDetected && referenceExists)
-        {
-            return "True Positive";
-        }
-
-        if (geminiDetected && !referenceExists)
-        {
-            return "False Positive";
-        }
-
-        if (!geminiDetected && referenceExists)
-        {
-            return "False Negative";
-        }
-
-        return "True Negative";
+        return statusCode == HttpStatusCode.TooManyRequests || (int)statusCode.Value >= 500;
     }
 
     private static string GetScenarioTag(AuditScenario scenario)
@@ -1397,48 +1859,48 @@ Security reference data:
         };
     }
 
-    private static string EscapeCsv(string value)
+    private static string GetScenarioDisplayName(AuditScenario scenario)
     {
-        var safeValue = value ?? string.Empty;
-
-        if (!safeValue.Contains(',') && !safeValue.Contains('"') && !safeValue.Contains('\n') && !safeValue.Contains('\r'))
+        return scenario switch
         {
-            return safeValue;
-        }
-
-        return $"\"{safeValue.Replace("\"", "\"\"")}\"";
+            AuditScenario.RagLlm => "RAG-LLM",
+            AuditScenario.ZeroShot => "Zero-Shot",
+            AuditScenario.CodeBert => "CodeBERT",
+            _ => "Unknown"
+        };
     }
 
     private static string GetApplicationRootDirectory()
     {
-        var currentDirectoryRoot = FindWorkspaceRoot(new DirectoryInfo(Path.GetFullPath(Directory.GetCurrentDirectory())));
+        var currentDirectory = new DirectoryInfo(Path.GetFullPath(Directory.GetCurrentDirectory()));
 
-        if (currentDirectoryRoot is not null)
+        while (currentDirectory is not null)
         {
-            return currentDirectoryRoot.FullName;
+            if (currentDirectory.GetFiles("*.sln").Any() ||
+                currentDirectory.GetFiles("*.slnx").Any() ||
+                currentDirectory.GetFiles("*.csproj").Any())
+            {
+                return currentDirectory.FullName;
+            }
+
+            currentDirectory = currentDirectory.Parent;
         }
 
-        var baseDirectoryRoot = FindWorkspaceRoot(new DirectoryInfo(Path.GetFullPath(AppContext.BaseDirectory)));
-        return baseDirectoryRoot?.FullName ?? Directory.GetCurrentDirectory();
+        return Directory.GetCurrentDirectory();
     }
 
     private static bool IsUsableApiKey(string? apiKey)
     {
-        return !string.IsNullOrWhiteSpace(apiKey);
+        return !string.IsNullOrWhiteSpace(apiKey) &&
+               !string.Equals(apiKey, "sample", StringComparison.OrdinalIgnoreCase);
     }
 
     private static Dictionary<string, VulnerabilityFieldDescription> GetVulnerabilityReportFieldDescriptions()
     {
         return new Dictionary<string, VulnerabilityFieldDescription>
         {
-            ["PackageName"] = new VulnerabilityFieldDescription
-            {
-                Description = "Nama paket NuGet yang dianalisis."
-            },
-            ["CurrentVersion"] = new VulnerabilityFieldDescription
-            {
-                Description = "Versi paket yang saat ini digunakan pada proyek target."
-            },
+            ["PackageName"] = new VulnerabilityFieldDescription { Description = "Nama paket NuGet yang dianalisis." },
+            ["CurrentVersion"] = new VulnerabilityFieldDescription { Description = "Versi paket yang saat ini digunakan pada proyek target." },
             ["IsVulnerable"] = new VulnerabilityFieldDescription
             {
                 Description = "Status apakah paket terdeteksi rentan berdasarkan analisis.",
@@ -1448,61 +1910,86 @@ Security reference data:
                     ["false"] = "Tidak ada kerentanan yang teridentifikasi untuk paket ini pada referensi yang tersedia."
                 }
             },
-            ["CVE_ID"] = new VulnerabilityFieldDescription
+            ["CVE_ID"] = new VulnerabilityFieldDescription { Description = "Identifier CVE yang terkait dengan kerentanan, jika tersedia." },
+            ["Severity"] = new VulnerabilityFieldDescription { Description = "Tingkat keparahan kerentanan dalam bahasa Inggris." },
+            ["SeverityIndonesia"] = new VulnerabilityFieldDescription { Description = "Tingkat keparahan kerentanan dalam bahasa Indonesia." },
+            ["MitigationPlan"] = new VulnerabilityFieldDescription { Description = "Rencana mitigasi atau rekomendasi perbaikan dalam bahasa Inggris." },
+            ["MitigationPlanIndonesia"] = new VulnerabilityFieldDescription { Description = "Rencana mitigasi atau rekomendasi perbaikan dalam bahasa Indonesia." },
+            ["IsGroundedInReference"] = new VulnerabilityFieldDescription { Description = "Status apakah temuan didukung oleh data referensi keamanan yang diberikan." },
+            ["ReasoningTrace"] = new VulnerabilityFieldDescription { Description = "Ringkasan alasan analisis model dalam bahasa Inggris." },
+            ["ReasoningTraceIndonesia"] = new VulnerabilityFieldDescription { Description = "Ringkasan alasan analisis model dalam bahasa Indonesia." }
+        };
+    }
+
+    private static Dictionary<string, MetricFormulaDescription> GetMetricFormulaDescriptions()
+    {
+        return new Dictionary<string, MetricFormulaDescription>
+        {
+            ["True Positive"] = new MetricFormulaDescription
             {
-                Description = "Identifier CVE yang terkait dengan kerentanan, jika tersedia."
+                Formula = "PredictedVulnerable = true AND GroundTruthVulnerable = true",
+                Description = "Model menandai package rentan dan ground truth juga menyatakan package rentan."
             },
-            ["Severity"] = new VulnerabilityFieldDescription
+            ["True Negative"] = new MetricFormulaDescription
             {
-                Description = "Tingkat keparahan kerentanan dalam bahasa Inggris.",
-                ValueDescriptions = new Dictionary<string, string>
-                {
-                    ["CRITICAL"] = "Kerentanan sangat parah dengan dampak tinggi; perlu tindakan segera.",
-                    ["HIGH"] = "Kerentanan parah dengan risiko tinggi; disarankan mitigasi secepatnya.",
-                    ["MODERATE"] = "Kerentanan tingkat sedang; perlu mitigasi terencana.",
-                    ["LOW"] = "Kerentanan tingkat rendah; dampak terbatas namun tetap perlu diperhatikan.",
-                    ["Unknown"] = "Tingkat keparahannya tidak dapat dipastikan dari referensi yang tersedia.",
-                    [""] = "Nilai tidak diisi oleh model."
-                }
+                Formula = "PredictedVulnerable = false AND GroundTruthVulnerable = false",
+                Description = "Model menandai package tidak rentan dan ground truth juga menyatakan package tidak rentan."
             },
-            ["SeverityIndonesia"] = new VulnerabilityFieldDescription
+            ["False Positive"] = new MetricFormulaDescription
             {
-                Description = "Tingkat keparahan kerentanan dalam bahasa Indonesia.",
-                ValueDescriptions = new Dictionary<string, string>
-                {
-                    ["Kritis"] = "Kerentanan sangat parah dengan dampak tinggi; perlu tindakan segera.",
-                    ["Tinggi"] = "Kerentanan parah dengan risiko tinggi; disarankan mitigasi secepatnya.",
-                    ["Sedang"] = "Kerentanan tingkat sedang; perlu mitigasi terencana.",
-                    ["Rendah"] = "Kerentanan tingkat rendah; dampak terbatas namun tetap perlu diperhatikan.",
-                    ["Tidak diketahui"] = "Tingkat keparahan tidak dapat dipastikan dari referensi yang tersedia.",
-                    [""] = "Nilai tidak diisi oleh model."
-                }
+                Formula = "PredictedVulnerable = true AND GroundTruthVulnerable = false",
+                Description = "Model menandai package rentan padahal ground truth tidak rentan. Ini indikator hallucination/slopsquatting risk."
             },
-            ["MitigationPlan"] = new VulnerabilityFieldDescription
+            ["False Negative"] = new MetricFormulaDescription
             {
-                Description = "Rencana mitigasi atau rekomendasi perbaikan dalam bahasa Inggris."
+                Formula = "PredictedVulnerable = false AND GroundTruthVulnerable = true",
+                Description = "Model gagal mendeteksi package yang sebenarnya rentan menurut ground truth."
             },
-            ["MitigationPlanIndonesia"] = new VulnerabilityFieldDescription
+            ["Accuracy"] = new MetricFormulaDescription
             {
-                Description = "Rencana mitigasi atau rekomendasi perbaikan dalam bahasa Indonesia."
+                Formula = "(TP + TN) / (TP + TN + FP + FN)",
+                Description = "Proporsi seluruh prediksi yang benar."
             },
-            ["IsGroundedInReference"] = new VulnerabilityFieldDescription
+            ["Precision"] = new MetricFormulaDescription
             {
-                Description = "Status apakah temuan didukung oleh data referensi keamanan yang diberikan.",
-                ValueDescriptions = new Dictionary<string, string>
-                {
-                    ["true"] = "Temuan didukung data referensi keamanan (misalnya advisory/CVE dari konteks referensi).",
-                    ["false"] = "Temuan tidak didukung langsung data referensi keamanan yang diberikan; perlu verifikasi lanjutan."
-                }
+                Formula = "TP / (TP + FP)",
+                Description = "Ketepatan prediksi rentan. Metrik utama untuk menekan false positive."
             },
-            ["ReasoningTrace"] = new VulnerabilityFieldDescription
+            ["Recall"] = new MetricFormulaDescription
             {
-                Description = "Ringkasan alasan analisis model dalam bahasa Inggris."
+                Formula = "TP / (TP + FN)",
+                Description = "Kemampuan menemukan seluruh package yang benar-benar rentan."
             },
-            ["ReasoningTraceIndonesia"] = new VulnerabilityFieldDescription
+            ["F1-Score"] = new MetricFormulaDescription
             {
-                Description = "Ringkasan alasan analisis model dalam bahasa Indonesia."
+                Formula = "2 x Precision x Recall / (Precision + Recall)",
+                Description = "Rata-rata harmonik Precision dan Recall."
+            },
+            ["FalsePositiveRatio"] = new MetricFormulaDescription
+            {
+                Formula = "FP / (TP + FP)",
+                Description = "Rasio alarm palsu dari seluruh prediksi positif."
             }
+        };
+    }
+
+    private static Dictionary<string, string> GetCodeBertDatasetFieldDescriptions()
+    {
+        return new Dictionary<string, string>
+        {
+            ["Id"] = "Identifier deterministik untuk record dataset.",
+            ["Split"] = "Bagian dataset: training, validation, atau testing.",
+            ["PackageName"] = "Nama package asli dari file .csproj.",
+            ["CurrentVersion"] = "Versi package asli dari file .csproj.",
+            ["MutatedPackageName"] = "Nama package setelah augmentasi.",
+            ["MutatedVersion"] = "Versi package setelah augmentasi.",
+            ["CsprojSnippet"] = "Potongan XML .csproj yang digunakan sebagai input model CodeBERT.",
+            ["Label"] = "Ground truth boolean. true berarti vulnerable.",
+            ["LabelId"] = "Ground truth numerik. 1 berarti vulnerable, 0 berarti not vulnerable.",
+            ["AugmentationType"] = "Jenis augmentasi: original, semantic_version_normalization, atau safe_dummy_dependency.",
+            ["CVE_ID"] = "Identifier CVE dari ground truth jika tersedia.",
+            ["Severity"] = "Severity dari advisory ground truth jika tersedia.",
+            ["AdvisoryId"] = "Identifier advisory seperti GHSA jika tersedia."
         };
     }
 
@@ -1577,7 +2064,117 @@ Security reference data:
         return value[..maxLength] + "...";
     }
 
+    private static void AddGeminiApiDiagnostic(GeminiApiDiagnostic diagnostic)
+    {
+        GeminiApiDiagnostics.Add(diagnostic);
+    }
+
+    private static void InstallConsoleCapture()
+    {
+        if (Console.Out is CapturingConsoleWriter)
+        {
+            return;
+        }
+
+        Console.SetOut(new CapturingConsoleWriter(Console.Out, "stdout", Console.OutputEncoding));
+        Console.SetError(new CapturingConsoleWriter(Console.Error, "stderr", Console.OutputEncoding));
+    }
+
+    private static void AddConsoleLog(string stream, string message, bool endsLine)
+    {
+        ConsoleLogEntries.Enqueue(new ConsoleLogEntry
+        {
+            Sequence = Interlocked.Increment(ref ConsoleLogSequence),
+            TimestampUtc = DateTimeOffset.UtcNow,
+            Stream = stream,
+            Message = message,
+            EndsLine = endsLine
+        });
+    }
+
+    private static void SaveConsoleLogJson(string outputFilePath)
+    {
+        var entries = ConsoleLogEntries
+            .OrderBy(x => x.Sequence)
+            .ToList();
+
+        var report = new ConsoleExecutionLogReport
+        {
+            GeneratedAtUtc = DateTimeOffset.UtcNow,
+            EntryCount = entries.Count,
+            FullText = BuildConsoleFullText(entries),
+            Entries = entries
+        };
+
+        File.WriteAllText(outputFilePath, JsonSerializer.Serialize(report, SerializerOptions), Encoding.UTF8);
+    }
+
+    private static string BuildConsoleFullText(IEnumerable<ConsoleLogEntry> entries)
+    {
+        var builder = new StringBuilder();
+
+        foreach (var entry in entries.OrderBy(x => x.Sequence))
+        {
+            builder.Append(entry.Message);
+
+            if (entry.EndsLine)
+            {
+                builder.AppendLine();
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    private static Dictionary<string, List<string>> CollectHeaders(HttpResponseMessage response)
+    {
+        var headers = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var header in response.Headers)
+        {
+            headers[header.Key] = header.Value.ToList();
+        }
+
+        foreach (var header in response.Content.Headers)
+        {
+            headers[header.Key] = header.Value.ToList();
+        }
+
+        return headers;
+    }
+
+    private static Dictionary<string, List<string>> CollectRateLimitHeaders(HttpResponseMessage response)
+    {
+        return CollectHeaders(response)
+            .Where(x =>
+                x.Key.Contains("rate", StringComparison.OrdinalIgnoreCase) ||
+                x.Key.Contains("quota", StringComparison.OrdinalIgnoreCase) ||
+                x.Key.Contains("limit", StringComparison.OrdinalIgnoreCase) ||
+                x.Key.Contains("retry-after", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static void WriteLine(string message)
+    {
+        lock (ConsoleLock)
+        {
+            Console.WriteLine(message);
+        }
+    }
+
+    private static void WriteError(string message)
+    {
+        lock (ConsoleLock)
+        {
+            Console.Error.WriteLine(message);
+        }
+    }
+
     private sealed class GeminiConfigurationException(string message) : Exception(message)
+    {
+    }
+
+    private sealed class GeminiApiFailedException(string message) : Exception(message)
     {
     }
 
@@ -1614,5 +2211,268 @@ Security reference data:
     {
         [JsonPropertyName("text")]
         public string? Text { get; set; }
+    }
+
+    private sealed class GeminiModelListResponse
+    {
+        [JsonPropertyName("models")]
+        public List<GeminiModelMetadata>? Models { get; set; }
+    }
+
+    private sealed class GeminiModelMetadata
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("supportedGenerationMethods")]
+        public List<string> SupportedGenerationMethods { get; set; } = new();
+    }
+
+    private sealed class FinalArtifactSet
+    {
+        public string RagJsonPath { get; set; } = string.Empty;
+        public string ZeroShotJsonPath { get; set; } = string.Empty;
+        public string CodeBertJsonPath { get; set; } = string.Empty;
+        public string ExcelReportPath { get; set; } = string.Empty;
+        public string ApiDiagnosticsJsonPath { get; set; } = string.Empty;
+        public string ConsoleLogJsonPath { get; set; } = string.Empty;
+    }
+
+    private sealed class ConsoleExecutionLogReport
+    {
+        public DateTimeOffset GeneratedAtUtc { get; set; }
+        public int EntryCount { get; set; }
+        public string FullText { get; set; } = string.Empty;
+        public List<ConsoleLogEntry> Entries { get; set; } = new();
+    }
+
+    private sealed class ConsoleLogEntry
+    {
+        public long Sequence { get; set; }
+        public DateTimeOffset TimestampUtc { get; set; }
+        public string Stream { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public bool EndsLine { get; set; }
+    }
+
+    private sealed class MetricFormulaDescription
+    {
+        public string Formula { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+    }
+
+    private sealed class ApiDiagnosticsReport
+    {
+        public DateTimeOffset GeneratedAtUtc { get; set; }
+        public string RootFolder { get; set; } = string.Empty;
+        public string ModelName { get; set; } = string.Empty;
+        public int TotalCalls { get; set; }
+        public int SuccessfulCalls { get; set; }
+        public int FailedCalls { get; set; }
+        public List<RateLimitObservation> RateLimitHeaderObservations { get; set; } = new();
+        public List<GeminiApiDiagnostic> Diagnostics { get; set; } = new();
+    }
+
+    private sealed class RateLimitObservation
+    {
+        public DateTimeOffset TimestampUtc { get; set; }
+        public string Operation { get; set; } = string.Empty;
+        public string Scenario { get; set; } = string.Empty;
+        public string ModelName { get; set; } = string.Empty;
+        public int? HttpStatusCode { get; set; }
+        public Dictionary<string, List<string>> Headers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private sealed class GeminiApiDiagnostic
+    {
+        public DateTimeOffset TimestampUtc { get; set; }
+        public string Operation { get; set; } = string.Empty;
+        public string Endpoint { get; set; } = string.Empty;
+        public string ModelName { get; set; } = string.Empty;
+        public string Scenario { get; set; } = string.Empty;
+        public int PackageCount { get; set; }
+        public int? HttpStatusCode { get; set; }
+        public string HttpStatusDescription { get; set; } = string.Empty;
+        public bool Success { get; set; }
+        public double ElapsedMilliseconds { get; set; }
+        public Dictionary<string, List<string>> RateLimitHeaders { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, List<string>> ResponseHeaders { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public string ResponsePreview { get; set; } = string.Empty;
+        public string ErrorMessage { get; set; } = string.Empty;
+    }
+
+    private sealed class BatchAuditReport
+    {
+        public DateTimeOffset GeneratedAtUtc { get; set; }
+        public string RootFolder { get; set; } = string.Empty;
+        public string ModelName { get; set; } = string.Empty;
+        public int ProjectCount { get; set; }
+        public int SucceededProjectCount { get; set; }
+        public int FailedProjectCount { get; set; }
+        public List<ProjectAuditResult> Results { get; set; } = new();
+    }
+
+    private sealed class ScenarioJsonReport
+    {
+        public DateTimeOffset GeneratedAtUtc { get; set; }
+        public string RootFolder { get; set; } = string.Empty;
+        public string ModelName { get; set; } = string.Empty;
+        public AuditScenario Scenario { get; set; }
+        public int ProjectCount { get; set; }
+        public int SucceededProjectCount { get; set; }
+        public int FailedProjectCount { get; set; }
+        public int TotalExtractedPackages { get; set; }
+        public int TotalVulnerabilityReports { get; set; }
+        public int VulnerableFindingCount { get; set; }
+        public int GroundedFindingCount { get; set; }
+        public Dictionary<string, VulnerabilityFieldDescription> VulnerabilityReportFieldDescriptions { get; set; } = new();
+        public Dictionary<string, MetricFormulaDescription> MetricFormulaDescriptions { get; set; } = new();
+        public List<ProjectVulnerabilityReport> VulnerabilityReports { get; set; } = new();
+        public List<ProjectScenarioJsonReport> Projects { get; set; } = new();
+    }
+
+    private sealed class ProjectVulnerabilityReport : VulnerabilityReport
+    {
+        public string ProjectName { get; set; } = string.Empty;
+        public string ProjectKey { get; set; } = string.Empty;
+        public string ProjectPath { get; set; } = string.Empty;
+    }
+
+    private sealed class ProjectScenarioJsonReport
+    {
+        public string ProjectName { get; set; } = string.Empty;
+        public string ProjectKey { get; set; } = string.Empty;
+        public string ProjectPath { get; set; } = string.Empty;
+        public int PackageCount { get; set; }
+        public List<NuGetPackageReference> ExtractedPackages { get; set; } = new();
+        public List<GroundTruthLabel> GroundTruthLabels { get; set; } = new();
+        public string SecurityReferenceSource { get; set; } = string.Empty;
+        public List<string> RetrievalDiagnostics { get; set; } = new();
+        public AuditScenario Scenario { get; set; }
+        public string ScenarioStatus { get; set; } = string.Empty;
+        public bool ExcludedFromMetrics { get; set; }
+        public string MetricExclusionReason { get; set; } = string.Empty;
+        public ScenarioAuditResult? ScenarioResult { get; set; }
+        public List<VulnerabilityReport> VulnerabilityReports { get; set; } = new();
+        public EvaluationMetrics? Metrics { get; set; }
+        public List<string> Messages { get; set; } = new();
+    }
+
+    private sealed class CodeBertJsonReport
+    {
+        public DateTimeOffset GeneratedAtUtc { get; set; }
+        public string RootFolder { get; set; } = string.Empty;
+        public string ModelName { get; set; } = string.Empty;
+        public int ProjectCount { get; set; }
+        public int TotalRecords { get; set; }
+        public int TrainingCount { get; set; }
+        public int ValidationCount { get; set; }
+        public int TestingCount { get; set; }
+        public string SplitStrategy { get; set; } = string.Empty;
+        public string AugmentationStrategy { get; set; } = string.Empty;
+        public Dictionary<string, string> DatasetFieldDescriptions { get; set; } = new();
+        public List<ProjectCodeBertJsonReport> Projects { get; set; } = new();
+    }
+
+    private sealed class ProjectCodeBertJsonReport
+    {
+        public string ProjectName { get; set; } = string.Empty;
+        public string ProjectKey { get; set; } = string.Empty;
+        public string ProjectPath { get; set; } = string.Empty;
+        public int PackageCount { get; set; }
+        public string SecurityReferenceSource { get; set; } = string.Empty;
+        public int TotalRecords { get; set; }
+        public int TrainingCount { get; set; }
+        public int ValidationCount { get; set; }
+        public int TestingCount { get; set; }
+        public List<CodeBertDatasetRecord> Records { get; set; } = new();
+    }
+
+    private sealed class ProjectAuditResult
+    {
+        public string ProjectName { get; set; } = string.Empty;
+        public string ProjectKey { get; set; } = string.Empty;
+        public string ProjectPath { get; set; } = string.Empty;
+        public int PackageCount { get; set; }
+        public bool Success { get; set; }
+        public string ErrorMessage { get; set; } = string.Empty;
+        public string SecurityReferenceSource { get; set; } = string.Empty;
+        public DateTimeOffset StartedAtUtc { get; set; }
+        public DateTimeOffset CompletedAtUtc { get; set; }
+        public double ElapsedSeconds { get; set; }
+        public List<string> RetrievalDiagnostics { get; set; } = new();
+        public List<string> Messages { get; set; } = new();
+        public List<ScenarioAuditResult> Scenarios { get; set; } = new();
+        public List<NuGetPackageReference> ExtractedPackages { get; set; } = new();
+        public List<GroundTruthLabel> GroundTruthLabels { get; set; } = new();
+        public List<CodeBertDatasetRecord> CodeBertRecords { get; set; } = new();
+    }
+
+    private sealed class ScenarioAuditResult
+    {
+        public AuditScenario Scenario { get; set; }
+        public bool Success { get; set; }
+        public string Status { get; set; } = "PENDING";
+        public string ErrorMessage { get; set; } = string.Empty;
+        public bool ExcludedFromMetrics { get; set; }
+        public string MetricExclusionReason { get; set; } = string.Empty;
+        public int VulnerableCount { get; set; }
+        public string AuditJsonPath { get; set; } = string.Empty;
+        public DateTimeOffset StartedAtUtc { get; set; }
+        public DateTimeOffset CompletedAtUtc { get; set; }
+        public double ElapsedSeconds { get; set; }
+        public GeminiResponse? Response { get; set; }
+        public EvaluationMetrics? Metrics { get; set; }
+    }
+
+    private sealed class CapturingConsoleWriter : TextWriter
+    {
+        private readonly TextWriter innerWriter;
+        private readonly string streamName;
+        private readonly Encoding encoding;
+
+        public CapturingConsoleWriter(TextWriter innerWriter, string streamName, Encoding encoding)
+        {
+            this.innerWriter = innerWriter;
+            this.streamName = streamName;
+            this.encoding = encoding;
+        }
+
+        public override Encoding Encoding => encoding;
+
+        public override IFormatProvider FormatProvider => CultureInfo.InvariantCulture;
+
+        public override void Write(string? value)
+        {
+            innerWriter.Write(value);
+
+            if (value is not null)
+            {
+                AddConsoleLog(streamName, value, false);
+            }
+        }
+
+        public override void WriteLine(string? value)
+        {
+            innerWriter.WriteLine(value);
+            AddConsoleLog(streamName, value ?? string.Empty, true);
+        }
+
+        public override void Write(char value)
+        {
+            innerWriter.Write(value);
+            AddConsoleLog(streamName, value.ToString(), false);
+        }
+
+        public override void WriteLine()
+        {
+            innerWriter.WriteLine();
+            AddConsoleLog(streamName, string.Empty, true);
+        }
+
+        public override void Flush()
+        {
+            innerWriter.Flush();
+        }
     }
 }
