@@ -1,170 +1,163 @@
 # GeminiNuGetAuditor
 
-`GeminiNuGetAuditor` adalah aplikasi Console berbasis `.NET 10` untuk audit keamanan dependency NuGet pada file `.csproj` dengan pendekatan **Retrieval-Augmented Generation (RAG)**.
+`GeminiNuGetAuditor` adalah aplikasi console berbasis `.NET 10` untuk melakukan audit keamanan dependency NuGet pada file `.csproj`. Sistem ini mendukung eksperimen komparatif sesuai metodologi tesis: **RAG-LLM**, **Zero-Shot**, dan **CodeBERT baseline**.
 
 ## Tujuan Project
 
 Project ini dibuat untuk:
 
-- menginventaris package NuGet yang digunakan oleh suatu project
-- mengambil **security reference data** sebagai ground truth dari beberapa sumber (local file, GitHub GraphQL API, fallback sample)
-- mengirim package + konteks referensi ke Gemini untuk analisis terarah
-- menurunkan risiko halusinasi dengan aturan "Unknown jika tidak ada di referensi"
-- menyimpan hasil audit ke JSON dan Excel untuk analisis kuantitatif (Accuracy, Precision, Recall, F1-Score)
+- mengekstraksi daftar package NuGet dan versi dari file `.csproj`;
+- mengambil data ground truth kerentanan dari GitHub Advisory Database secara real-time;
+- menjalankan skenario **RAG-LLM** dengan Gemini 1.5 Pro yang diperkuat konteks advisory;
+- menjalankan skenario **Zero-Shot** dengan Gemini 1.5 Pro tanpa konteks eksternal untuk mengukur halusinasi dan risiko Slopsquatting;
+- menyiapkan dataset baseline **CodeBERT** melalui augmentasi data dan split 70% training, 15% validation, dan 15% testing;
+- menghitung metrik evaluasi berbasis confusion matrix: TP, TN, FP, FN, Accuracy, Precision, Recall, dan F1-Score;
+- menghasilkan artefak JSON, CSV, dan Excel untuk kebutuhan analisis penelitian.
 
 ## Business Flow Singkat
 
-Berikut alur bisnis utama project ini:
+Alur bisnis utama sistem adalah sebagai berikut:
 
-1. User menentukan file `.csproj` yang ingin diaudit.
-2. Aplikasi membaca seluruh `PackageReference` dari file tersebut (Extraction).
-3. Aplikasi mengambil context referensi keamanan dengan prioritas:
-   - local file `github-advisory-db.json`
-   - GitHub GraphQL API
-   - fallback advisory sample di `appsettings` (Retrieval).
-4. Daftar package + referensi keamanan digabung dalam prompt (Augmentation).
-5. Gemini diminta mengembalikan **JSON murni** sesuai model `GeminiResponse` (Generation).
-6. Hasil dinormalisasi agar 1 package = 1 report.
-7. Aplikasi menyimpan:
-   - dataset audit `.json`
-   - dataset metrik `.xlsx` (Summary, Detail, Summary Details)
-   - untuk mode compare: workbook komparasi `RAG vs Non-RAG`
+1. User menentukan file `.csproj` yang akan diaudit.
+2. Aplikasi membaca seluruh `PackageReference` dari file tersebut.
+3. Aplikasi mengambil referensi keamanan dengan prioritas:
+   - **Priority 1: GitHub GraphQL API** sebagai sumber real-time;
+   - **Fallback 1: Local OSV/GitHub Advisory Database** melalui `github-advisory-db.json`;
+   - **Fallback 2: sample advisories** dari `appsettings.json`.
+4. Aplikasi membentuk ground truth label dari referensi keamanan yang berhasil digunakan.
+5. Pada mode RAG-LLM, daftar package dan konteks advisory dimasukkan ke prompt Gemini.
+6. Pada mode Zero-Shot, daftar package dikirim ke Gemini tanpa konteks advisory eksternal.
+7. Pada mode CodeBERT, aplikasi mengekspor dataset JSON/CSV yang sudah diaugmentasi dan dibagi menjadi training, validation, dan testing.
+8. Hasil prediksi dibandingkan dengan ground truth untuk menghasilkan metrik evaluasi.
 
-## Detail Alur dari Sudut Pandang User
+## Detail Alur
 
-### Langkah 3 - Sistem mengambil referensi keamanan (Ground Truth)
-Aplikasi melakukan retrieval berlapis:
+### 1. Extraction
 
-1. baca `github-advisory-db.json` jika tersedia
-2. jika tidak tersedia, query GitHub GraphQL API
-3. jika API gagal/tidak tersedia, gunakan fallback advisories dari `appsettings`
-
-Setiap proses retrieval menampilkan diagnostics di console agar sumber data dapat diverifikasi.
-
-### Langkah 5 - User menerima hasil audit
-Setiap package memiliki hasil seperti:
+`CsprojPackageExtractor.cs` membaca file `.csproj` secara null-safe dan mengambil:
 
 - `PackageName`
 - `CurrentVersion`
-- `IsVulnerable`
-- `CVE_ID`
-- `Severity` (EN)
-- `SeverityIndonesia` (ID)
-- `MitigationPlan` (EN)
-- `MitigationPlanIndonesia` (ID)
-- `IsGroundedInReference`
-- `ReasoningTrace` (EN)
-- `ReasoningTraceIndonesia` (ID)
 
-`AuditSessionRecord` juga menyertakan `VulnerabilityReportFieldDescriptions` yang berisi deskripsi field dan arti value (khusus field kategorikal/boolean).
+Extractor mendukung versi pada atribut `Version` maupun child element `<Version>`.
 
-## Detail Alur dari Sudut Pandang Technician
+### 2. Retrieval Ground Truth
 
-### 2. Retrieval security reference
-File `SecurityReferenceProvider.cs` menangani retrieval context dari beberapa sumber.
+`SecurityReferenceProvider.cs` menerapkan retrieval berlapis dengan urutan final:
 
-Method utama:
+1. **GitHub GraphQL API (Real-time)**  
+   Sistem memanggil GitHub Advisory Database melalui GraphQL untuk setiap package NuGet. Sumber ini menjadi prioritas utama karena paling mutakhir.
 
-- `GetSecurityContext(List<string> packages)`
-- `GetSecurityContextWithDiagnostics(List<string> packages)`
+2. **Local OSV Database / GitHub Advisory JSON (Fallback 1)**  
+   Jika GitHub API gagal karena timeout, rate-limit, konfigurasi token, HTTP error, atau respons tidak valid, sistem membaca file lokal `github-advisory-db.json`.
 
-Tanggung jawab method ini:
+3. **Appsettings Fallback (Fallback 2)**  
+   Jika file lokal hilang, tidak dapat dibaca, atau JSON rusak, sistem memakai sample advisories pada `SecurityReference:FallbackAdvisories`.
 
-- mencoba local advisory file terlebih dahulu
-- fallback ke GitHub GraphQL API jika local file tidak ada
-- fallback ke sample advisories jika API gagal/tidak tersedia
-- mengembalikan diagnostics detail source retrieval untuk logging console
+Setiap tahap menulis diagnostics ke console, termasuk sumber yang akhirnya dipakai.
 
-### 3. Pengiriman request ke Gemini
-`Program.cs` menampilkan diagnostics request Gemini di console, termasuk:
+### 3. Inference Scenarios
 
-- endpoint yang dipanggil
-- HTTP status response
-- status parsing payload
+Sistem mendukung tiga skenario evaluasi:
 
-Tujuannya agar mudah memverifikasi bahwa request benar-benar mengakses API Gemini, bukan gagal diam-diam.
+- **RAG-LLM (`--mode=rag`)**  
+  Gemini 1.5 Pro menerima daftar package dan konteks advisory. Model hanya boleh menandai rentan jika temuan didukung referensi.
 
-## Struktur Model Data
+- **Zero-Shot (`--mode=zero-shot`)**  
+  Gemini 1.5 Pro menerima daftar package tanpa konteks eksternal. Skenario ini dipakai untuk mengukur kecenderungan halusinasi dan false positive.
 
-File `VulnerabilityModels.cs` mendefinisikan model utama berikut.
+- **CodeBERT (`--mode=codebert --export-codebert-dataset`)**  
+  Sistem menyiapkan dataset baseline deep learning untuk fine-tuning/evaluasi CodeBERT.
 
-### `VulnerabilityReport`
-Mewakili hasil audit untuk satu package.
+Mode komparasi:
 
-Properti:
+```powershell
+dotnet run -- --compare "path\to\project.csproj"
+```
 
-- `PackageName`
-- `CurrentVersion`
-- `IsVulnerable`
-- `CVE_ID`
-- `Severity`
-- `SeverityIndonesia`
-- `MitigationPlan`
-- `MitigationPlanIndonesia`
-- `IsGroundedInReference`
-- `ReasoningTrace`
-- `ReasoningTraceIndonesia`
+### 4. JSON Output Gemini
+
+Gemini dipaksa mengembalikan JSON murni sesuai model `GeminiResponse`. Setiap report berisi field bilingual:
+
+- `Severity` dan `SeverityIndonesia`
+- `MitigationPlan` dan `MitigationPlanIndonesia`
+- `ReasoningTrace` dan `ReasoningTraceIndonesia`
 
 ## Input dan Output
 
-### Input utama
+### Input
 
-- path file `.csproj`
-- Gemini API key (`GEMINI_API_KEY` atau `Gemini:ApiKey`)
-- GitHub token (`GITHUB_TOKEN` atau `SecurityReference:GitHubToken`)
-- konfigurasi retrieval pada section `SecurityReference` di `appsettings`
+- path file `.csproj`;
+- Gemini API key melalui `GEMINI_API_KEY` atau `Gemini:ApiKey`;
+- GitHub token melalui `GITHUB_TOKEN` atau `SecurityReference:GitHubToken`;
+- konfigurasi `SecurityReference` pada `appsettings.json`;
+- optional local database `github-advisory-db.json`.
 
-### Output utama
+### Output
 
-- file JSON lokal berisi dataset audit lengkap (`AuditSessionRecord`)
-- file Excel metrik klasifikasi per package untuk analisis Accuracy, Precision, Recall, dan F1-Score
-- diagnostics detail di console untuk status retrieval source dan status akses Gemini API
-
-### Output mode compare (`--compare`)
-
-- `audit-<project>-rag-<timestamp>.json`
-- `audit-<project>-nonrag-<timestamp>.json`
+- `audit-<project>-rag-llm-<timestamp>.json`
+- `audit-<project>-zero-shot-<timestamp>.json`
+- `metrics-<project>-<mode>-<timestamp>.xlsx`
 - `metrics-<project>-compare-<timestamp>.xlsx`
+- `codebert-dataset-<project>-<timestamp>.json`
+- `codebert-dataset-<project>-<timestamp>.csv`
 
-Workbook compare berisi sheet `Model Comparison` dengan kriteria penelitian:
+## Evaluasi
 
-- `Precision(RAG) > Precision(Non-RAG)`
-- `FP Ratio(RAG) < FP Ratio(Non-RAG)`
+Evaluasi dilakukan dengan confusion matrix:
 
-Catatan interpretasi:
-- Status `FAIL` berarti **minimal satu** kriteria di atas tidak terpenuhi pada run tersebut.
-- Jika Non-RAG tidak menghasilkan prediksi positif sama sekali (`TP+FP = 0`), maka `FP Ratio Non-RAG = 0`; pada kondisi ini, sangat sulit bagi RAG untuk memenuhi syarat `FP Ratio(RAG) < FP Ratio(Non-RAG)` kecuali desain evaluasi baseline disesuaikan.
+- **TP**: model memprediksi rentan dan ground truth rentan.
+- **TN**: model memprediksi tidak rentan dan ground truth tidak rentan.
+- **FP**: model memprediksi rentan tetapi ground truth tidak rentan.
+- **FN**: model memprediksi tidak rentan tetapi ground truth rentan.
 
-## Gambaran Arsitektur Saat Ini
+Metrik yang dihitung:
 
-Komponen utama:
+- Accuracy = (TP + TN) / (TP + TN + FP + FN)
+- Precision = TP / (TP + FP)
+- Recall = TP / (TP + FN)
+- F1-Score = 2 x Precision x Recall / (Precision + Recall)
 
-- `CsprojPackageExtractor.cs` untuk extraction
-- `SecurityReferenceProvider.cs` untuk retrieval context + diagnostics
-- `Program.cs` untuk augmentation + generation + normalisasi + persistence
-- `VulnerabilityModels.cs` untuk model hasil audit (bilingual fields)
-
-## Ringkasan Cepat
-
-Jika ingin memahami project ini dalam 30 detik:
-
-- project membaca package NuGet dari `.csproj`
-- project mengambil ground truth dari local file/GitHub API/fallback sample
-- package + referensi dikirim ke Gemini (RAG prompt)
-- hasil audit menyertakan field bilingual EN-ID untuk severity, mitigation, dan reasoning
-- output disimpan ke JSON + Excel, dan console menampilkan diagnostics akses API
+Precision digunakan untuk melihat kemampuan sistem menekan false positive dan halusinasi. Recall digunakan untuk melihat kemampuan sistem mencegah false negative.
 
 ## Cara Menjalankan
 
-- Non-RAG:
-  - `GeminiNuGetAuditor.exe --mode=nonrag "D:\Project S2\yanlis-lase-SSG7\ThesisGeminiNuGetAuditor\samples\DummyAuditTarget\DummyAuditTarget.csproj"`
-- RAG:
-  - `GeminiNuGetAuditor.exe --mode=rag "D:\Project S2\yanlis-lase-SSG7\ThesisGeminiNuGetAuditor\samples\DummyAuditTarget\DummyAuditTarget.csproj"`
-- Compare:
-  - `GeminiNuGetAuditor.exe --compare "D:\Project S2\yanlis-lase-SSG7\ThesisGeminiNuGetAuditor\samples\DummyAuditTarget\DummyAuditTarget.csproj"`
+RAG-LLM:
 
-Tips saat debugging di Visual Studio:
-- isi argumen di **Debug > Command line arguments**
-- saat prompt `Masukkan path file .csproj...`, masukkan **path saja** bila argumen tidak dikirim dari profile debug
+```powershell
+dotnet run -- --mode=rag "D:\path\to\project.csproj"
+```
 
-Last Updated : 05 Mei 2026
+Zero-Shot:
+
+```powershell
+dotnet run -- --mode=zero-shot "D:\path\to\project.csproj"
+```
+
+Compare RAG-LLM vs Zero-Shot:
+
+```powershell
+dotnet run -- --compare "D:\path\to\project.csproj"
+```
+
+Export dataset CodeBERT:
+
+```powershell
+dotnet run -- --mode=codebert --export-codebert-dataset "D:\path\to\project.csproj"
+```
+
+## Komponen Utama
+
+- `Program.cs`: orkestrasi CLI, skenario inferensi, prompt Gemini, normalisasi, dan penyimpanan output.
+- `CsprojPackageExtractor.cs`: parsing `.csproj`.
+- `SecurityReferenceProvider.cs`: retrieval GitHub GraphQL API, local OSV DB, dan appsettings fallback.
+- `GroundTruthProvider.cs`: pembentukan label ground truth dari advisory context.
+- `CodeBertDatasetExporter.cs`: augmentasi dan ekspor dataset CodeBERT.
+- `ModelEvaluator.cs`: perhitungan confusion matrix dan metrik evaluasi.
+- `VulnerabilityModels.cs`: model data audit, dataset, ground truth, dan evaluasi.
+
+## Ringkasan Cepat
+
+`GeminiNuGetAuditor` membaca dependency NuGet, mengambil ground truth real-time dari GitHub GraphQL API, menjalankan skenario RAG-LLM dan Zero-Shot, menyiapkan dataset CodeBERT, lalu menghitung metrik kuantitatif untuk mengevaluasi mitigasi false positive, false negative, dan halusinasi LLM.
+
+Last Updated: 25 Juni 2026

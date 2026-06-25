@@ -137,15 +137,15 @@ public static class CodeBertDatasetExporter
             return;
         }
 
-        var trainingCount = (int)Math.Round(records.Count * 0.70, MidpointRounding.AwayFromZero);
-        var validationCount = (int)Math.Round(records.Count * 0.15, MidpointRounding.AwayFromZero);
+        var trainingCount = (int)Math.Floor(records.Count * 0.70);
+        var validationCount = (int)Math.Floor(records.Count * 0.15);
 
         if (records.Count >= 3)
         {
+            trainingCount = Math.Max(1, trainingCount);
             validationCount = Math.Max(1, validationCount);
-            var testingCount = Math.Max(1, records.Count - trainingCount - validationCount);
 
-            while (trainingCount + validationCount + testingCount > records.Count && trainingCount > 1)
+            while (records.Count - trainingCount - validationCount < 1 && trainingCount > 1)
             {
                 trainingCount--;
             }

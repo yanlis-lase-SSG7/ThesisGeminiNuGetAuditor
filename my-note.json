@@ -1,7 +1,7 @@
 {
   "Gemini": {
     "ApiKey": "sample", //just sample key, do not remove or change the value, it will be overridden by environment variable in production
-    "Model": "gemini-flash-latest",
+    "Model": "gemini-1.5-pro",
     "RequestTimeoutSeconds": 60,
     "MaxPackagesPerRequest": 15,
     "MaxRetryCount": 2,

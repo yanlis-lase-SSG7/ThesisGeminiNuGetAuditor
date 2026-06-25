@@ -1,0 +1,13 @@
+Cara Menjalankan
+
+RAG-LLM:
+dotnet run -- --mode=rag "D:\path\to\project.csproj"
+
+Zero-Shot:
+dotnet run -- --mode=zero-shot "D:\path\to\project.csproj"
+
+Compare RAG-LLM vs Zero-Shot:
+dotnet run -- --compare "D:\path\to\project.csproj"
+
+Export dataset CodeBERT:
+dotnet run -- --mode=codebert --export-codebert-dataset "D:\path\to\project.csproj"
