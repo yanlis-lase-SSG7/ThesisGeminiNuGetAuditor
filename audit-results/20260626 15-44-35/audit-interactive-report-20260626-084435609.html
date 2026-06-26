@@ -1,0 +1,1190 @@
+﻿<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GeminiNuGetAuditor Interactive Report</title>
+<style>
+:root{--bg:#f6f8fb;--panel:#ffffff;--ink:#172033;--muted:#657089;--line:#dbe3ef;--brand:#1d4ed8;--brand2:#0f766e;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:Segoe UI,Roboto,Arial,sans-serif;line-height:1.45}
+header{background:linear-gradient(135deg,#0f172a,#1d4ed8 55%,#0f766e);color:white;padding:34px 42px}
+header h1{margin:0 0 8px;font-size:30px;letter-spacing:0} header p{margin:0;color:#dbeafe;max-width:980px}
+main{padding:24px 42px 48px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
+.metric .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.metric .value{font-size:28px;font-weight:700;margin-top:4px}
+section{margin-top:18px}.section-title{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:24px 0 10px}h2{font-size:20px;margin:0}.hint{color:var(--muted);font-size:13px}
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:13px}th{background:#eef4ff;color:#24324b;position:sticky;top:0;z-index:1}tr:hover td{background:#f8fbff}
+.pill{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:12px;font-weight:600}.good{background:#dcfce7;color:var(--good)}.bad{background:#fee2e2;color:var(--bad)}.warn{background:#fef3c7;color:var(--warn)}.neutral{background:#e5e7eb;color:#374151}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar input{min-width:280px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:white}.tabs{display:flex;gap:8px;flex-wrap:wrap}.tab{border:1px solid var(--line);background:white;border-radius:999px;padding:8px 12px;cursor:pointer}.tab.active{background:var(--brand);color:white;border-color:var(--brand)}
+.panel{display:none}.panel.active{display:block}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.files a{display:block;color:var(--brand);text-decoration:none;margin:6px 0}.files a:hover{text-decoration:underline}
+@media(max-width:980px){main,header{padding-left:18px;padding-right:18px}.grid,.two{grid-template-columns:1fr}.toolbar input{min-width:100%;width:100%}}
+</style>
+</head><body>
+<header>
+<h1>GeminiNuGetAuditor Interactive Report</h1>
+<p>Audit root: D:\thesis\GeminiNuGetAuditor\samples &nbsp; | &nbsp; Model: <strong>gemini-2.5-pro</strong> &nbsp; | &nbsp; Generated: 2026-06-26T08:48:37.2354983+00:00</p>
+</header><main>
+<section class="grid">
+<div class="card metric"><div class="label">Projects</div><div class="value">3</div></div>
+<div class="card metric"><div class="label">Successful</div><div class="value">3</div></div>
+<div class="card metric"><div class="label">RAG Findings</div><div class="value">8</div></div>
+<div class="card metric"><div class="label">Zero-Shot Findings</div><div class="value">24</div></div>
+<div class="card metric"><div class="label">CodeBERT Records</div><div class="value">150</div></div>
+<div class="card metric"><div class="label">API Failed Scenarios</div><div class="value">0</div></div>
+<div class="card metric"><div class="label">Packages</div><div class="value">50</div></div>
+<div class="card metric"><div class="label">Ground Truth Vulnerable</div><div class="value">20</div></div>
+</section>
+<section class="card">
+<div class="section-title"><h2>How to read this report</h2><span class="hint">Three outputs are produced: two LLM audit scenarios and one CodeBERT dataset baseline.</span></div>
+<div class="two">
+<div><strong>RAG-LLM</strong><p>Gemini receives package references plus retrieved security context. Use this as the grounded LLM scenario.</p></div>
+<div><strong>Zero-Shot</strong><p>Gemini receives only package references. Compare it with RAG-LLM to measure the effect of retrieval.</p></div>
+<div><strong>CodeBERT</strong><p>This run exports labeled dataset rows for a CodeBERT baseline. It is not an LLM prediction table, so it does not appear in the LLM confusion matrix.</p></div>
+<div><strong>Ground Truth</strong><p>Labels are built from GitHub GraphQL/local advisory/fallback references and drive TP/TN/FP/FN.</p></div>
+</div>
+</section>
+<section><div class="section-title"><h2>Interactive Tables</h2><div class="toolbar"><input id="q" placeholder="Search project, package, CVE, severity..."><div class="tabs"><button class="tab active" data-tab="projects">Projects</button><button class="tab" data-tab="findings">Findings</button><button class="tab" data-tab="artifacts">Artifacts</button></div></div></div>
+<div id="projects" class="panel active">
+<table><thead><tr><th>Project</th><th>Packages</th><th>RAG</th><th>Zero-Shot</th><th>CodeBERT</th><th>Reference</th><th>Elapsed</th></tr></thead><tbody>
+<tr>
+<td><strong>App1</strong><br><span class="hint">App1-45812D1B</span></td>
+<td>3</td>
+<td><span class="pill good">SUCCESS</span><br><span class="hint">Acc 100,0% | P 0,0% | R 0,0% | F1 0,0%</span></td>
+<td><span class="pill good">SUCCESS</span><br><span class="hint">Acc 100,0% | P 0,0% | R 0,0% | F1 0,0%</span></td>
+<td><span class="pill good">EXPORTED</span><br>9 records</td>
+<td>GitHubGraphQLApi</td>
+<td>22,2s</td>
+</tr>
+<tr>
+<td><strong>App2</strong><br><span class="hint">App2-2D6259FA</span></td>
+<td>4</td>
+<td><span class="pill good">SUCCESS</span><br><span class="hint">Acc 100,0% | P 100,0% | R 100,0% | F1 100,0%</span></td>
+<td><span class="pill good">SUCCESS</span><br><span class="hint">Acc 75,0% | P 0,0% | R 0,0% | F1 0,0%</span></td>
+<td><span class="pill good">EXPORTED</span><br>12 records</td>
+<td>GitHubGraphQLApi</td>
+<td>33,6s</td>
+</tr>
+<tr>
+<td><strong>DummyAuditTarget</strong><br><span class="hint">DummyAuditTarget-5BD9E72F</span></td>
+<td>43</td>
+<td><span class="pill good">SUCCESS</span><br><span class="hint">Acc 72,1% | P 100,0% | R 36,8% | F1 53,8%</span></td>
+<td><span class="pill good">SUCCESS</span><br><span class="hint">Acc 60,5% | P 54,2% | R 68,4% | F1 60,5%</span></td>
+<td><span class="pill good">EXPORTED</span><br>129 records</td>
+<td>GitHubGraphQLApi</td>
+<td>235,1s</td>
+</tr>
+</tbody></table>
+</div><div id="findings" class="panel">
+<table><thead><tr><th>Project</th><th>Scenario</th><th>Package</th><th>Version</th><th>Vulnerable</th><th>CVE</th><th>Severity</th><th>Grounded</th><th>Mitigation</th></tr></thead><tbody>
+<tr>
+<td>App2</td>
+<td>RAG-LLM</td>
+<td>AutoMapper</td>
+<td>12.0.1</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2026-32933</td>
+<td>High</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td>Tingkatkan ke versi 15.1.1 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Azure.Identity</td>
+<td>1.10.2</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2023-36414</td>
+<td>Moderate</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Tingkatkan ke versi 1.10.4 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Azure.Identity</td>
+<td>1.10.2</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2024-35255</td>
+<td>Moderate</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td>Tingkatkan ke versi 1.11.4 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>FastReport.OpenSource.Web</td>
+<td>2021.2.7</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2021-41551</td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Tingkatkan ke versi 2021.3.0 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>itext7</td>
+<td>7.1.16</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2021-43113</td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Tingkatkan ke versi 7.1.17 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Microsoft.ApplicationInsights.AspNetCore</td>
+<td>2.14.0</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2021-31959</td>
+<td>Moderate</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Tingkatkan ke versi 2.18.0 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Microsoft.AspNet.Mvc</td>
+<td>5.2.7</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2020-1045</td>
+<td>Moderate</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Tingkatkan ke Microsoft.AspNet.Mvc versi 5.2.8 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Microsoft.AspNetCore.Authentication.OpenIdConnect</td>
+<td>3.1.17</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2022-21986</td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Kerangka kerja .NET Core 3.1 sudah tidak didukung. Tingkatkan ke versi LTS yang didukung seperti .NET 6 atau .NET 8. Jika harus tetap menggunakan 3.1, perbarui ke versi patch terakhir, 3.1.32.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Microsoft.AspNetCore.Http</td>
+<td>2.2.2</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2019-1302</td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>.NET Core 2.2 sudah tidak didukung. Migrasikan aplikasi ke versi LTS .NET yang didukung, seperti .NET 6 atau .NET 8.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Microsoft.AspNetCore.Mvc.Core</td>
+<td>2.2.5</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2019-1302</td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>.NET Core 2.2 sudah tidak didukung. Migrasikan aplikasi ke versi LTS .NET yang didukung, seperti .NET 6 atau .NET 8.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation</td>
+<td>3.1.6</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2021-34485</td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Kerangka kerja .NET Core 3.1 sudah tidak didukung. Tingkatkan ke versi LTS yang didukung seperti .NET 6 atau .NET 8. Jika tetap menggunakan 3.1, perbarui ke versi 3.1.17 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Microsoft.EntityFrameworkCore</td>
+<td>3.1.6</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td></td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Kerangka kerja .NET Core 3.1 sudah tidak didukung. Tingkatkan ke versi LTS yang didukung seperti .NET 6 atau .NET 8 dan versi Entity Framework Core yang sesuai.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Microsoft.EntityFrameworkCore.Design</td>
+<td>3.1.6</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td></td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Kerangka kerja .NET Core 3.1 sudah tidak didukung. Tingkatkan ke versi LTS yang didukung seperti .NET 6 atau .NET 8 dan versi Entity Framework Core yang sesuai.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Microsoft.EntityFrameworkCore.SqlServer</td>
+<td>3.1.6</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td></td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Kerangka kerja .NET Core 3.1 sudah tidak didukung. Tingkatkan ke versi LTS yang didukung seperti .NET 6 atau .NET 8 dan versi Entity Framework Core yang sesuai.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Microsoft.Extensions.Caching.StackExchangeRedis</td>
+<td>5.0.1</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2022-21986</td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Kerangka kerja .NET 5 sudah tidak didukung. Tingkatkan ke versi LTS yang didukung seperti .NET 6 atau .NET 8.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Microsoft.Identity.Web</td>
+<td>1.15.2</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2022-29107</td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Tingkatkan ke Microsoft.Identity.Web versi 1.25.1 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Microsoft.VisualStudio.Web.CodeGeneration.Design</td>
+<td>3.1.5</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td></td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Tingkatkan proyek ke versi LTS .NET yang didukung, seperti .NET 6 atau .NET 8, dan gunakan versi alat pembuatan kode yang sesuai.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Nancy</td>
+<td>2.0.0</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2018-1000155</td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Proyek Nancy telah diarsipkan dan tidak lagi dipelihara. Sangat disarankan untuk bermigrasi ke kerangka kerja web modern yang dipelihara secara aktif seperti ASP.NET Core.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>SixLabors.ImageSharp</td>
+<td>2.1.10</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2025-54575</td>
+<td>Moderate</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td>Tingkatkan ke versi 2.1.11 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>System.Drawing.Common</td>
+<td>4.7.2</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2021-34485</td>
+<td>Moderate</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Perbarui paket ke versi 4.7.3 atau versi yang lebih baru. Selain itu, pertimbangkan untuk bermigrasi ke pustaka pemrosesan gambar yang berbeda karena paket ini sekarang dianggap sebagai teknologi khusus Windows.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>System.Private.ServiceModel</td>
+<td>4.7.0</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2020-1147</td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Perbarui paket ke versi 4.7.1 atau versi yang lebih baru yang telah ditambal.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>System.Security.Cryptography.Xml</td>
+<td>4.5.0</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2018-0785</td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Perbarui paket ke versi 4.5.2 atau versi yang lebih baru yang telah ditambal.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>System.Security.Cryptography.Xml</td>
+<td>4.5.0</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2022-34716</td>
+<td>Moderate</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td>Tingkatkan ke versi 4.7.1 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>System.ServiceModel.Duplex</td>
+<td>4.4.*</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2019-0657</td>
+<td>Moderate</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Perbarui ke versi yang telah ditambal, seperti 4.4.4, atau idealnya migrasikan ke versi mayor yang lebih baru seperti 4.8.1 atau lebih tinggi.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>System.ServiceModel.Duplex</td>
+<td>4.4.*</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2018-0786</td>
+<td>High</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td>Tingkatkan ke versi 4.4.4 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>System.ServiceModel.Http</td>
+<td>4.4.*</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2020-1147</td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Perbarui ke versi yang telah ditambal, seperti 4.7.1 atau lebih tinggi.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>System.ServiceModel.Http</td>
+<td>4.4.*</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2018-0786</td>
+<td>High</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td>Tingkatkan ke versi 4.4.4 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>System.ServiceModel.NetTcp</td>
+<td>4.4.*</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2020-1147</td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Perbarui ke versi yang telah ditambal, seperti 4.7.1 atau lebih tinggi.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>System.ServiceModel.NetTcp</td>
+<td>4.4.*</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2018-0786</td>
+<td>High</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td>Tingkatkan ke versi 4.4.4 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>System.ServiceModel.Security</td>
+<td>4.4.*</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2019-0820</td>
+<td>Moderate</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Perbarui ke versi yang telah ditambal, seperti 4.5.3 atau lebih tinggi.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>System.ServiceModel.Security</td>
+<td>4.4.*</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2018-0786</td>
+<td>High</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td>Tingkatkan ke versi 4.4.4 atau yang lebih baru.</td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>System.Text.Encodings.Web</td>
+<td>5.0.1</td>
+<td><span class="pill bad">VULNERABLE</span></td>
+<td>CVE-2021-26701</td>
+<td>High</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Perbarui paket ke versi 5.0.2 atau versi yang lebih baru yang telah ditambal.</td>
+</tr>
+<tr>
+<td>App1</td>
+<td>Zero-Shot</td>
+<td>Microsoft.EntityFrameworkCore</td>
+<td>8.0.4</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Tidak ada tindakan yang diperlukan karena versi saat ini tidak diketahui memiliki kerentanan.</td>
+</tr>
+<tr>
+<td>App1</td>
+<td>RAG-LLM</td>
+<td>Microsoft.EntityFrameworkCore</td>
+<td>8.0.4</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>App1</td>
+<td>Zero-Shot</td>
+<td>Npgsql.EntityFrameworkCore.PostgreSQL</td>
+<td>7.0.11</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Tidak ada tindakan yang diperlukan karena versi saat ini tidak diketahui memiliki kerentanan.</td>
+</tr>
+<tr>
+<td>App1</td>
+<td>RAG-LLM</td>
+<td>Npgsql.EntityFrameworkCore.PostgreSQL</td>
+<td>7.0.11</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>App1</td>
+<td>Zero-Shot</td>
+<td>Swashbuckle.AspNetCore</td>
+<td>6.5.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td>Tidak ada tindakan yang diperlukan karena versi saat ini tidak diketahui memiliki kerentanan.</td>
+</tr>
+<tr>
+<td>App1</td>
+<td>RAG-LLM</td>
+<td>Swashbuckle.AspNetCore</td>
+<td>6.5.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>App2</td>
+<td>Zero-Shot</td>
+<td>AutoMapper</td>
+<td>12.0.1</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>App2</td>
+<td>Zero-Shot</td>
+<td>Dapper</td>
+<td>2.0.123</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>App2</td>
+<td>RAG-LLM</td>
+<td>Dapper</td>
+<td>2.0.123</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>App2</td>
+<td>Zero-Shot</td>
+<td>FluentValidation.AspNetCore</td>
+<td>11.2.2</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>App2</td>
+<td>RAG-LLM</td>
+<td>FluentValidation.AspNetCore</td>
+<td>11.2.2</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>App2</td>
+<td>Zero-Shot</td>
+<td>Serilog</td>
+<td>2.10.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>App2</td>
+<td>RAG-LLM</td>
+<td>Serilog</td>
+<td>2.10.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>AdvancedAgilityPack</td>
+<td>1.1.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>AdvancedAgilityPack</td>
+<td>1.1.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Binus.WS.Pattern</td>
+<td>1.0.5</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Binus.WS.Pattern</td>
+<td>1.0.5</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Binus.WS.Pattern.AzureStorage</td>
+<td>1.0.7</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Binus.WS.Pattern.AzureStorage</td>
+<td>1.0.7</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Binus.WS.Pattern.MessageQueue</td>
+<td>1.2.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Binus.WS.Pattern.MessageQueue</td>
+<td>1.2.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>BuildBundlerMinifier</td>
+<td>3.2.449</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>BuildBundlerMinifier</td>
+<td>3.2.449</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>ClosedXML</td>
+<td>0.95.4</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>ClosedXML</td>
+<td>0.95.4</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Dapper</td>
+<td>2.1.35</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Dapper</td>
+<td>2.1.35</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>FastReport.OpenSource</td>
+<td>2021.2.7</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>FastReport.OpenSource</td>
+<td>2021.2.7</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>FastReport.OpenSource.Export.PdfSimple</td>
+<td>2021.2.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>FastReport.OpenSource.Export.PdfSimple</td>
+<td>2021.2.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>FastReport.OpenSource.Web</td>
+<td>2021.2.7</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>itext7</td>
+<td>7.1.16</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Microsoft.ApplicationInsights.AspNetCore</td>
+<td>2.14.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Microsoft.AspNet.Mvc</td>
+<td>5.2.7</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Microsoft.AspNetCore.Authentication.OpenIdConnect</td>
+<td>3.1.17</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Microsoft.AspNetCore.Http</td>
+<td>2.2.2</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Microsoft.AspNetCore.Mvc.Core</td>
+<td>2.2.5</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation</td>
+<td>3.1.6</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Microsoft.Data.SqlClient</td>
+<td>2.1.7</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Microsoft.Data.SqlClient</td>
+<td>2.1.7</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Microsoft.EntityFrameworkCore</td>
+<td>3.1.6</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Microsoft.EntityFrameworkCore.Design</td>
+<td>3.1.6</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Microsoft.EntityFrameworkCore.SqlServer</td>
+<td>3.1.6</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Microsoft.Extensions.Caching.StackExchangeRedis</td>
+<td>5.0.1</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Microsoft.Identity.Web</td>
+<td>1.15.2</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Microsoft.VisualStudio.Web.CodeGeneration.Design</td>
+<td>3.1.5</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>MimeTypeMapOfficial</td>
+<td>1.0.17</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>MimeTypeMapOfficial</td>
+<td>1.0.17</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Nancy</td>
+<td>2.0.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>NetCoreAutoLinkDropdown</td>
+<td>1.0.2</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>NetCoreAutoLinkDropdown</td>
+<td>1.0.2</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Newtonsoft.Json</td>
+<td>13.0.3</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Newtonsoft.Json</td>
+<td>13.0.3</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>PdfSharpCore</td>
+<td>1.2.17</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>PdfSharpCore</td>
+<td>1.2.17</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>Serilog</td>
+<td>4.0.1</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>Serilog</td>
+<td>4.0.1</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>SixLabors.ImageSharp</td>
+<td>2.1.10</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>starkbank-ecdsa</td>
+<td>1.3.2</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>starkbank-ecdsa</td>
+<td>1.3.2</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>System.Data.SqlClient</td>
+<td>4.8.6</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>System.Data.SqlClient</td>
+<td>4.8.6</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>System.Drawing.Common</td>
+<td>4.7.2</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>Zero-Shot</td>
+<td>System.Globalization.Calendars</td>
+<td>4.3.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>System.Globalization.Calendars</td>
+<td>4.3.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill warn">UNGROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>System.Private.ServiceModel</td>
+<td>4.7.0</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td></td>
+</tr>
+<tr>
+<td>DummyAuditTarget</td>
+<td>RAG-LLM</td>
+<td>System.Text.Encodings.Web</td>
+<td>5.0.1</td>
+<td><span class="pill good">SAFE</span></td>
+<td></td>
+<td>Unknown</td>
+<td><span class="pill good">GROUNDED</span></td>
+<td></td>
+</tr>
+</tbody></table>
+</div><div id="artifacts" class="panel card files">
+<a href="audit-rag-llm-20260626-084435609.json">RAG-LLM JSON - audit-rag-llm-20260626-084435609.json</a>
+<a href="audit-zero-shot-20260626-084435609.json">Zero-Shot JSON - audit-zero-shot-20260626-084435609.json</a>
+<a href="audit-codebert-20260626-084435609.json">CodeBERT JSON - audit-codebert-20260626-084435609.json</a>
+<a href="audit-comprehensive-report-20260626-084435609.xlsx">Excel Workbook - audit-comprehensive-report-20260626-084435609.xlsx</a>
+<a href="api-diagnostics-20260626-084435609.json">API Diagnostics JSON - api-diagnostics-20260626-084435609.json</a>
+<a href="console-execution-log-20260626-084435609.json">Console Log JSON - console-execution-log-20260626-084435609.json</a>
+</div></section>
+<script>
+const tabs=[...document.querySelectorAll('.tab')],panels=[...document.querySelectorAll('.panel')],q=document.getElementById('q');
+tabs.forEach(t=>t.addEventListener('click',()=>{tabs.forEach(x=>x.classList.remove('active'));panels.forEach(p=>p.classList.remove('active'));t.classList.add('active');document.getElementById(t.dataset.tab).classList.add('active');filter()}));
+q.addEventListener('input',filter);
+function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.panel.active tbody tr').forEach(r=>{r.style.display=r.innerText.toLowerCase().includes(term)?'':'none'})}
+</script>
+</main></body></html>

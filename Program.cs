@@ -190,6 +190,7 @@ public class Program
             WriteLine($"Zero-Shot JSON report: {artifactSet.ZeroShotJsonPath}");
             WriteLine($"CodeBERT JSON report: {artifactSet.CodeBertJsonPath}");
             WriteLine($"Comprehensive Excel report: {artifactSet.ExcelReportPath}");
+            WriteLine($"Interactive HTML report: {artifactSet.HtmlReportPath}");
             WriteLine($"Gemini API diagnostics JSON: {artifactSet.ApiDiagnosticsJsonPath}");
             WriteLine($"Console execution log JSON: {artifactSet.ConsoleLogJsonPath}");
             SaveConsoleLogJson(artifactSet.ConsoleLogJsonPath);
@@ -1305,6 +1306,7 @@ Security reference data:
             ZeroShotJsonPath = Path.Combine(outputDirectory, $"audit-zero-shot-{timestamp}.json"),
             CodeBertJsonPath = Path.Combine(outputDirectory, $"audit-codebert-{timestamp}.json"),
             ExcelReportPath = Path.Combine(outputDirectory, $"audit-comprehensive-report-{timestamp}.xlsx"),
+            HtmlReportPath = Path.Combine(outputDirectory, $"audit-interactive-report-{timestamp}.html"),
             ApiDiagnosticsJsonPath = Path.Combine(outputDirectory, $"api-diagnostics-{timestamp}.json"),
             ConsoleLogJsonPath = Path.Combine(outputDirectory, $"console-execution-log-{timestamp}.json")
         };
@@ -1417,6 +1419,7 @@ Security reference data:
         File.WriteAllText(artifactSet.CodeBertJsonPath, JsonSerializer.Serialize(codeBertReport, SerializerOptions), Encoding.UTF8);
         File.WriteAllText(artifactSet.ApiDiagnosticsJsonPath, JsonSerializer.Serialize(BuildApiDiagnosticsReport(rootFolder, modelName), SerializerOptions), Encoding.UTF8);
         SaveComprehensiveExcelReport(artifactSet.ExcelReportPath, rootFolder, modelName, results);
+        SaveInteractiveHtmlReport(artifactSet.HtmlReportPath, rootFolder, modelName, results, artifactSet);
     }
 
     private static IReadOnlyList<ProjectAuditResult> LoadCheckpointResults(
@@ -1659,7 +1662,10 @@ Security reference data:
         IReadOnlyCollection<ProjectAuditResult> results)
     {
         using var workbook = new XLWorkbook();
+        WriteReadMeSheet(workbook);
         WriteRunSummarySheet(workbook, rootFolder, modelName, results);
+        WriteModelComparisonSheet(workbook, results);
+        WriteMethodComparisonSheet(workbook, results);
         WriteProjectStatusSheet(workbook, results);
         WriteScenarioMetricsSheet(workbook, results);
         WriteFindingDetailSheet(workbook, results);
@@ -1693,6 +1699,7 @@ Security reference data:
             ("IncompleteOrApiFailedProjects", results.Count(x => !IsProjectFullySuccessfulForResume(x)).ToString()),
             ("RagLlmProjectResults", results.Count(x => x.Scenarios.Any(s => s.Scenario == AuditScenario.RagLlm && s.Success)).ToString()),
             ("ZeroShotProjectResults", results.Count(x => x.Scenarios.Any(s => s.Scenario == AuditScenario.ZeroShot && s.Success)).ToString()),
+            ("CodeBertProjectResults", results.Count(x => x.CodeBertRecords.Count > 0 || x.PackageCount == 0).ToString()),
             ("ApiFailedScenarioResults", results.SelectMany(x => x.Scenarios).Count(s => s.Status == "API_FAILED").ToString()),
             ("MetricExclusionPolicy", "Scenario with API_FAILED or missing LLM prediction is excluded from confusion matrix; no Ground Truth fallback is used."),
             ("CodeBertRecords", results.Sum(x => x.CodeBertRecords.Count).ToString()),
@@ -1709,6 +1716,176 @@ Security reference data:
         }
 
         FormatUsedRangeAsTable(sheet, 2);
+    }
+
+    private static void WriteModelComparisonSheet(XLWorkbook workbook, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var sheet = workbook.Worksheets.Add("Model Comparison");
+        var headers = new[] { "Metric", "RAG-LLM", "Zero-Shot", "Delta (RAG-ZeroShot)", "Description" };
+        WriteHeaders(sheet, headers);
+
+        var rag = AggregateScenarioMetrics(results, AuditScenario.RagLlm);
+        var zeroShot = AggregateScenarioMetrics(results, AuditScenario.ZeroShot);
+        var rows = new List<(string Metric, double Rag, double ZeroShot, string Description)>
+        {
+            ("Accuracy", rag.Accuracy, zeroShot.Accuracy, "Proporsi seluruh prediksi package yang benar."),
+            ("Precision", rag.Precision, zeroShot.Precision, "Ketepatan prediksi rentan. Lebih tinggi berarti false positive lebih rendah."),
+            ("Recall", rag.Recall, zeroShot.Recall, "Kemampuan menemukan package yang benar-benar rentan."),
+            ("F1Score", rag.F1Score, zeroShot.F1Score, "Keseimbangan precision dan recall."),
+            ("FalsePositiveRatio", rag.FalsePositiveRatio, zeroShot.FalsePositiveRatio, "Rasio alarm palsu dari seluruh prediksi positif."),
+            ("TruePositive", rag.TruePositive, zeroShot.TruePositive, "Jumlah package rentan yang berhasil terdeteksi."),
+            ("TrueNegative", rag.TrueNegative, zeroShot.TrueNegative, "Jumlah package aman yang benar terdeteksi aman."),
+            ("FalsePositive", rag.FalsePositive, zeroShot.FalsePositive, "Jumlah package aman yang salah ditandai rentan."),
+            ("FalseNegative", rag.FalseNegative, zeroShot.FalseNegative, "Jumlah package rentan yang gagal terdeteksi."),
+            ("Total", rag.Total, zeroShot.Total, "Total package yang masuk evaluasi.")
+        };
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var row = i + 2;
+            sheet.Cell(row, 1).Value = rows[i].Metric;
+            sheet.Cell(row, 2).Value = rows[i].Rag;
+            sheet.Cell(row, 3).Value = rows[i].ZeroShot;
+            sheet.Cell(row, 4).Value = rows[i].Rag - rows[i].ZeroShot;
+            sheet.Cell(row, 5).Value = rows[i].Description;
+        }
+
+        sheet.Range(2, 2, 6, 4).Style.NumberFormat.Format = "0.00%";
+        sheet.Column(5).Style.Alignment.WrapText = true;
+        FormatUsedRangeAsTable(sheet, headers.Length);
+    }
+
+    private static EvaluationMetrics AggregateScenarioMetrics(IReadOnlyCollection<ProjectAuditResult> results, AuditScenario scenario)
+    {
+        var metrics = results
+            .SelectMany(project => project.Scenarios)
+            .Where(item => item.Scenario == scenario && item.Metrics is not null)
+            .Select(item => item.Metrics!)
+            .ToList();
+
+        var truePositive = metrics.Sum(x => x.TruePositive);
+        var trueNegative = metrics.Sum(x => x.TrueNegative);
+        var falsePositive = metrics.Sum(x => x.FalsePositive);
+        var falseNegative = metrics.Sum(x => x.FalseNegative);
+        var total = truePositive + trueNegative + falsePositive + falseNegative;
+        var precisionDenominator = truePositive + falsePositive;
+        var recallDenominator = truePositive + falseNegative;
+        var precision = precisionDenominator > 0 ? (double)truePositive / precisionDenominator : 0d;
+        var recall = recallDenominator > 0 ? (double)truePositive / recallDenominator : 0d;
+
+        return new EvaluationMetrics
+        {
+            Scenario = GetScenarioDisplayName(scenario),
+            Total = total,
+            TruePositive = truePositive,
+            TrueNegative = trueNegative,
+            FalsePositive = falsePositive,
+            FalseNegative = falseNegative,
+            Accuracy = total > 0 ? (double)(truePositive + trueNegative) / total : 0d,
+            Precision = precision,
+            Recall = recall,
+            F1Score = precision + recall > 0 ? 2 * precision * recall / (precision + recall) : 0d,
+            FalsePositiveRatio = precisionDenominator > 0 ? (double)falsePositive / precisionDenominator : 0d
+        };
+    }
+
+    private static void WriteReadMeSheet(XLWorkbook workbook)
+    {
+        var sheet = workbook.Worksheets.Add("README");
+        var headers = new[] { "Section", "HowToRead" };
+        WriteHeaders(sheet, headers);
+
+        var rows = new List<(string Section, string HowToRead)>
+        {
+            ("Purpose", "Workbook ini merangkum audit dependency NuGet dari file .csproj. Tiga jalur yang dihasilkan adalah RAG-LLM, Zero-Shot, dan CodeBERT dataset export."),
+            ("RAG-LLM", "LLM menerima package list plus security reference hasil retrieval. Gunakan sheet Scenario Metrics dan Finding Detail untuk membaca prediksi dan evaluasinya."),
+            ("Zero-Shot", "LLM hanya menerima package list tanpa konteks advisory. Bandingkan dengan RAG-LLM untuk melihat efek retrieval."),
+            ("CodeBERT", "Bukan prediksi LLM di workbook ini. Sheet CodeBERT Dataset adalah dataset baseline untuk training/evaluasi model CodeBERT, memakai label ground truth."),
+            ("Run Summary", "Ringkasan eksekusi: model, jumlah project, jumlah sukses/gagal, concurrency, dan jumlah record."),
+            ("Method Comparison", "Tabel cepat untuk melihat status tiga metode per project: RAG-LLM, Zero-Shot, dan CodeBERT."),
+            ("Project Status", "Status per project, termasuk status RAG, Zero-Shot, jumlah record CodeBERT, dan error jika ada."),
+            ("Scenario Metrics", "Confusion matrix dan metrik untuk RAG-LLM dan Zero-Shot. CodeBERT tidak muncul di sini karena belum melakukan inference."),
+            ("Finding Detail", "Detail package-level: prediksi model, ground truth, CVE, severity, mitigasi, dan reasoning bilingual."),
+            ("Ground Truth", "Label pembanding dari GitHub API/local advisory/fallback. Ini dasar TP/TN/FP/FN."),
+            ("CodeBERT Dataset", "Record dataset yang diekspor: original, semantic_version_normalization, dan safe_dummy_dependency."),
+            ("Retrieval Diagnostics", "Jejak sumber advisory yang dipakai untuk tiap project."),
+            ("Field Descriptions", "Kamus field JSON dan Excel agar pembaca memahami arti setiap kolom temuan."),
+            ("Metric Definitions", "Rumus Accuracy, Precision, Recall, F1, False Positive Ratio, dan confusion matrix."),
+            ("JSON Reports", "audit-rag-llm*.json dan audit-zero-shot*.json berisi report LLM; audit-codebert*.json berisi dataset baseline; api-diagnostics*.json berisi kesehatan API."),
+            ("HTML Report", "audit-interactive-report*.html adalah ringkasan interaktif untuk dibuka di browser dan difilter tanpa membuka Excel.")
+        };
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            sheet.Cell(i + 2, 1).Value = rows[i].Section;
+            sheet.Cell(i + 2, 2).Value = rows[i].HowToRead;
+        }
+
+        sheet.Column(1).Width = 28;
+        sheet.Column(2).Width = 120;
+        sheet.Column(2).Style.Alignment.WrapText = true;
+        FormatUsedRangeAsTable(sheet, headers.Length);
+    }
+
+    private static void WriteMethodComparisonSheet(XLWorkbook workbook, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var sheet = workbook.Worksheets.Add("Method Comparison");
+        var headers = new[]
+        {
+            "ProjectName", "ProjectKey", "PackageCount",
+            "RagStatus", "RagAccuracy", "RagPrecision", "RagRecall", "RagF1",
+            "ZeroShotStatus", "ZeroShotAccuracy", "ZeroShotPrecision", "ZeroShotRecall", "ZeroShotF1",
+            "CodeBertStatus", "CodeBertRecords", "CodeBertTraining", "CodeBertValidation", "CodeBertTesting", "CodeBertNote"
+        };
+        WriteHeaders(sheet, headers);
+
+        var row = 2;
+        foreach (var project in results)
+        {
+            var rag = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.RagLlm);
+            var zeroShot = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.ZeroShot);
+            var codeBertRecords = project.CodeBertRecords;
+
+            sheet.Cell(row, 1).Value = project.ProjectName;
+            sheet.Cell(row, 2).Value = project.ProjectKey;
+            sheet.Cell(row, 3).Value = project.PackageCount;
+            sheet.Cell(row, 4).Value = rag?.Status ?? "NOT_RUN";
+            WriteMetricCells(sheet, row, 5, rag?.Metrics);
+            sheet.Cell(row, 9).Value = zeroShot?.Status ?? "NOT_RUN";
+            WriteMetricCells(sheet, row, 10, zeroShot?.Metrics);
+            sheet.Cell(row, 14).Value = codeBertRecords.Count > 0 || project.PackageCount == 0 ? "EXPORTED" : "NOT_EXPORTED";
+            sheet.Cell(row, 15).Value = codeBertRecords.Count;
+            sheet.Cell(row, 16).Value = codeBertRecords.Count(x => x.Split == "training");
+            sheet.Cell(row, 17).Value = codeBertRecords.Count(x => x.Split == "validation");
+            sheet.Cell(row, 18).Value = codeBertRecords.Count(x => x.Split == "testing");
+            sheet.Cell(row, 19).Value = "CodeBERT rows are dataset records, not LLM predictions in this run.";
+            row++;
+        }
+
+        if (row > 2)
+        {
+            sheet.Range(2, 5, row - 1, 8).Style.NumberFormat.Format = "0.00%";
+            sheet.Range(2, 10, row - 1, 13).Style.NumberFormat.Format = "0.00%";
+        }
+
+        FormatUsedRangeAsTable(sheet, headers.Length);
+    }
+
+    private static void WriteMetricCells(IXLWorksheet sheet, int row, int startColumn, EvaluationMetrics? metrics)
+    {
+        if (metrics is null)
+        {
+            sheet.Cell(row, startColumn).Value = string.Empty;
+            sheet.Cell(row, startColumn + 1).Value = string.Empty;
+            sheet.Cell(row, startColumn + 2).Value = string.Empty;
+            sheet.Cell(row, startColumn + 3).Value = string.Empty;
+            return;
+        }
+
+        sheet.Cell(row, startColumn).Value = metrics.Accuracy;
+        sheet.Cell(row, startColumn + 1).Value = metrics.Precision;
+        sheet.Cell(row, startColumn + 2).Value = metrics.Recall;
+        sheet.Cell(row, startColumn + 3).Value = metrics.F1Score;
     }
 
     private static void WriteProjectStatusSheet(XLWorkbook workbook, IReadOnlyCollection<ProjectAuditResult> results)
@@ -1985,6 +2162,179 @@ Security reference data:
         }
 
         FormatUsedRangeAsTable(sheet, headers.Length);
+    }
+
+    private static void SaveInteractiveHtmlReport(
+        string outputFilePath,
+        string rootFolder,
+        string modelName,
+        IReadOnlyCollection<ProjectAuditResult> results,
+        FinalArtifactSet artifactSet)
+    {
+        var ragResults = results.SelectMany(p => p.Scenarios.Where(s => s.Scenario == AuditScenario.RagLlm).Select(s => (Project: p, Scenario: s))).ToList();
+        var zeroShotResults = results.SelectMany(p => p.Scenarios.Where(s => s.Scenario == AuditScenario.ZeroShot).Select(s => (Project: p, Scenario: s))).ToList();
+        var allFindings = results
+            .SelectMany(project => project.Scenarios.SelectMany(scenario =>
+                scenario.Response?.VulnerabilityReports.Select(report => (Project: project, Scenario: scenario, Report: report))
+                ?? Enumerable.Empty<(ProjectAuditResult Project, ScenarioAuditResult Scenario, VulnerabilityReport Report)>()))
+            .ToList();
+
+        var builder = new StringBuilder();
+        builder.AppendLine("<!doctype html>");
+        builder.AppendLine("<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+        builder.AppendLine("<title>GeminiNuGetAuditor Interactive Report</title>");
+        builder.AppendLine("""
+<style>
+:root{--bg:#f6f8fb;--panel:#ffffff;--ink:#172033;--muted:#657089;--line:#dbe3ef;--brand:#1d4ed8;--brand2:#0f766e;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:Segoe UI,Roboto,Arial,sans-serif;line-height:1.45}
+header{background:linear-gradient(135deg,#0f172a,#1d4ed8 55%,#0f766e);color:white;padding:34px 42px}
+header h1{margin:0 0 8px;font-size:30px;letter-spacing:0} header p{margin:0;color:#dbeafe;max-width:980px}
+main{padding:24px 42px 48px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
+.metric .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.metric .value{font-size:28px;font-weight:700;margin-top:4px}
+section{margin-top:18px}.section-title{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:24px 0 10px}h2{font-size:20px;margin:0}.hint{color:var(--muted);font-size:13px}
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:13px}th{background:#eef4ff;color:#24324b;position:sticky;top:0;z-index:1}tr:hover td{background:#f8fbff}
+.pill{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:12px;font-weight:600}.good{background:#dcfce7;color:var(--good)}.bad{background:#fee2e2;color:var(--bad)}.warn{background:#fef3c7;color:var(--warn)}.neutral{background:#e5e7eb;color:#374151}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar input{min-width:280px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:white}.tabs{display:flex;gap:8px;flex-wrap:wrap}.tab{border:1px solid var(--line);background:white;border-radius:999px;padding:8px 12px;cursor:pointer}.tab.active{background:var(--brand);color:white;border-color:var(--brand)}
+.panel{display:none}.panel.active{display:block}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.files a{display:block;color:var(--brand);text-decoration:none;margin:6px 0}.files a:hover{text-decoration:underline}
+@media(max-width:980px){main,header{padding-left:18px;padding-right:18px}.grid,.two{grid-template-columns:1fr}.toolbar input{min-width:100%;width:100%}}
+</style>
+""");
+        builder.AppendLine("</head><body>");
+        builder.AppendLine("<header>");
+        builder.AppendLine("<h1>GeminiNuGetAuditor Interactive Report</h1>");
+        builder.AppendLine($"<p>Audit root: {Html(rootFolder)} &nbsp; | &nbsp; Model: <strong>{Html(modelName)}</strong> &nbsp; | &nbsp; Generated: {Html(DateTimeOffset.UtcNow.ToString("O"))}</p>");
+        builder.AppendLine("</header><main>");
+
+        builder.AppendLine("<section class=\"grid\">");
+        AppendMetricCard(builder, "Projects", results.Count.ToString(CultureInfo.InvariantCulture));
+        AppendMetricCard(builder, "Successful", results.Count(IsProjectFullySuccessfulForResume).ToString(CultureInfo.InvariantCulture));
+        AppendMetricCard(builder, "RAG Findings", ragResults.Sum(x => x.Scenario.Response?.VulnerabilityReports.Count(r => r.IsVulnerable) ?? 0).ToString(CultureInfo.InvariantCulture));
+        AppendMetricCard(builder, "Zero-Shot Findings", zeroShotResults.Sum(x => x.Scenario.Response?.VulnerabilityReports.Count(r => r.IsVulnerable) ?? 0).ToString(CultureInfo.InvariantCulture));
+        AppendMetricCard(builder, "CodeBERT Records", results.Sum(x => x.CodeBertRecords.Count).ToString(CultureInfo.InvariantCulture));
+        AppendMetricCard(builder, "API Failed Scenarios", results.SelectMany(x => x.Scenarios).Count(x => x.Status == "API_FAILED").ToString(CultureInfo.InvariantCulture));
+        AppendMetricCard(builder, "Packages", results.Sum(x => x.PackageCount).ToString(CultureInfo.InvariantCulture));
+        AppendMetricCard(builder, "Ground Truth Vulnerable", results.Sum(x => x.GroundTruthLabels.Count(g => g.IsVulnerable)).ToString(CultureInfo.InvariantCulture));
+        builder.AppendLine("</section>");
+
+        builder.AppendLine("""
+<section class="card">
+<div class="section-title"><h2>How to read this report</h2><span class="hint">Three outputs are produced: two LLM audit scenarios and one CodeBERT dataset baseline.</span></div>
+<div class="two">
+<div><strong>RAG-LLM</strong><p>Gemini receives package references plus retrieved security context. Use this as the grounded LLM scenario.</p></div>
+<div><strong>Zero-Shot</strong><p>Gemini receives only package references. Compare it with RAG-LLM to measure the effect of retrieval.</p></div>
+<div><strong>CodeBERT</strong><p>This run exports labeled dataset rows for a CodeBERT baseline. It is not an LLM prediction table, so it does not appear in the LLM confusion matrix.</p></div>
+<div><strong>Ground Truth</strong><p>Labels are built from GitHub GraphQL/local advisory/fallback references and drive TP/TN/FP/FN.</p></div>
+</div>
+</section>
+""");
+
+        builder.AppendLine("<section><div class=\"section-title\"><h2>Interactive Tables</h2><div class=\"toolbar\"><input id=\"q\" placeholder=\"Search project, package, CVE, severity...\"><div class=\"tabs\"><button class=\"tab active\" data-tab=\"projects\">Projects</button><button class=\"tab\" data-tab=\"findings\">Findings</button><button class=\"tab\" data-tab=\"artifacts\">Artifacts</button></div></div></div>");
+        builder.AppendLine("<div id=\"projects\" class=\"panel active\">");
+        AppendProjectTable(builder, results);
+        builder.AppendLine("</div><div id=\"findings\" class=\"panel\">");
+        AppendFindingTable(builder, allFindings);
+        builder.AppendLine("</div><div id=\"artifacts\" class=\"panel card files\">");
+        AppendArtifactLinks(builder, artifactSet);
+        builder.AppendLine("</div></section>");
+        builder.AppendLine("""
+<script>
+const tabs=[...document.querySelectorAll('.tab')],panels=[...document.querySelectorAll('.panel')],q=document.getElementById('q');
+tabs.forEach(t=>t.addEventListener('click',()=>{tabs.forEach(x=>x.classList.remove('active'));panels.forEach(p=>p.classList.remove('active'));t.classList.add('active');document.getElementById(t.dataset.tab).classList.add('active');filter()}));
+q.addEventListener('input',filter);
+function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.panel.active tbody tr').forEach(r=>{r.style.display=r.innerText.toLowerCase().includes(term)?'':'none'})}
+</script>
+""");
+        builder.AppendLine("</main></body></html>");
+        File.WriteAllText(outputFilePath, builder.ToString(), Encoding.UTF8);
+    }
+
+    private static void AppendMetricCard(StringBuilder builder, string label, string value)
+    {
+        builder.AppendLine($"<div class=\"card metric\"><div class=\"label\">{Html(label)}</div><div class=\"value\">{Html(value)}</div></div>");
+    }
+
+    private static void AppendProjectTable(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        builder.AppendLine("<table><thead><tr><th>Project</th><th>Packages</th><th>RAG</th><th>Zero-Shot</th><th>CodeBERT</th><th>Reference</th><th>Elapsed</th></tr></thead><tbody>");
+        foreach (var project in results.OrderBy(x => x.ProjectName, StringComparer.OrdinalIgnoreCase))
+        {
+            var rag = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.RagLlm);
+            var zero = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.ZeroShot);
+            builder.AppendLine("<tr>");
+            builder.AppendLine($"<td><strong>{Html(project.ProjectName)}</strong><br><span class=\"hint\">{Html(project.ProjectKey)}</span></td>");
+            builder.AppendLine($"<td>{project.PackageCount}</td>");
+            builder.AppendLine($"<td>{StatusPill(rag?.Status ?? "NOT_RUN")}<br>{MetricMini(rag?.Metrics)}</td>");
+            builder.AppendLine($"<td>{StatusPill(zero?.Status ?? "NOT_RUN")}<br>{MetricMini(zero?.Metrics)}</td>");
+            builder.AppendLine($"<td>{StatusPill(project.CodeBertRecords.Count > 0 || project.PackageCount == 0 ? "EXPORTED" : "NOT_EXPORTED")}<br>{project.CodeBertRecords.Count} records</td>");
+            builder.AppendLine($"<td>{Html(project.SecurityReferenceSource)}</td>");
+            builder.AppendLine($"<td>{project.ElapsedSeconds:0.0}s</td>");
+            builder.AppendLine("</tr>");
+        }
+        builder.AppendLine("</tbody></table>");
+    }
+
+    private static void AppendFindingTable(
+        StringBuilder builder,
+        IReadOnlyCollection<(ProjectAuditResult Project, ScenarioAuditResult Scenario, VulnerabilityReport Report)> findings)
+    {
+        builder.AppendLine("<table><thead><tr><th>Project</th><th>Scenario</th><th>Package</th><th>Version</th><th>Vulnerable</th><th>CVE</th><th>Severity</th><th>Grounded</th><th>Mitigation</th></tr></thead><tbody>");
+        foreach (var item in findings.OrderByDescending(x => x.Report.IsVulnerable).ThenBy(x => x.Project.ProjectName).ThenBy(x => x.Report.PackageName))
+        {
+            builder.AppendLine("<tr>");
+            builder.AppendLine($"<td>{Html(item.Project.ProjectName)}</td>");
+            builder.AppendLine($"<td>{Html(GetScenarioDisplayName(item.Scenario.Scenario))}</td>");
+            builder.AppendLine($"<td>{Html(item.Report.PackageName)}</td>");
+            builder.AppendLine($"<td>{Html(item.Report.CurrentVersion)}</td>");
+            builder.AppendLine($"<td>{StatusPill(item.Report.IsVulnerable ? "VULNERABLE" : "SAFE")}</td>");
+            builder.AppendLine($"<td>{Html(item.Report.CVE_ID)}</td>");
+            builder.AppendLine($"<td>{Html(item.Report.Severity)}</td>");
+            builder.AppendLine($"<td>{StatusPill(item.Report.IsGroundedInReference ? "GROUNDED" : "UNGROUNDED")}</td>");
+            builder.AppendLine($"<td>{Html(TruncateForDisplay(item.Report.MitigationPlanIndonesia, 240))}</td>");
+            builder.AppendLine("</tr>");
+        }
+        builder.AppendLine("</tbody></table>");
+    }
+
+    private static void AppendArtifactLinks(StringBuilder builder, FinalArtifactSet artifactSet)
+    {
+        var artifacts = new[]
+        {
+            ("RAG-LLM JSON", artifactSet.RagJsonPath),
+            ("Zero-Shot JSON", artifactSet.ZeroShotJsonPath),
+            ("CodeBERT JSON", artifactSet.CodeBertJsonPath),
+            ("Excel Workbook", artifactSet.ExcelReportPath),
+            ("API Diagnostics JSON", artifactSet.ApiDiagnosticsJsonPath),
+            ("Console Log JSON", artifactSet.ConsoleLogJsonPath)
+        };
+
+        foreach (var (label, path) in artifacts)
+        {
+            builder.AppendLine($"<a href=\"{Html(Path.GetFileName(path))}\">{Html(label)} - {Html(Path.GetFileName(path))}</a>");
+        }
+    }
+
+    private static string MetricMini(EvaluationMetrics? metrics)
+    {
+        return metrics is null
+            ? "<span class=\"hint\">No metrics</span>"
+            : $"<span class=\"hint\">Acc {metrics.Accuracy:P1} | P {metrics.Precision:P1} | R {metrics.Recall:P1} | F1 {metrics.F1Score:P1}</span>";
+    }
+
+    private static string StatusPill(string status)
+    {
+        var css = status switch
+        {
+            "SUCCESS" or "EXPORTED" or "SAFE" or "GROUNDED" => "good",
+            "API_FAILED" or "NOT_EXPORTED" or "VULNERABLE" => "bad",
+            "NOT_RUN" or "UNGROUNDED" => "warn",
+            _ => "neutral"
+        };
+        return $"<span class=\"pill {css}\">{Html(status)}</span>";
+    }
+
+    private static string Html(string? value)
+    {
+        return WebUtility.HtmlEncode(value ?? string.Empty);
     }
 
     private static void WriteHeaders(IXLWorksheet sheet, IReadOnlyList<string> headers)
@@ -2446,6 +2796,7 @@ Security reference data:
         public string ZeroShotJsonPath { get; set; } = string.Empty;
         public string CodeBertJsonPath { get; set; } = string.Empty;
         public string ExcelReportPath { get; set; } = string.Empty;
+        public string HtmlReportPath { get; set; } = string.Empty;
         public string ApiDiagnosticsJsonPath { get; set; } = string.Empty;
         public string ConsoleLogJsonPath { get; set; } = string.Empty;
     }
