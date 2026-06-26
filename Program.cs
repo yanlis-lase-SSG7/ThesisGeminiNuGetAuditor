@@ -706,6 +706,7 @@ public class Program
         await GeminiRequestGate.WaitAsync(cancellationToken);
         var requestStopwatch = Stopwatch.StartNew();
         var endpoint = string.Format(settings.GenerateContentEndpointTemplate, modelName);
+        var diagnosticRecorded = false;
 
         try
         {
@@ -728,10 +729,6 @@ public class Program
                             new { text = prompt }
                         }
                     }
-                },
-                generationConfig = new
-                {
-                    responseMimeType = "application/json"
                 }
             };
 
@@ -755,6 +752,7 @@ public class Program
                 RateLimitHeaders = CollectRateLimitHeaders(response),
                 ResponsePreview = TruncateForDisplay(responseContent, 1000)
             });
+            diagnosticRecorded = true;
 
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
@@ -808,18 +806,21 @@ public class Program
         catch (Exception ex)
         {
             requestStopwatch.Stop();
-            AddGeminiApiDiagnostic(new GeminiApiDiagnostic
+            if (!diagnosticRecorded)
             {
-                TimestampUtc = DateTimeOffset.UtcNow,
-                Operation = "GenerateContent",
-                Endpoint = endpoint,
-                ModelName = modelName,
-                Scenario = GetScenarioDisplayName(scenario),
-                PackageCount = packageReferences.Count,
-                Success = false,
-                ElapsedMilliseconds = requestStopwatch.Elapsed.TotalMilliseconds,
-                ErrorMessage = ex.Message
-            });
+                AddGeminiApiDiagnostic(new GeminiApiDiagnostic
+                {
+                    TimestampUtc = DateTimeOffset.UtcNow,
+                    Operation = "GenerateContent",
+                    Endpoint = endpoint,
+                    ModelName = modelName,
+                    Scenario = GetScenarioDisplayName(scenario),
+                    PackageCount = packageReferences.Count,
+                    Success = false,
+                    ElapsedMilliseconds = requestStopwatch.Elapsed.TotalMilliseconds,
+                    ErrorMessage = ex.Message
+                });
+            }
             throw;
         }
         finally
