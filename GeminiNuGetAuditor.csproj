@@ -14,6 +14,7 @@
   <ItemGroup>
     <None Include=".github\copilot-instructions.md" />
     <None Include="samples\DummyAuditTarget\DummyAuditTarget.csproj" />
+    <None Include="Thesis_Dataset_1000\**\*.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -31,6 +32,7 @@
 
   <ItemGroup>
     <Folder Include="audit-results\" />
+    <Folder Include="Thesis_Dataset_1000\" />
   </ItemGroup>
 
 </Project>
