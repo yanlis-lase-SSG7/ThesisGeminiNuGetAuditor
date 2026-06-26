@@ -14,9 +14,8 @@ public class Program
 {
     private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
     private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
-    private const int SequentialMaxDegreeOfParallelism = 1;
-    private const int GeminiGlobalConcurrencyLimit = 1;
-    private const int HardDelayAfterProjectMilliseconds = 15000;
+    private const int ProjectMaxDegreeOfParallelism = 10;
+    private const int GeminiGlobalConcurrencyLimit = 15;
 
     private static readonly object ConsoleLock = new();
     private static readonly SemaphoreSlim GeminiRequestGate = new(GeminiGlobalConcurrencyLimit, GeminiGlobalConcurrencyLimit);
@@ -56,18 +55,20 @@ public class Program
                 return 0;
             }
 
-            var outputDirectory = Path.Combine(GetApplicationRootDirectory(), "audit-results");
-            Directory.CreateDirectory(outputDirectory);
+            var auditResultsDirectory = Path.Combine(GetApplicationRootDirectory(), "audit-results");
+            var runFolderName = DateTime.Now.ToString("yyyyMMdd HH-mm-ss", CultureInfo.InvariantCulture);
+            var outputDirectory = CreateRunOutputDirectory(auditResultsDirectory, runFolderName);
 
             WriteLine($"Audit root folder: {rootFolder}");
             WriteLine($"Found {csprojFiles.Count} .csproj file(s).");
             WriteLine($"Using Gemini model: {modelName}");
+            WriteLine($"Run output directory: {outputDirectory}");
             var runTimestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmssfff");
             var artifactSet = CreateArtifactSet(outputDirectory, runTimestamp);
             var checkpointDirectory = Path.Combine(outputDirectory, "checkpoints");
             Directory.CreateDirectory(checkpointDirectory);
 
-            var completedCheckpointResults = LoadSuccessfulCheckpointResults(checkpointDirectory, csprojFiles);
+            var completedCheckpointResults = LoadCheckpointResults(checkpointDirectory, csprojFiles);
             var completedProjectPaths = completedCheckpointResults
                 .Select(x => Path.GetFullPath(x.ProjectPath))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -75,49 +76,96 @@ public class Program
                 .Where(path => !completedProjectPaths.Contains(Path.GetFullPath(path)))
                 .ToList();
 
-            WriteLine($"Max concurrent project processing: {SequentialMaxDegreeOfParallelism}");
+            WriteLine($"Max concurrent project processing: {ProjectMaxDegreeOfParallelism}");
             WriteLine($"Global Gemini request concurrency: {GeminiGlobalConcurrencyLimit}");
-            WriteLine($"Hard delay after each processed project: {HardDelayAfterProjectMilliseconds / 1000} seconds.");
             WriteLine($"Checkpoint directory: {checkpointDirectory}");
-            WriteLine($"Successful checkpoint(s) loaded for resume: {completedCheckpointResults.Count}.");
+            WriteLine($"Existing checkpoint(s) loaded for resume: {completedCheckpointResults.Count}.");
             WriteLine($"Pending .csproj file(s) to process in this run: {pendingCsprojFiles.Count}.");
-            WriteLine("Starting sequential checkpointed evaluation: RAG-LLM, Zero-Shot, and CodeBERT dataset export.");
+            WriteLine("Starting parallel checkpointed evaluation: RAG-LLM, Zero-Shot, and CodeBERT dataset export.");
 
-            var results = completedCheckpointResults
+            var resultsByProjectPath = new ConcurrentDictionary<string, ProjectAuditResult>(StringComparer.OrdinalIgnoreCase);
+            foreach (var checkpointResult in completedCheckpointResults)
+            {
+                resultsByProjectPath[Path.GetFullPath(checkpointResult.ProjectPath)] = checkpointResult;
+            }
+
+            var artifactWriteLock = new SemaphoreSlim(1, 1);
+            async Task SaveAggregateArtifactsAsync(CancellationToken cancellationToken)
+            {
+                await artifactWriteLock.WaitAsync(cancellationToken);
+                try
+                {
+                    SaveFinalAuditArtifacts(
+                        artifactSet,
+                        rootFolder,
+                        modelName,
+                        resultsByProjectPath.Values
+                            .OrderBy(x => x.ProjectPath, StringComparer.OrdinalIgnoreCase)
+                            .ToList());
+                }
+                finally
+                {
+                    artifactWriteLock.Release();
+                }
+            }
+
+            await SaveAggregateArtifactsAsync(CancellationToken.None);
+
+            var processedCount = 0;
+            await Parallel.ForEachAsync(
+                pendingCsprojFiles,
+                new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = ProjectMaxDegreeOfParallelism,
+                    CancellationToken = CancellationToken.None
+                },
+                async (csprojPath, cancellationToken) =>
+                {
+                    var projectNumber = Interlocked.Increment(ref processedCount);
+                    var checkpointPath = CreateProjectCheckpointPath(checkpointDirectory, BuildProjectKey(csprojPath));
+
+                    if (File.Exists(checkpointPath) &&
+                        TryLoadCheckpointResult(checkpointPath, csprojFiles, out var existingResult))
+                    {
+                        resultsByProjectPath[Path.GetFullPath(existingResult.ProjectPath)] = existingResult;
+                        WriteLine($"[Checkpoint] Skipping existing project result {projectNumber}/{pendingCsprojFiles.Count}: {existingResult.ProjectPath}");
+                        await SaveAggregateArtifactsAsync(cancellationToken);
+                        return;
+                    }
+
+                    WriteLine($"Processing project {projectNumber}/{pendingCsprojFiles.Count}: {csprojPath}");
+
+                    var result = await ProcessProjectAsync(
+                        csprojPath,
+                        apiKey,
+                        modelName,
+                        geminiSettings,
+                        outputDirectory,
+                        cancellationToken);
+
+                    SaveProjectCheckpoint(checkpointDirectory, result);
+                    resultsByProjectPath[Path.GetFullPath(result.ProjectPath)] = result;
+                    await SaveAggregateArtifactsAsync(cancellationToken);
+                    WriteLine($"Checkpoint and aggregate reports saved after project: {result.ProjectKey}");
+                });
+
+            var results = resultsByProjectPath.Values
                 .OrderBy(x => x.ProjectPath, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            SaveFinalAuditArtifacts(artifactSet, rootFolder, modelName, results);
+            var missingCheckpointResults = LoadCheckpointResults(checkpointDirectory, csprojFiles)
+                .Where(x => !resultsByProjectPath.ContainsKey(Path.GetFullPath(x.ProjectPath)))
+                .ToList();
 
-            for (var index = 0; index < pendingCsprojFiles.Count; index++)
+            foreach (var missingResult in missingCheckpointResults)
             {
-                var csprojPath = pendingCsprojFiles[index];
-                WriteLine($"Processing project {index + 1}/{pendingCsprojFiles.Count}: {csprojPath}");
-
-                var result = await ProcessProjectAsync(
-                    csprojPath,
-                    apiKey,
-                    modelName,
-                    geminiSettings,
-                    outputDirectory,
-                    CancellationToken.None);
-
-                SaveProjectCheckpoint(checkpointDirectory, result);
-                results.RemoveAll(x => string.Equals(x.ProjectPath, result.ProjectPath, StringComparison.OrdinalIgnoreCase));
-                results.Add(result);
-                results = results
-                    .OrderBy(x => x.ProjectPath, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-
-                SaveFinalAuditArtifacts(artifactSet, rootFolder, modelName, results);
-                WriteLine($"Checkpoint and aggregate reports saved after project: {result.ProjectKey}");
-
-                if (index < pendingCsprojFiles.Count - 1)
-                {
-                    WriteLine($"Waiting {HardDelayAfterProjectMilliseconds / 1000} seconds before the next project to reduce Gemini TPM/RPM pressure.");
-                    await Task.Delay(HardDelayAfterProjectMilliseconds);
-                }
+                resultsByProjectPath[Path.GetFullPath(missingResult.ProjectPath)] = missingResult;
             }
+
+            results = resultsByProjectPath.Values
+                .OrderBy(x => x.ProjectPath, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            SaveFinalAuditArtifacts(artifactSet, rootFolder, modelName, results);
 
             totalStopwatch.Stop();
             WriteLine("Batch audit completed.");
@@ -346,9 +394,9 @@ public class Program
                 return result;
             }
 
-            WriteLine($"[{projectKey}] Found {packageReferences.Count} package(s). Starting scenarios sequentially.");
+            WriteLine($"[{projectKey}] Found {packageReferences.Count} package(s). Starting Zero-Shot and retrieval concurrently.");
 
-            var zeroShotResult = await RunGeminiScenarioSafelyAsync(
+            var zeroShotTask = RunGeminiScenarioSafelyAsync(
                 projectKey,
                 AuditScenario.ZeroShot,
                 apiKey,
@@ -357,11 +405,11 @@ public class Program
                 packageReferences,
                 "[]",
                 cancellationToken);
-            result.Scenarios.Add(zeroShotResult);
 
-            var securityContextResult = await SecurityReferenceProvider.GetSecurityContextWithDiagnosticsAsync(
+            var securityContextTask = SecurityReferenceProvider.GetSecurityContextWithDiagnosticsAsync(
                 packageReferences.Select(x => x.PackageName).ToList(),
                 cancellationToken);
+            var securityContextResult = await securityContextTask;
             result.SecurityReferenceSource = securityContextResult.Source;
             result.RetrievalDiagnostics.AddRange(securityContextResult.Diagnostics);
 
@@ -374,7 +422,9 @@ public class Program
             var groundTruthLabels = GroundTruthProvider.BuildLabels(packageReferences, securityContext);
             result.GroundTruthLabels = groundTruthLabels.ToList();
 
-            var ragResult = await RunGeminiScenarioSafelyAsync(
+            WriteLine($"[{projectKey}] Ground truth prepared. Starting RAG-LLM and CodeBERT dataset preparation concurrently.");
+
+            var ragTask = RunGeminiScenarioSafelyAsync(
                 projectKey,
                 AuditScenario.RagLlm,
                 apiKey,
@@ -383,6 +433,14 @@ public class Program
                 packageReferences,
                 securityContext,
                 cancellationToken);
+
+            var codeBertTask = Task.Run(
+                () => CodeBertDatasetExporter.BuildDatasetRecords(packageReferences, groundTruthLabels),
+                cancellationToken);
+
+            var zeroShotResult = await zeroShotTask;
+            var ragResult = await ragTask;
+            result.Scenarios.Add(zeroShotResult);
             result.Scenarios.Add(ragResult);
 
             foreach (var scenarioResult in result.Scenarios)
@@ -406,7 +464,7 @@ public class Program
 
             try
             {
-                result.CodeBertRecords = CodeBertDatasetExporter.BuildDatasetRecords(packageReferences, groundTruthLabels);
+                result.CodeBertRecords = await codeBertTask;
                 result.Messages.Add($"CodeBERT records prepared: {result.CodeBertRecords.Count}.");
             }
             catch (Exception ex)
@@ -1217,6 +1275,30 @@ Security reference data:
         };
     }
 
+    private static string CreateRunOutputDirectory(string auditResultsDirectory, string runFolderName)
+    {
+        Directory.CreateDirectory(auditResultsDirectory);
+
+        var outputDirectory = Path.Combine(auditResultsDirectory, runFolderName);
+        if (!Directory.Exists(outputDirectory))
+        {
+            Directory.CreateDirectory(outputDirectory);
+            return outputDirectory;
+        }
+
+        for (var index = 1; index < 1000; index++)
+        {
+            var candidateDirectory = Path.Combine(auditResultsDirectory, $"{runFolderName} {index:000}");
+            if (!Directory.Exists(candidateDirectory))
+            {
+                Directory.CreateDirectory(candidateDirectory);
+                return candidateDirectory;
+            }
+        }
+
+        throw new IOException($"Could not create a unique audit result folder for timestamp '{runFolderName}'.");
+    }
+
     private static void SaveFinalAuditArtifacts(
         FinalArtifactSet artifactSet,
         string rootFolder,
@@ -1234,43 +1316,19 @@ Security reference data:
         SaveComprehensiveExcelReport(artifactSet.ExcelReportPath, rootFolder, modelName, results);
     }
 
-    private static IReadOnlyList<ProjectAuditResult> LoadSuccessfulCheckpointResults(
+    private static IReadOnlyList<ProjectAuditResult> LoadCheckpointResults(
         string checkpointDirectory,
         IReadOnlyCollection<string> csprojFiles)
     {
         Directory.CreateDirectory(checkpointDirectory);
-        var allowedProjectPaths = csprojFiles
-            .Select(Path.GetFullPath)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var results = new List<ProjectAuditResult>();
 
         foreach (var checkpointPath in Directory.EnumerateFiles(checkpointDirectory, "*.json", SearchOption.TopDirectoryOnly))
         {
-            try
+            if (TryLoadCheckpointResult(checkpointPath, csprojFiles, out var result))
             {
-                var json = File.ReadAllText(checkpointPath, Encoding.UTF8);
-                var result = JsonSerializer.Deserialize<ProjectAuditResult>(json, SerializerOptions);
-
-                if (result is null ||
-                    string.IsNullOrWhiteSpace(result.ProjectPath) ||
-                    !allowedProjectPaths.Contains(Path.GetFullPath(result.ProjectPath)))
-                {
-                    continue;
-                }
-
-                if (!IsProjectFullySuccessfulForResume(result))
-                {
-                    WriteLine($"[Checkpoint] Existing checkpoint is not complete and will be reprocessed: {checkpointPath}");
-                    continue;
-                }
-
-                result.Success = true;
                 results.Add(result);
-                WriteLine($"[Checkpoint] Loaded successful checkpoint and will skip: {result.ProjectPath}");
-            }
-            catch (Exception ex)
-            {
-                WriteLine($"[Checkpoint] Ignoring unreadable checkpoint '{checkpointPath}': {ex.Message}");
+                WriteLine($"[Checkpoint] Loaded existing checkpoint and will skip: {result.ProjectPath}");
             }
         }
 
@@ -1281,12 +1339,49 @@ Security reference data:
             .ToList();
     }
 
+    private static bool TryLoadCheckpointResult(
+        string checkpointPath,
+        IReadOnlyCollection<string> csprojFiles,
+        out ProjectAuditResult result)
+    {
+        result = new ProjectAuditResult();
+
+        try
+        {
+            var allowedProjectPaths = csprojFiles
+                .Select(Path.GetFullPath)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var json = File.ReadAllText(checkpointPath, Encoding.UTF8);
+            var loadedResult = JsonSerializer.Deserialize<ProjectAuditResult>(json, SerializerOptions);
+
+            if (loadedResult is null ||
+                string.IsNullOrWhiteSpace(loadedResult.ProjectPath) ||
+                !allowedProjectPaths.Contains(Path.GetFullPath(loadedResult.ProjectPath)))
+            {
+                return false;
+            }
+
+            result = loadedResult;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            WriteLine($"[Checkpoint] Ignoring unreadable checkpoint '{checkpointPath}': {ex.Message}");
+            return false;
+        }
+    }
+
     private static void SaveProjectCheckpoint(string checkpointDirectory, ProjectAuditResult result)
     {
         Directory.CreateDirectory(checkpointDirectory);
-        var checkpointPath = Path.Combine(checkpointDirectory, $"{SanitizeFileName(result.ProjectKey)}.json");
+        var checkpointPath = CreateProjectCheckpointPath(checkpointDirectory, result.ProjectKey);
         File.WriteAllText(checkpointPath, JsonSerializer.Serialize(result, SerializerOptions), Encoding.UTF8);
         WriteLine($"[{result.ProjectKey}] Checkpoint saved: {checkpointPath}");
+    }
+
+    private static string CreateProjectCheckpointPath(string checkpointDirectory, string projectKey)
+    {
+        return Path.Combine(checkpointDirectory, $"{SanitizeFileName(projectKey)}.json");
     }
 
     private static bool IsProjectFullySuccessfulForResume(ProjectAuditResult result)
@@ -1473,9 +1568,9 @@ Security reference data:
             ("GeneratedAtUtc", DateTimeOffset.UtcNow.ToString("O")),
             ("RootFolder", rootFolder),
             ("GeminiModel", modelName),
-            ("ExecutionMode", "Sequential checkpointed execution"),
-            ("MaxDegreeOfParallelism", SequentialMaxDegreeOfParallelism.ToString()),
-            ("HardDelayAfterEachProcessedProjectSeconds", (HardDelayAfterProjectMilliseconds / 1000).ToString()),
+            ("ExecutionMode", "Parallel checkpointed interactive directory scan"),
+            ("MaxDegreeOfParallelism", ProjectMaxDegreeOfParallelism.ToString()),
+            ("GlobalGeminiRequestConcurrency", GeminiGlobalConcurrencyLimit.ToString()),
             ("ProjectCount", results.Count.ToString()),
             ("FullySuccessfulProjects", results.Count(IsProjectFullySuccessfulForResume).ToString()),
             ("IncompleteOrApiFailedProjects", results.Count(x => !IsProjectFullySuccessfulForResume(x)).ToString()),

@@ -1,13 +1,56 @@
-Cara Menjalankan
+Cara Menjalankan GeminiNuGetAuditor
 
-RAG-LLM:
-dotnet run -- --mode=rag "D:\path\to\project.csproj"
+1. Pastikan .NET 10 SDK sudah terinstall.
 
-Zero-Shot:
-dotnet run -- --mode=zero-shot "D:\path\to\project.csproj"
+2. Siapkan API key Gemini. Bisa melalui environment variable:
 
-Compare RAG-LLM vs Zero-Shot:
-dotnet run -- --compare "D:\path\to\project.csproj"
+   PowerShell:
+   $env:GEMINI_API_KEY = "your-gemini-api-key"
 
-Export dataset CodeBERT:
-dotnet run -- --mode=codebert --export-codebert-dataset "D:\path\to\project.csproj"
+   Atau isi konfigurasi Gemini:ApiKey di appsettings.json.
+
+3. Jika ingin memakai GitHub Advisory Database real-time, siapkan GitHub token:
+
+   PowerShell:
+   $env:GITHUB_TOKEN = "your-github-token"
+
+   Jika token tidak tersedia atau request GitHub gagal, aplikasi akan memakai fallback local advisory database atau appsettings.
+
+4. Jalankan aplikasi tanpa argumen:
+
+   dotnet run
+
+5. Saat console menampilkan prompt berikut:
+
+   Please enter the folder path containing the .csproj files to audit:
+
+   Masukkan folder root yang berisi file .csproj, contoh:
+
+   D:\path\to\solution-or-project-folder
+
+6. Aplikasi akan:
+
+   - mencari semua file .csproj secara rekursif;
+   - membuat folder hasil baru di dalam audit-results, contoh audit-results\20261231 14-15-16;
+   - melewati project yang sudah memiliki checkpoint JSON di folder checkpoints milik run tersebut;
+   - memproses banyak project secara paralel;
+   - menjalankan Zero-Shot, retrieval ground truth, RAG-LLM, dan ekspor data CodeBERT;
+   - menyimpan report JSON dan Excel ke folder audit-results.
+
+7. Output utama:
+
+   audit-results\20261231 14-15-16\audit-rag-llm-<timestamp>.json
+   audit-results\20261231 14-15-16\audit-zero-shot-<timestamp>.json
+   audit-results\20261231 14-15-16\audit-codebert-<timestamp>.json
+   audit-results\20261231 14-15-16\audit-comprehensive-report-<timestamp>.xlsx
+   audit-results\20261231 14-15-16\api-diagnostics-<timestamp>.json
+   audit-results\20261231 14-15-16\console-execution-log-<timestamp>.json
+   audit-results\20261231 14-15-16\checkpoints\<project-key>.json
+
+Catatan:
+
+- Jalankan aplikasi tanpa argumen CLI.
+- Jika Gemini API gagal untuk sebuah skenario, status skenario menjadi API_FAILED.
+- API_FAILED tidak memakai ground truth sebagai prediksi pengganti dan tidak dihitung ke confusion matrix.
+- Untuk memproses ulang satu project di folder run yang sama, hapus checkpoint JSON project tersebut dari folder checkpoints.
+- Format folder memakai tanda hubung pada jam-menit-detik karena karakter ":" tidak valid untuk nama folder Windows.
