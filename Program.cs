@@ -14,7 +14,9 @@ public class Program
 {
     private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
     private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
-    private const string CheckpointSchemaVersion = "2026-06-26-version-range-v2";
+    private const string CodeBertPythonEnvironmentVariableName = "CODEBERT_PYTHON";
+    private const string CodeBertInferenceScriptName = "codebert_inference.py";
+    private const string CheckpointSchemaVersion = "2026-06-26-codebert-python-v3";
     private const int ProjectMaxDegreeOfParallelism = 4;
     private const int GeminiGlobalConcurrencyLimit = 4;
 
@@ -83,7 +85,7 @@ public class Program
             WriteLine($"Checkpoint directory: {checkpointDirectory}");
             WriteLine($"Existing checkpoint(s) loaded for resume: {completedCheckpointResults.Count}.");
             WriteLine($"Pending .csproj file(s) to process in this run: {pendingCsprojFiles.Count}.");
-            WriteLine("Starting parallel checkpointed evaluation: RAG-LLM, Zero-Shot, and CodeBERT dataset export.");
+            WriteLine("Starting parallel checkpointed evaluation: RAG-LLM, Zero-Shot, and CodeBERT Python inference.");
 
             var resultsByProjectPath = new ConcurrentDictionary<string, ProjectAuditResult>(StringComparer.OrdinalIgnoreCase);
             foreach (var checkpointResult in completedCheckpointResults)
@@ -190,6 +192,7 @@ public class Program
             WriteLine($"RAG-LLM JSON report: {artifactSet.RagJsonPath}");
             WriteLine($"Zero-Shot JSON report: {artifactSet.ZeroShotJsonPath}");
             WriteLine($"CodeBERT JSON report: {artifactSet.CodeBertJsonPath}");
+            WriteLine($"Comprehensive CSV report: {artifactSet.CsvReportPath}");
             WriteLine($"Comprehensive Excel report: {artifactSet.ExcelReportPath}");
             WriteLine($"Interactive HTML report: {artifactSet.HtmlReportPath}");
             WriteLine($"Gemini API diagnostics JSON: {artifactSet.ApiDiagnosticsJsonPath}");
@@ -462,14 +465,37 @@ public class Program
             result.Scenarios.Add(zeroShotResult);
             result.Scenarios.Add(ragResult);
 
+            try
+            {
+                result.CodeBertRecords = await codeBertTask;
+                result.Messages.Add($"CodeBERT records prepared: {result.CodeBertRecords.Count}.");
+
+                var codeBertResult = await RunCodeBertScenarioSafelyAsync(
+                    projectKey,
+                    result.CodeBertRecords,
+                    groundTruthLabels,
+                    outputDirectory,
+                    cancellationToken);
+                result.Scenarios.Add(codeBertResult);
+                result.CodeBertInputJsonPath = codeBertResult.InputJsonPath;
+                result.CodeBertPredictionJsonPath = codeBertResult.PredictionJsonPath;
+            }
+            catch (Exception ex)
+            {
+                result.Messages.Add($"CodeBERT dataset preparation failed: {ex.Message}");
+                result.Scenarios.Add(CreateFailedCodeBertScenario(ex.Message));
+            }
+
             foreach (var scenarioResult in result.Scenarios)
             {
                 if (scenarioResult.Response is null)
                 {
-                    scenarioResult.Status = "API_FAILED";
+                    scenarioResult.Status = scenarioResult.Scenario == AuditScenario.CodeBert ? "CODEBERT_FAILED" : "API_FAILED";
                     scenarioResult.ExcludedFromMetrics = true;
-                    scenarioResult.MetricExclusionReason = "Prediksi LLM tidak tersedia karena API gagal setelah retry. Skenario ini tidak dimasukkan ke confusion matrix untuk menjaga integritas evaluasi.";
-                    result.Messages.Add($"{scenarioResult.Scenario} marked API_FAILED and excluded from metrics. {scenarioResult.ErrorMessage}");
+                    scenarioResult.MetricExclusionReason = scenarioResult.Scenario == AuditScenario.CodeBert
+                        ? "Prediksi CodeBERT tidak tersedia karena Python inference gagal. Skenario ini tidak dimasukkan ke confusion matrix."
+                        : "Prediksi LLM tidak tersedia karena API gagal setelah retry. Tidak ada fallback ke Ground Truth.";
+                    result.Messages.Add($"{scenarioResult.Scenario} marked {scenarioResult.Status} and excluded from metrics. {scenarioResult.ErrorMessage}");
                     continue;
                 }
 
@@ -479,16 +505,6 @@ public class Program
                     groundTruthLabels);
 
                 scenarioResult.Metrics = metrics;
-            }
-
-            try
-            {
-                result.CodeBertRecords = await codeBertTask;
-                result.Messages.Add($"CodeBERT records prepared: {result.CodeBertRecords.Count}.");
-            }
-            catch (Exception ex)
-            {
-                result.Messages.Add($"CodeBERT dataset preparation failed: {ex.Message}");
             }
 
             result.Success = IsProjectFullySuccessfulForResume(result);
@@ -570,6 +586,152 @@ public class Program
         return result;
     }
 
+    private static async Task<ScenarioAuditResult> RunCodeBertScenarioSafelyAsync(
+        string projectKey,
+        IReadOnlyCollection<CodeBertDatasetRecord> records,
+        IReadOnlyCollection<GroundTruthLabel> groundTruthLabels,
+        string outputDirectory,
+        CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var result = new ScenarioAuditResult
+        {
+            Scenario = AuditScenario.CodeBert,
+            StartedAtUtc = DateTimeOffset.UtcNow
+        };
+
+        try
+        {
+            WriteLine($"[{projectKey}] [CodeBERT] Preparing Python inference input.");
+            var codeBertDirectory = Path.Combine(outputDirectory, "codebert");
+            Directory.CreateDirectory(codeBertDirectory);
+
+            var inputPath = Path.Combine(codeBertDirectory, $"{projectKey}-codebert-input.json");
+            var predictionPath = Path.Combine(codeBertDirectory, $"{projectKey}-codebert-predictions.json");
+            var input = new CodeBertInferenceInput
+            {
+                ProjectKey = projectKey,
+                GeneratedAtUtc = DateTimeOffset.UtcNow,
+                Records = records.ToList(),
+                GroundTruthLabels = groundTruthLabels.ToList()
+            };
+
+            File.WriteAllText(inputPath, JsonSerializer.Serialize(input, SerializerOptions), Encoding.UTF8);
+            result.InputJsonPath = inputPath;
+            result.PredictionJsonPath = predictionPath;
+
+            await ExecuteCodeBertPythonAsync(inputPath, predictionPath, cancellationToken);
+
+            var response = ModelEvaluator.LoadCodeBertPredictions(predictionPath);
+            result.Response = NormalizeResponse(
+                groundTruthLabels.Select(x => new NuGetPackageReference
+                {
+                    PackageName = x.PackageName,
+                    CurrentVersion = x.CurrentVersion
+                }).ToList(),
+                response);
+            result.Status = "SUCCESS";
+            result.ExcludedFromMetrics = false;
+            result.Success = true;
+            result.VulnerableCount = result.Response.VulnerabilityReports.Count(x => x.IsVulnerable);
+            WriteLine($"[{projectKey}] [CodeBERT] Finished. Vulnerable detections: {result.VulnerableCount}.");
+        }
+        catch (Exception ex)
+        {
+            result.Success = false;
+            result.Status = "CODEBERT_FAILED";
+            result.ExcludedFromMetrics = true;
+            result.MetricExclusionReason = "Prediksi CodeBERT tidak tersedia karena Python inference gagal.";
+            result.ErrorMessage = ex.Message;
+            WriteError($"[{projectKey}] [CodeBERT] Failed: {ex.Message}");
+        }
+        finally
+        {
+            stopwatch.Stop();
+            result.CompletedAtUtc = DateTimeOffset.UtcNow;
+            result.ElapsedSeconds = stopwatch.Elapsed.TotalSeconds;
+        }
+
+        return result;
+    }
+
+    private static ScenarioAuditResult CreateFailedCodeBertScenario(string message)
+    {
+        return new ScenarioAuditResult
+        {
+            Scenario = AuditScenario.CodeBert,
+            Status = "CODEBERT_FAILED",
+            Success = false,
+            ExcludedFromMetrics = true,
+            MetricExclusionReason = "Dataset CodeBERT gagal dibuat sehingga Python inference tidak dijalankan.",
+            ErrorMessage = message,
+            StartedAtUtc = DateTimeOffset.UtcNow,
+            CompletedAtUtc = DateTimeOffset.UtcNow
+        };
+    }
+
+    private static async Task ExecuteCodeBertPythonAsync(
+        string inputPath,
+        string outputPath,
+        CancellationToken cancellationToken)
+    {
+        var pythonExecutable = Environment.GetEnvironmentVariable(CodeBertPythonEnvironmentVariableName);
+        if (string.IsNullOrWhiteSpace(pythonExecutable))
+        {
+            pythonExecutable = "python";
+        }
+
+        var scriptPath = Path.Combine(GetApplicationRootDirectory(), CodeBertInferenceScriptName);
+        if (!File.Exists(scriptPath))
+        {
+            throw new FileNotFoundException("CodeBERT inference script was not found.", scriptPath);
+        }
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = pythonExecutable,
+            WorkingDirectory = GetApplicationRootDirectory(),
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add(scriptPath);
+        startInfo.ArgumentList.Add("--input");
+        startInfo.ArgumentList.Add(inputPath);
+        startInfo.ArgumentList.Add("--output");
+        startInfo.ArgumentList.Add(outputPath);
+
+        using var process = new Process { StartInfo = startInfo };
+        WriteLine($"[CodeBERT] Executing Python inference: {pythonExecutable} {CodeBertInferenceScriptName}");
+
+        if (!process.Start())
+        {
+            throw new InvalidOperationException("Failed to start CodeBERT Python process.");
+        }
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+
+        if (!string.IsNullOrWhiteSpace(stdout))
+        {
+            WriteLine($"[CodeBERT] stdout: {TruncateForDisplay(stdout, 1000)}");
+        }
+
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"CodeBERT Python process exited with code {process.ExitCode}. stderr: {TruncateForDisplay(stderr, 1000)}");
+        }
+
+        if (!File.Exists(outputPath))
+        {
+            throw new FileNotFoundException("CodeBERT Python process completed but prediction file was not created.", outputPath);
+        }
+    }
+
     private static async Task<GeminiResponse?> AnalyzeWithGeminiWithBatching(
         string apiKey,
         string modelName,
@@ -625,6 +787,7 @@ public class Program
 
         return new GeminiResponse
         {
+            ModelName = modelName,
             VulnerabilityReports = mergedReports
         };
     }
@@ -787,7 +950,13 @@ public class Program
                 return null;
             }
 
-            return JsonSerializer.Deserialize<GeminiResponse>(ExtractJsonPayload(json), SerializerOptions);
+            var parsed = JsonSerializer.Deserialize<GeminiResponse>(ExtractJsonPayload(json), SerializerOptions);
+            if (parsed is not null)
+            {
+                parsed.ModelName = modelName;
+            }
+
+            return parsed;
         }
         catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
@@ -1265,6 +1434,7 @@ Security reference data:
 
         return new GeminiResponse
         {
+            ModelName = geminiResponse?.ModelName ?? string.Empty,
             VulnerabilityReports = normalizedReports
         };
     }
@@ -1307,6 +1477,7 @@ Security reference data:
             RagJsonPath = Path.Combine(outputDirectory, $"audit-rag-llm-{timestamp}.json"),
             ZeroShotJsonPath = Path.Combine(outputDirectory, $"audit-zero-shot-{timestamp}.json"),
             CodeBertJsonPath = Path.Combine(outputDirectory, $"audit-codebert-{timestamp}.json"),
+            CsvReportPath = Path.Combine(outputDirectory, $"audit-comprehensive-metrics-{timestamp}.csv"),
             ExcelReportPath = Path.Combine(outputDirectory, $"audit-comprehensive-report-{timestamp}.xlsx"),
             HtmlReportPath = Path.Combine(outputDirectory, $"audit-interactive-report-{timestamp}.html"),
             ApiDiagnosticsJsonPath = Path.Combine(outputDirectory, $"api-diagnostics-{timestamp}.json"),
@@ -1420,6 +1591,7 @@ Security reference data:
         File.WriteAllText(artifactSet.ZeroShotJsonPath, JsonSerializer.Serialize(zeroShotReport, SerializerOptions), Encoding.UTF8);
         File.WriteAllText(artifactSet.CodeBertJsonPath, JsonSerializer.Serialize(codeBertReport, SerializerOptions), Encoding.UTF8);
         File.WriteAllText(artifactSet.ApiDiagnosticsJsonPath, JsonSerializer.Serialize(BuildApiDiagnosticsReport(rootFolder, modelName), SerializerOptions), Encoding.UTF8);
+        SaveComprehensiveCsvReport(artifactSet.CsvReportPath, results);
         SaveComprehensiveExcelReport(artifactSet.ExcelReportPath, rootFolder, modelName, results);
         SaveInteractiveHtmlReport(artifactSet.HtmlReportPath, rootFolder, modelName, results, artifactSet);
     }
@@ -1511,6 +1683,7 @@ Security reference data:
     {
         var rag = result.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.RagLlm);
         var zeroShot = result.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.ZeroShot);
+        var codeBert = result.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.CodeBert);
 
         if (result.PackageCount == 0 && result.Success && result.ErrorMessage.Length == 0)
         {
@@ -1521,7 +1694,8 @@ Security reference data:
                result.PackageCount >= 0 &&
                result.CodeBertRecords.Count > 0 &&
                rag is { Success: true, Response: not null } &&
-               zeroShot is { Success: true, Response: not null };
+               zeroShot is { Success: true, Response: not null } &&
+               codeBert is { Success: true, Response: not null };
     }
 
     private static ScenarioJsonReport BuildScenarioJsonReport(
@@ -1626,20 +1800,33 @@ Security reference data:
         IReadOnlyCollection<ProjectAuditResult> results)
     {
         var projectReports = results
-            .Select(project => new ProjectCodeBertJsonReport
+            .Select(project =>
             {
-                ProjectName = project.ProjectName,
-                ProjectKey = project.ProjectKey,
-                ProjectPath = project.ProjectPath,
-                PackageCount = project.PackageCount,
-                SecurityReferenceSource = project.SecurityReferenceSource,
-                TotalRecords = project.CodeBertRecords.Count,
-                TrainingCount = project.CodeBertRecords.Count(x => x.Split == "training"),
-                ValidationCount = project.CodeBertRecords.Count(x => x.Split == "validation"),
-                TestingCount = project.CodeBertRecords.Count(x => x.Split == "testing"),
-                EvaluationStatus = "DATASET_EXPORTED",
-                EvaluationNote = "No neural CodeBERT inference was executed in this run; train/import CodeBERT predictions to compute TP/TN/FP/FN.",
-                Records = project.CodeBertRecords
+                var codeBert = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.CodeBert);
+                return new ProjectCodeBertJsonReport
+                {
+                    ProjectName = project.ProjectName,
+                    ProjectKey = project.ProjectKey,
+                    ProjectPath = project.ProjectPath,
+                    PackageCount = project.PackageCount,
+                    SecurityReferenceSource = project.SecurityReferenceSource,
+                    TotalRecords = project.CodeBertRecords.Count,
+                    TrainingCount = project.CodeBertRecords.Count(x => x.Split == "training"),
+                    ValidationCount = project.CodeBertRecords.Count(x => x.Split == "validation"),
+                    TestingCount = project.CodeBertRecords.Count(x => x.Split == "testing"),
+                    EvaluationStatus = codeBert?.Status ?? "NOT_RUN",
+                    PredictionModelName = GetPredictionModelName(codeBert),
+                    InferenceMode = GetInferenceMode(codeBert),
+                    IsMockPrediction = IsMockCodeBertScenario(codeBert),
+                    EvaluationNote = codeBert?.Success == true
+                        ? GetCodeBertEvaluationNote(codeBert)
+                        : codeBert?.ErrorMessage ?? "CodeBERT inference was not executed.",
+                    InputJsonPath = project.CodeBertInputJsonPath,
+                    PredictionJsonPath = project.CodeBertPredictionJsonPath,
+                    Predictions = codeBert?.Response?.VulnerabilityReports ?? new List<VulnerabilityReport>(),
+                    Metrics = codeBert?.Metrics,
+                    Records = project.CodeBertRecords
+                };
             })
             .ToList();
 
@@ -1655,8 +1842,10 @@ Security reference data:
             TestingCount = projectReports.Sum(x => x.TestingCount),
             SplitStrategy = "70% training, 15% validation, 15% testing. For very small datasets, each split is preserved when possible.",
             AugmentationStrategy = "original, semantic_version_normalization, and safe_dummy_dependency records generated from parsed NuGet dependencies and ground-truth labels.",
-            EvaluationStatus = "DATASET_EXPORTED",
-            EvaluationNote = "This artifact is a labeled dataset baseline. It is ready for CodeBERT training/inference, but it is not itself a neural model prediction result.",
+            EvaluationStatus = projectReports.All(x => string.Equals(x.EvaluationStatus, "SUCCESS", StringComparison.OrdinalIgnoreCase))
+                ? "SUCCESS"
+                : "PARTIAL_OR_FAILED",
+            EvaluationNote = "CodeBERT metrics are produced by running codebert_inference.py and evaluating its prediction JSON with the same ModelEvaluator used by RAG-LLM and Zero-Shot. If PredictionModelName contains 'mock', treat the metrics as pipeline-validation only.",
             DatasetFieldDescriptions = GetCodeBertDatasetFieldDescriptions(),
             Projects = projectReports
         };
@@ -1687,6 +1876,99 @@ Security reference data:
         workbook.SaveAs(outputFilePath);
     }
 
+    private static string GetPredictionModelName(ScenarioAuditResult? scenario)
+    {
+        if (scenario is null)
+        {
+            return string.Empty;
+        }
+
+        return scenario.Response?.ModelName ?? string.Empty;
+    }
+
+    private static string GetInferenceMode(ScenarioAuditResult? scenario)
+    {
+        if (scenario is null)
+        {
+            return "NOT_RUN";
+        }
+
+        if (scenario.Scenario == AuditScenario.CodeBert)
+        {
+            return IsMockCodeBertScenario(scenario) ? "MOCK_PYTHON_BRIDGE" : "PYTHON_BRIDGE";
+        }
+
+        return "GEMINI_API";
+    }
+
+    private static bool IsMockCodeBertScenario(ScenarioAuditResult? scenario)
+    {
+        return scenario?.Scenario == AuditScenario.CodeBert &&
+               GetPredictionModelName(scenario).Contains("mock", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetMetricNote(ScenarioAuditResult? scenario)
+    {
+        if (scenario is null)
+        {
+            return "Scenario was not run.";
+        }
+
+        if (scenario.ExcludedFromMetrics)
+        {
+            return scenario.MetricExclusionReason;
+        }
+
+        if (IsMockCodeBertScenario(scenario))
+        {
+            return "Mock CodeBERT predictions. Use these metrics only to validate the reporting pipeline.";
+        }
+
+        return "Metrics calculated from model predictions and ground truth labels.";
+    }
+
+    private static string GetCodeBertEvaluationNote(ScenarioAuditResult? scenario)
+    {
+        return IsMockCodeBertScenario(scenario)
+            ? "Mock Python CodeBERT inference completed. Metrics validate the pipeline only; replace codebert_inference.py with real fine-tuned inference before using these as CodeBERT model quality."
+            : "Python CodeBERT inference completed and metrics were calculated with ModelEvaluator.";
+    }
+
+    private static void SaveComprehensiveCsvReport(string outputFilePath, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("ProjectName,ProjectKey,Scenario,Status,PredictionModelName,InferenceMode,MetricNote,Total,TP,TN,FP,FN,Accuracy,Precision,Recall,F1Score,FalsePositiveRatio");
+
+        foreach (var project in results.OrderBy(x => x.ProjectName, StringComparer.OrdinalIgnoreCase))
+        {
+            foreach (var scenario in project.Scenarios.OrderBy(x => GetScenarioDisplayName(x.Scenario), StringComparer.OrdinalIgnoreCase))
+            {
+                var metrics = scenario.Metrics;
+                builder.AppendLine(string.Join(
+                    ',',
+                    Csv(project.ProjectName),
+                    Csv(project.ProjectKey),
+                    Csv(GetScenarioDisplayName(scenario.Scenario)),
+                    Csv(scenario.Status),
+                    Csv(GetPredictionModelName(scenario)),
+                    Csv(GetInferenceMode(scenario)),
+                    Csv(GetMetricNote(scenario)),
+                    (metrics?.Total ?? 0).ToString(CultureInfo.InvariantCulture),
+                    (metrics?.TruePositive ?? 0).ToString(CultureInfo.InvariantCulture),
+                    (metrics?.TrueNegative ?? 0).ToString(CultureInfo.InvariantCulture),
+                    (metrics?.FalsePositive ?? 0).ToString(CultureInfo.InvariantCulture),
+                    (metrics?.FalseNegative ?? 0).ToString(CultureInfo.InvariantCulture),
+                    (metrics?.Accuracy ?? 0d).ToString(CultureInfo.InvariantCulture),
+                    (metrics?.Precision ?? 0d).ToString(CultureInfo.InvariantCulture),
+                    (metrics?.Recall ?? 0d).ToString(CultureInfo.InvariantCulture),
+                    (metrics?.F1Score ?? 0d).ToString(CultureInfo.InvariantCulture),
+                    (metrics?.FalsePositiveRatio ?? 0d).ToString(CultureInfo.InvariantCulture)));
+            }
+        }
+
+        File.WriteAllText(outputFilePath, builder.ToString(), Encoding.UTF8);
+    }
+
     private static void WriteRunSummarySheet(
         XLWorkbook workbook,
         string rootFolder,
@@ -1709,7 +1991,7 @@ Security reference data:
             ("IncompleteOrApiFailedProjects", results.Count(x => !IsProjectFullySuccessfulForResume(x)).ToString()),
             ("RagLlmProjectResults", results.Count(x => x.Scenarios.Any(s => s.Scenario == AuditScenario.RagLlm && s.Success)).ToString()),
             ("ZeroShotProjectResults", results.Count(x => x.Scenarios.Any(s => s.Scenario == AuditScenario.ZeroShot && s.Success)).ToString()),
-            ("CodeBertProjectResults", results.Count(x => x.CodeBertRecords.Count > 0 || x.PackageCount == 0).ToString()),
+            ("CodeBertProjectResults", results.Count(x => x.Scenarios.Any(s => s.Scenario == AuditScenario.CodeBert && s.Success)).ToString()),
             ("ApiFailedScenarioResults", results.SelectMany(x => x.Scenarios).Count(s => s.Status == "API_FAILED").ToString()),
             ("MetricExclusionPolicy", "Scenario with API_FAILED or missing LLM prediction is excluded from confusion matrix; no Ground Truth fallback is used."),
             ("GroundTruthPolicy", "A package is labeled vulnerable only when its current version satisfies the advisory vulnerable version range."),
@@ -1733,11 +2015,12 @@ Security reference data:
     private static void WriteModelComparisonSheet(XLWorkbook workbook, IReadOnlyCollection<ProjectAuditResult> results)
     {
         var sheet = workbook.Worksheets.Add("Model Comparison");
-        var headers = new[] { "Metric", "RAG-LLM", "Zero-Shot", "Delta (RAG-ZeroShot)", "Description" };
+        var headers = new[] { "Metric", "RAG-LLM", "Zero-Shot", "CodeBERT", "Delta (RAG-ZeroShot)", "Delta (RAG-CodeBERT)", "Description" };
         WriteHeaders(sheet, headers);
 
         var rag = AggregateScenarioMetrics(results, AuditScenario.RagLlm);
         var zeroShot = AggregateScenarioMetrics(results, AuditScenario.ZeroShot);
+        var codeBert = AggregateScenarioMetrics(results, AuditScenario.CodeBert);
         var rows = new List<(string Metric, double Rag, double ZeroShot, string Description)>
         {
             ("Accuracy", rag.Accuracy, zeroShot.Accuracy, "Proporsi seluruh prediksi package yang benar."),
@@ -1758,12 +2041,28 @@ Security reference data:
             sheet.Cell(row, 1).Value = rows[i].Metric;
             sheet.Cell(row, 2).Value = rows[i].Rag;
             sheet.Cell(row, 3).Value = rows[i].ZeroShot;
-            sheet.Cell(row, 4).Value = rows[i].Rag - rows[i].ZeroShot;
-            sheet.Cell(row, 5).Value = rows[i].Description;
+            var codeBertValue = rows[i].Metric switch
+            {
+                "Accuracy" => codeBert.Accuracy,
+                "Precision" => codeBert.Precision,
+                "Recall" => codeBert.Recall,
+                "F1Score" => codeBert.F1Score,
+                "FalsePositiveRatio" => codeBert.FalsePositiveRatio,
+                "TruePositive" => codeBert.TruePositive,
+                "TrueNegative" => codeBert.TrueNegative,
+                "FalsePositive" => codeBert.FalsePositive,
+                "FalseNegative" => codeBert.FalseNegative,
+                "Total" => codeBert.Total,
+                _ => 0d
+            };
+            sheet.Cell(row, 4).Value = codeBertValue;
+            sheet.Cell(row, 5).Value = rows[i].Rag - rows[i].ZeroShot;
+            sheet.Cell(row, 6).Value = rows[i].Rag - codeBertValue;
+            sheet.Cell(row, 7).Value = rows[i].Description;
         }
 
-        sheet.Range(2, 2, 6, 4).Style.NumberFormat.Format = "0.00%";
-        sheet.Column(5).Style.Alignment.WrapText = true;
+        sheet.Range(2, 2, 6, 6).Style.NumberFormat.Format = "0.00%";
+        sheet.Column(7).Style.Alignment.WrapText = true;
         FormatUsedRangeAsTable(sheet, headers.Length);
     }
 
@@ -1812,12 +2111,12 @@ Security reference data:
             ("Purpose", "Workbook ini merangkum audit dependency NuGet dari file .csproj. Tiga jalur yang dihasilkan adalah RAG-LLM, Zero-Shot, dan CodeBERT dataset export."),
             ("RAG-LLM", "LLM menerima package list plus security reference hasil retrieval. Gunakan sheet Scenario Metrics dan Finding Detail untuk membaca prediksi dan evaluasinya."),
             ("Zero-Shot", "LLM hanya menerima package list tanpa konteks advisory. Bandingkan dengan RAG-LLM untuk melihat efek retrieval."),
-            ("CodeBERT", "Bukan prediksi LLM di workbook ini. Sheet CodeBERT Dataset adalah dataset baseline untuk training/evaluasi model CodeBERT, memakai label ground truth."),
+            ("CodeBERT", "Dataset CodeBERT diekspor, lalu codebert_inference.py dijalankan melalui Python bridge. Jika PredictionModelName berisi mock-codebert, metriknya hanya validasi pipeline, bukan kualitas model fine-tuned."),
             ("Ground Truth Version Range", "Package hanya dianggap vulnerable jika CurrentVersion masuk VulnerableVersionRange. Ini mencegah package patched tetap dihitung sebagai vulnerable hanya karena namanya punya advisory."),
             ("Run Summary", "Ringkasan eksekusi: model, jumlah project, jumlah sukses/gagal, concurrency, dan jumlah record."),
             ("Method Comparison", "Tabel cepat untuk melihat status tiga metode per project: RAG-LLM, Zero-Shot, dan CodeBERT."),
             ("Project Status", "Status per project, termasuk status RAG, Zero-Shot, jumlah record CodeBERT, dan error jika ada."),
-            ("Scenario Metrics", "Confusion matrix dan metrik untuk RAG-LLM dan Zero-Shot. CodeBERT tidak muncul di sini karena belum melakukan inference."),
+            ("Scenario Metrics", "Confusion matrix dan metrik untuk RAG-LLM, Zero-Shot, dan CodeBERT."),
             ("Finding Detail", "Detail package-level: prediksi model, ground truth, CVE, severity, mitigasi, dan reasoning bilingual."),
             ("False Review", "Sheet False Positive Review dan False Negative Review memisahkan error prediksi agar mudah dianalisis."),
             ("Ground Truth", "Label pembanding dari GitHub API/local advisory/fallback. Ini dasar TP/TN/FP/FN."),
@@ -1825,7 +2124,7 @@ Security reference data:
             ("Retrieval Diagnostics", "Jejak sumber advisory yang dipakai untuk tiap project."),
             ("Field Descriptions", "Kamus field JSON dan Excel agar pembaca memahami arti setiap kolom temuan."),
             ("Metric Definitions", "Rumus Accuracy, Precision, Recall, F1, False Positive Ratio, dan confusion matrix."),
-            ("JSON Reports", "audit-rag-llm*.json dan audit-zero-shot*.json berisi report LLM; audit-codebert*.json berisi dataset baseline; api-diagnostics*.json berisi kesehatan API."),
+            ("JSON Reports", "audit-rag-llm*.json dan audit-zero-shot*.json berisi report LLM; audit-codebert*.json berisi dataset, prediksi CodeBERT bridge, metadata inference, dan metrik; api-diagnostics*.json berisi kesehatan API."),
             ("HTML Report", "audit-interactive-report*.html adalah ringkasan interaktif untuk dibuka di browser dan difilter tanpa membuka Excel.")
         };
 
@@ -1849,7 +2148,8 @@ Security reference data:
             "ProjectName", "ProjectKey", "PackageCount",
             "RagStatus", "RagAccuracy", "RagPrecision", "RagRecall", "RagF1",
             "ZeroShotStatus", "ZeroShotAccuracy", "ZeroShotPrecision", "ZeroShotRecall", "ZeroShotF1",
-            "CodeBertStatus", "CodeBertRecords", "CodeBertTraining", "CodeBertValidation", "CodeBertTesting", "CodeBertNote"
+            "CodeBertStatus", "CodeBertAccuracy", "CodeBertPrecision", "CodeBertRecall", "CodeBertF1",
+            "CodeBertPredictionModel", "CodeBertInferenceMode", "CodeBertRecords", "CodeBertTraining", "CodeBertValidation", "CodeBertTesting", "CodeBertPredictionJsonPath"
         };
         WriteHeaders(sheet, headers);
 
@@ -1858,6 +2158,7 @@ Security reference data:
         {
             var rag = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.RagLlm);
             var zeroShot = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.ZeroShot);
+            var codeBert = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.CodeBert);
             var codeBertRecords = project.CodeBertRecords;
 
             sheet.Cell(row, 1).Value = project.ProjectName;
@@ -1867,12 +2168,15 @@ Security reference data:
             WriteMetricCells(sheet, row, 5, rag?.Metrics);
             sheet.Cell(row, 9).Value = zeroShot?.Status ?? "NOT_RUN";
             WriteMetricCells(sheet, row, 10, zeroShot?.Metrics);
-            sheet.Cell(row, 14).Value = codeBertRecords.Count > 0 || project.PackageCount == 0 ? "EXPORTED" : "NOT_EXPORTED";
-            sheet.Cell(row, 15).Value = codeBertRecords.Count;
-            sheet.Cell(row, 16).Value = codeBertRecords.Count(x => x.Split == "training");
-            sheet.Cell(row, 17).Value = codeBertRecords.Count(x => x.Split == "validation");
-            sheet.Cell(row, 18).Value = codeBertRecords.Count(x => x.Split == "testing");
-            sheet.Cell(row, 19).Value = "Dataset exported. Import/train CodeBERT predictions to produce neural baseline metrics.";
+            sheet.Cell(row, 14).Value = codeBert?.Status ?? "NOT_RUN";
+            WriteMetricCells(sheet, row, 15, codeBert?.Metrics);
+            sheet.Cell(row, 19).Value = GetPredictionModelName(codeBert);
+            sheet.Cell(row, 20).Value = GetInferenceMode(codeBert);
+            sheet.Cell(row, 21).Value = codeBertRecords.Count;
+            sheet.Cell(row, 22).Value = codeBertRecords.Count(x => x.Split == "training");
+            sheet.Cell(row, 23).Value = codeBertRecords.Count(x => x.Split == "validation");
+            sheet.Cell(row, 24).Value = codeBertRecords.Count(x => x.Split == "testing");
+            sheet.Cell(row, 25).Value = project.CodeBertPredictionJsonPath;
             row++;
         }
 
@@ -1880,6 +2184,7 @@ Security reference data:
         {
             sheet.Range(2, 5, row - 1, 8).Style.NumberFormat.Format = "0.00%";
             sheet.Range(2, 10, row - 1, 13).Style.NumberFormat.Format = "0.00%";
+            sheet.Range(2, 15, row - 1, 18).Style.NumberFormat.Format = "0.00%";
         }
 
         FormatUsedRangeAsTable(sheet, headers.Length);
@@ -1910,7 +2215,8 @@ Security reference data:
             "ProjectName", "ProjectKey", "ProjectPath", "PackageCount", "Success", "SecurityReferenceSource",
             "RagStatus", "RagSuccess", "RagExcludedFromMetrics", "RagMetricExclusionReason",
             "ZeroShotStatus", "ZeroShotSuccess", "ZeroShotExcludedFromMetrics", "ZeroShotMetricExclusionReason",
-            "CodeBertRecords", "ElapsedSeconds", "ErrorMessage"
+            "CodeBertStatus", "CodeBertSuccess", "CodeBertExcludedFromMetrics", "CodeBertMetricExclusionReason",
+            "CodeBertPredictionModel", "CodeBertInferenceMode", "CodeBertRecords", "ElapsedSeconds", "ErrorMessage"
         };
         WriteHeaders(sheet, headers);
 
@@ -1925,6 +2231,7 @@ Security reference data:
             sheet.Cell(row, 6).Value = project.SecurityReferenceSource;
             var rag = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.RagLlm);
             var zeroShot = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.ZeroShot);
+            var codeBert = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.CodeBert);
             sheet.Cell(row, 7).Value = rag?.Status ?? "NOT_RUN";
             sheet.Cell(row, 8).Value = rag?.Success ?? false;
             sheet.Cell(row, 9).Value = rag?.ExcludedFromMetrics ?? true;
@@ -1933,9 +2240,15 @@ Security reference data:
             sheet.Cell(row, 12).Value = zeroShot?.Success ?? false;
             sheet.Cell(row, 13).Value = zeroShot?.ExcludedFromMetrics ?? true;
             sheet.Cell(row, 14).Value = zeroShot?.MetricExclusionReason ?? string.Empty;
-            sheet.Cell(row, 15).Value = project.CodeBertRecords.Count;
-            sheet.Cell(row, 16).Value = project.ElapsedSeconds;
-            sheet.Cell(row, 17).Value = project.ErrorMessage;
+            sheet.Cell(row, 15).Value = codeBert?.Status ?? "NOT_RUN";
+            sheet.Cell(row, 16).Value = codeBert?.Success ?? false;
+            sheet.Cell(row, 17).Value = codeBert?.ExcludedFromMetrics ?? true;
+            sheet.Cell(row, 18).Value = codeBert?.MetricExclusionReason ?? string.Empty;
+            sheet.Cell(row, 19).Value = GetPredictionModelName(codeBert);
+            sheet.Cell(row, 20).Value = GetInferenceMode(codeBert);
+            sheet.Cell(row, 21).Value = project.CodeBertRecords.Count;
+            sheet.Cell(row, 22).Value = project.ElapsedSeconds;
+            sheet.Cell(row, 23).Value = project.ErrorMessage;
             row++;
         }
 
@@ -1945,7 +2258,11 @@ Security reference data:
     private static void WriteScenarioMetricsSheet(XLWorkbook workbook, IReadOnlyCollection<ProjectAuditResult> results)
     {
         var sheet = workbook.Worksheets.Add("Scenario Metrics");
-        var headers = new[] { "ProjectName", "ProjectKey", "Scenario", "Total", "TP", "TN", "FP", "FN", "Accuracy", "Precision", "Recall", "F1Score", "FalsePositiveRatio" };
+        var headers = new[]
+        {
+            "ProjectName", "ProjectKey", "Scenario", "Status", "PredictionModelName", "InferenceMode", "MetricNote",
+            "Total", "TP", "TN", "FP", "FN", "Accuracy", "Precision", "Recall", "F1Score", "FalsePositiveRatio"
+        };
         WriteHeaders(sheet, headers);
 
         var row = 2;
@@ -1957,23 +2274,27 @@ Security reference data:
                 sheet.Cell(row, 1).Value = project.ProjectName;
                 sheet.Cell(row, 2).Value = project.ProjectKey;
                 sheet.Cell(row, 3).Value = GetScenarioDisplayName(scenario.Scenario);
-                sheet.Cell(row, 4).Value = metrics.Total;
-                sheet.Cell(row, 5).Value = metrics.TruePositive;
-                sheet.Cell(row, 6).Value = metrics.TrueNegative;
-                sheet.Cell(row, 7).Value = metrics.FalsePositive;
-                sheet.Cell(row, 8).Value = metrics.FalseNegative;
-                sheet.Cell(row, 9).Value = metrics.Accuracy;
-                sheet.Cell(row, 10).Value = metrics.Precision;
-                sheet.Cell(row, 11).Value = metrics.Recall;
-                sheet.Cell(row, 12).Value = metrics.F1Score;
-                sheet.Cell(row, 13).Value = metrics.FalsePositiveRatio;
+                sheet.Cell(row, 4).Value = scenario.Status;
+                sheet.Cell(row, 5).Value = GetPredictionModelName(scenario);
+                sheet.Cell(row, 6).Value = GetInferenceMode(scenario);
+                sheet.Cell(row, 7).Value = GetMetricNote(scenario);
+                sheet.Cell(row, 8).Value = metrics.Total;
+                sheet.Cell(row, 9).Value = metrics.TruePositive;
+                sheet.Cell(row, 10).Value = metrics.TrueNegative;
+                sheet.Cell(row, 11).Value = metrics.FalsePositive;
+                sheet.Cell(row, 12).Value = metrics.FalseNegative;
+                sheet.Cell(row, 13).Value = metrics.Accuracy;
+                sheet.Cell(row, 14).Value = metrics.Precision;
+                sheet.Cell(row, 15).Value = metrics.Recall;
+                sheet.Cell(row, 16).Value = metrics.F1Score;
+                sheet.Cell(row, 17).Value = metrics.FalsePositiveRatio;
                 row++;
             }
         }
 
         if (row > 2)
         {
-            sheet.Range(2, 9, row - 1, 13).Style.NumberFormat.Format = "0.00%";
+            sheet.Range(2, 13, row - 1, 17).Style.NumberFormat.Format = "0.00%";
         }
 
         FormatUsedRangeAsTable(sheet, headers.Length);
@@ -2173,21 +2494,47 @@ Security reference data:
     private static void WriteCodeBertEvaluationSheet(XLWorkbook workbook, IReadOnlyCollection<ProjectAuditResult> results)
     {
         var sheet = workbook.Worksheets.Add("CodeBERT Evaluation");
-        var headers = new[] { "ProjectName", "ProjectKey", "Status", "DatasetRecords", "Training", "Validation", "Testing", "Explanation" };
+        var headers = new[]
+        {
+            "ProjectName", "ProjectKey", "Status", "DatasetRecords", "Training", "Validation", "Testing",
+            "TP", "TN", "FP", "FN", "Accuracy", "Precision", "Recall", "F1Score",
+            "PredictionModelName", "InferenceMode", "InputJsonPath", "PredictionJsonPath", "Explanation"
+        };
         WriteHeaders(sheet, headers);
 
         var row = 2;
         foreach (var project in results)
         {
+            var codeBert = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.CodeBert);
+            var metrics = codeBert?.Metrics;
             sheet.Cell(row, 1).Value = project.ProjectName;
             sheet.Cell(row, 2).Value = project.ProjectKey;
-            sheet.Cell(row, 3).Value = project.CodeBertRecords.Count > 0 || project.PackageCount == 0 ? "DATASET_EXPORTED" : "NOT_EXPORTED";
+            sheet.Cell(row, 3).Value = codeBert?.Status ?? "NOT_RUN";
             sheet.Cell(row, 4).Value = project.CodeBertRecords.Count;
             sheet.Cell(row, 5).Value = project.CodeBertRecords.Count(x => x.Split == "training");
             sheet.Cell(row, 6).Value = project.CodeBertRecords.Count(x => x.Split == "validation");
             sheet.Cell(row, 7).Value = project.CodeBertRecords.Count(x => x.Split == "testing");
-            sheet.Cell(row, 8).Value = "Neural CodeBERT metrics require training/inference output. This sheet prevents treating dataset export as model prediction.";
+            sheet.Cell(row, 8).Value = metrics?.TruePositive ?? 0;
+            sheet.Cell(row, 9).Value = metrics?.TrueNegative ?? 0;
+            sheet.Cell(row, 10).Value = metrics?.FalsePositive ?? 0;
+            sheet.Cell(row, 11).Value = metrics?.FalseNegative ?? 0;
+            sheet.Cell(row, 12).Value = metrics?.Accuracy ?? 0d;
+            sheet.Cell(row, 13).Value = metrics?.Precision ?? 0d;
+            sheet.Cell(row, 14).Value = metrics?.Recall ?? 0d;
+            sheet.Cell(row, 15).Value = metrics?.F1Score ?? 0d;
+            sheet.Cell(row, 16).Value = GetPredictionModelName(codeBert);
+            sheet.Cell(row, 17).Value = GetInferenceMode(codeBert);
+            sheet.Cell(row, 18).Value = project.CodeBertInputJsonPath;
+            sheet.Cell(row, 19).Value = project.CodeBertPredictionJsonPath;
+            sheet.Cell(row, 20).Value = codeBert?.Success == true
+                ? GetCodeBertEvaluationNote(codeBert)
+                : codeBert?.ErrorMessage ?? "CodeBERT inference was not executed.";
             row++;
+        }
+
+        if (row > 2)
+        {
+            sheet.Range(2, 12, row - 1, 15).Style.NumberFormat.Format = "0.00%";
         }
 
         FormatUsedRangeAsTable(sheet, headers.Length);
@@ -2272,103 +2619,287 @@ Security reference data:
     {
         var ragResults = results.SelectMany(p => p.Scenarios.Where(s => s.Scenario == AuditScenario.RagLlm).Select(s => (Project: p, Scenario: s))).ToList();
         var zeroShotResults = results.SelectMany(p => p.Scenarios.Where(s => s.Scenario == AuditScenario.ZeroShot).Select(s => (Project: p, Scenario: s))).ToList();
+        var codeBertResults = results.SelectMany(p => p.Scenarios.Where(s => s.Scenario == AuditScenario.CodeBert).Select(s => (Project: p, Scenario: s))).ToList();
         var allFindings = results
             .SelectMany(project => project.Scenarios.SelectMany(scenario =>
                 scenario.Response?.VulnerabilityReports.Select(report => (Project: project, Scenario: scenario, Report: report))
                 ?? Enumerable.Empty<(ProjectAuditResult Project, ScenarioAuditResult Scenario, VulnerabilityReport Report)>()))
             .ToList();
+        var allMetricRecords = results
+            .SelectMany(project => project.Scenarios.SelectMany(scenario =>
+                scenario.Metrics?.Records.Select(record => (Project: project, Scenario: scenario, Record: record))
+                ?? Enumerable.Empty<(ProjectAuditResult Project, ScenarioAuditResult Scenario, EvaluationRecord Record)>()))
+            .ToList();
+        var vulnerableTruthCount = results.Sum(x => x.GroundTruthLabels.Count(g => g.IsVulnerable));
+        var falsePositiveCount = allMetricRecords.Count(x => x.Record.MatchResult == "False Positive");
+        var falseNegativeCount = allMetricRecords.Count(x => x.Record.MatchResult == "False Negative");
 
         var builder = new StringBuilder();
         builder.AppendLine("<!doctype html>");
         builder.AppendLine("<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-        builder.AppendLine("<title>GeminiNuGetAuditor Interactive Report</title>");
+        builder.AppendLine("<title>GeminiNuGetAuditor Interactive Audit Report / Laporan Audit Interaktif</title>");
         builder.AppendLine("""
 <style>
-:root{--bg:#f6f8fb;--panel:#ffffff;--ink:#172033;--muted:#657089;--line:#dbe3ef;--brand:#1d4ed8;--brand2:#0f766e;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+:root{--bg:#f5f7fb;--panel:#ffffff;--ink:#172033;--muted:#657089;--line:#dbe3ef;--brand:#1d4ed8;--brand2:#0f766e;--bert:#7c3aed;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:Segoe UI,Roboto,Arial,sans-serif;line-height:1.45}
-header{background:linear-gradient(135deg,#0f172a,#1d4ed8 55%,#0f766e);color:white;padding:34px 42px}
-header h1{margin:0 0 8px;font-size:30px;letter-spacing:0} header p{margin:0;color:#dbeafe;max-width:980px}
+header{background:linear-gradient(135deg,#0f172a,#1d4ed8 58%,#0f766e);color:white;padding:34px 42px}
+header h1{margin:0 0 8px;font-size:30px;letter-spacing:0} header p{margin:0;color:#dbeafe;max-width:1100px}.hero-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.hero-meta span{border:1px solid rgba(255,255,255,.26);background:rgba(255,255,255,.1);border-radius:999px;padding:6px 10px;font-size:12px}
 main{padding:24px 42px 48px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
-.metric .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.metric .value{font-size:28px;font-weight:700;margin-top:4px}
-section{margin-top:18px}.section-title{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:24px 0 10px}h2{font-size:20px;margin:0}.hint{color:var(--muted);font-size:13px}
+.metric .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.metric .value{font-size:28px;font-weight:700;margin-top:4px}.metric .sub{color:var(--muted);font-size:12px;margin-top:4px}
+section{margin-top:18px}.section-title{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:24px 0 10px}h2{font-size:20px;margin:0}.hint{color:var(--muted);font-size:13px}.mono{font-family:Consolas,Menlo,monospace}.id{color:var(--brand2);font-style:italic;font-weight:650}.id-block{display:block;color:var(--brand2);font-style:italic;font-weight:550;margin-top:2px}.id-soft{color:#0f766e;font-style:italic}
 table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:13px}th{background:#eef4ff;color:#24324b;position:sticky;top:0;z-index:1}tr:hover td{background:#f8fbff}
 .pill{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:12px;font-weight:600}.good{background:#dcfce7;color:var(--good)}.bad{background:#fee2e2;color:var(--bad)}.warn{background:#fef3c7;color:var(--warn)}.neutral{background:#e5e7eb;color:#374151}
-.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar input{min-width:280px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:white}.tabs{display:flex;gap:8px;flex-wrap:wrap}.tab{border:1px solid var(--line);background:white;border-radius:999px;padding:8px 12px;cursor:pointer}.tab.active{background:var(--brand);color:white;border-color:var(--brand)}
-.panel{display:none}.panel.active{display:block}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.files a{display:block;color:var(--brand);text-decoration:none;margin:6px 0}.files a:hover{text-decoration:underline}
-@media(max-width:980px){main,header{padding-left:18px;padding-right:18px}.grid,.two{grid-template-columns:1fr}.toolbar input{min-width:100%;width:100%}}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#eef4ff;border:1px solid var(--line);border-radius:8px;padding:10px}.toolbar input,.toolbar select{min-width:190px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:white}.toolbar input{min-width:300px}.toolbar label{font-size:13px;color:#24324b;display:flex;gap:6px;align-items:center}.toolbar button{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:white;cursor:pointer}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.tab{border:1px solid var(--line);background:white;border-radius:999px;padding:8px 12px;cursor:pointer}.tab.active{background:var(--brand);color:white;border-color:var(--brand)}.tab.active .id{color:#dbeafe}
+.panel{display:none}.panel.active{display:block}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.files a{display:block;color:var(--brand);text-decoration:none;margin:6px 0}.files a:hover{text-decoration:underline}
+.summary-card{border-left:4px solid var(--brand)}.summary-card.codebert{border-left-color:var(--bert)}.summary-card.zero{border-left-color:var(--brand2)}.score{font-size:22px;font-weight:700}.bar-label{display:flex;justify-content:space-between;gap:8px;margin-top:8px}.bar-track{height:12px;background:#e5e7eb;border-radius:999px;overflow:hidden}.bar-fill{height:12px}.detail{max-width:520px}.row-hidden{display:none!important}
+details{background:#f8fbff;border:1px solid var(--line);border-radius:8px;padding:10px}summary{cursor:pointer;font-weight:600}
+@media(max-width:1100px){main,header{padding-left:18px;padding-right:18px}.grid,.two,.three{grid-template-columns:1fr}.toolbar input,.toolbar select{min-width:100%;width:100%}}
 </style>
 """);
         builder.AppendLine("</head><body>");
         builder.AppendLine("<header>");
-        builder.AppendLine("<h1>GeminiNuGetAuditor Interactive Report</h1>");
-        builder.AppendLine($"<p>Audit root: {Html(rootFolder)} &nbsp; | &nbsp; Model: <strong>{Html(modelName)}</strong> &nbsp; | &nbsp; Generated: {Html(DateTimeOffset.UtcNow.ToString("O"))}</p>");
+        builder.AppendLine("<h1>GeminiNuGetAuditor Interactive Audit Report</h1>");
+        builder.AppendLine("<p class=\"id-block\" style=\"color:#dbeafe\">Laporan Audit Interaktif GeminiNuGetAuditor</p>");
+        builder.AppendLine($"<p>Audit root <span class=\"id\">Folder audit</span>: {Html(rootFolder)} &nbsp; | &nbsp; Model <span class=\"id\">Model</span>: <strong>{Html(modelName)}</strong> &nbsp; | &nbsp; Generated <span class=\"id\">Dibuat</span>: {Html(DateTimeOffset.UtcNow.ToString("O"))}</p>");
+        builder.AppendLine("<div class=\"hero-meta\">");
+        builder.AppendLine($"<span>{results.Count} project(s) <span class=\"id\">proyek</span></span><span>{results.Sum(x => x.PackageCount)} package(s) <span class=\"id\">paket</span></span><span>{vulnerableTruthCount} ground-truth vulnerable <span class=\"id\">rentan menurut ground truth</span></span><span>{results.SelectMany(x => x.Scenarios).Count(x => x.Status == "API_FAILED")} API failed scenario(s) <span class=\"id\">skenario API gagal</span></span>");
+        builder.AppendLine("</div>");
         builder.AppendLine("</header><main>");
 
         builder.AppendLine("<section class=\"grid\">");
-        AppendMetricCard(builder, "Projects", results.Count.ToString(CultureInfo.InvariantCulture));
-        AppendMetricCard(builder, "Successful", results.Count(IsProjectFullySuccessfulForResume).ToString(CultureInfo.InvariantCulture));
-        AppendMetricCard(builder, "RAG Findings", ragResults.Sum(x => x.Scenario.Response?.VulnerabilityReports.Count(r => r.IsVulnerable) ?? 0).ToString(CultureInfo.InvariantCulture));
-        AppendMetricCard(builder, "Zero-Shot Findings", zeroShotResults.Sum(x => x.Scenario.Response?.VulnerabilityReports.Count(r => r.IsVulnerable) ?? 0).ToString(CultureInfo.InvariantCulture));
-        AppendMetricCard(builder, "CodeBERT Records", results.Sum(x => x.CodeBertRecords.Count).ToString(CultureInfo.InvariantCulture));
-        AppendMetricCard(builder, "API Failed Scenarios", results.SelectMany(x => x.Scenarios).Count(x => x.Status == "API_FAILED").ToString(CultureInfo.InvariantCulture));
-        AppendMetricCard(builder, "Packages", results.Sum(x => x.PackageCount).ToString(CultureInfo.InvariantCulture));
-        AppendMetricCard(builder, "Ground Truth Vulnerable", results.Sum(x => x.GroundTruthLabels.Count(g => g.IsVulnerable)).ToString(CultureInfo.InvariantCulture));
+        AppendMetricCard(builder, "Projects", "Proyek", results.Count.ToString(CultureInfo.InvariantCulture), $"{results.Count(IsProjectFullySuccessfulForResume)} complete", $"{results.Count(IsProjectFullySuccessfulForResume)} selesai");
+        AppendMetricCard(builder, "Packages", "Paket", results.Sum(x => x.PackageCount).ToString(CultureInfo.InvariantCulture), $"{vulnerableTruthCount} vulnerable by ground truth", $"{vulnerableTruthCount} rentan menurut ground truth");
+        AppendMetricCard(builder, "RAG Findings", "Temuan RAG", ragResults.Sum(x => x.Scenario.Response?.VulnerabilityReports.Count(r => r.IsVulnerable) ?? 0).ToString(CultureInfo.InvariantCulture), "grounded Gemini scenario", "skenario Gemini dengan konteks");
+        AppendMetricCard(builder, "Zero-Shot Findings", "Temuan Zero-Shot", zeroShotResults.Sum(x => x.Scenario.Response?.VulnerabilityReports.Count(r => r.IsVulnerable) ?? 0).ToString(CultureInfo.InvariantCulture), "no retrieval context", "tanpa konteks retrieval");
+        AppendMetricCard(builder, "CodeBERT Findings", "Temuan CodeBERT", codeBertResults.Sum(x => x.Scenario.Response?.VulnerabilityReports.Count(r => r.IsVulnerable) ?? 0).ToString(CultureInfo.InvariantCulture), $"{results.Sum(x => x.CodeBertRecords.Count)} dataset records", $"{results.Sum(x => x.CodeBertRecords.Count)} record dataset");
+        AppendMetricCard(builder, "False Positives", "Positif Palsu", falsePositiveCount.ToString(CultureInfo.InvariantCulture), "all evaluated scenarios", "semua skenario");
+        AppendMetricCard(builder, "False Negatives", "Negatif Palsu", falseNegativeCount.ToString(CultureInfo.InvariantCulture), "all evaluated scenarios", "semua skenario");
+        AppendMetricCard(builder, "API Failed", "API Gagal", results.SelectMany(x => x.Scenarios).Count(x => x.Status == "API_FAILED").ToString(CultureInfo.InvariantCulture), "Gemini scenario failures", "kegagalan skenario Gemini");
         builder.AppendLine("</section>");
 
         builder.AppendLine("""
 <section class="card">
-<div class="section-title"><h2>How to read this report</h2><span class="hint">Three outputs are produced: two LLM audit scenarios and one CodeBERT dataset baseline.</span></div>
+<div class="section-title"><h2>How to read<span class="id-block">Cara membaca</span></h2><span class="hint">Two LLM audit scenarios and one CodeBERT bridge scenario.<span class="id-block">Dua skenario audit LLM dan satu skenario bridge CodeBERT.</span></span></div>
 <div class="two">
-<div><strong>RAG-LLM</strong><p>Gemini receives package references plus retrieved security context. Use this as the grounded LLM scenario.</p></div>
-<div><strong>Zero-Shot</strong><p>Gemini receives only package references. Compare it with RAG-LLM to measure the effect of retrieval.</p></div>
-<div><strong>CodeBERT</strong><p>This run exports labeled dataset rows for a CodeBERT baseline. It is not an LLM prediction table, so it does not appear in the LLM confusion matrix.</p></div>
-<div><strong>Ground Truth</strong><p>Labels are built from GitHub GraphQL/local advisory/fallback references and drive TP/TN/FP/FN.</p></div>
+<div><strong>RAG-LLM</strong><p>Gemini receives package references plus retrieved security context.<span class="id-block">Gemini menerima daftar package plus konteks keamanan hasil retrieval.</span></p></div>
+<div><strong>Zero-Shot</strong><p>Gemini receives only package references.<span class="id-block">Gemini hanya menerima daftar package tanpa konteks advisory.</span></p></div>
+<div><strong>CodeBERT</strong><p>The app exports labeled rows, executes codebert_inference.py, and evaluates predictions with the same confusion matrix. If model is mock-codebert, metrics validate the pipeline only.<span class="id-block">Aplikasi mengekspor dataset berlabel, menjalankan codebert_inference.py, lalu mengevaluasi prediksi dengan confusion matrix yang sama. Jika model mock-codebert, metrik hanya validasi pipeline.</span></p></div>
+<div><strong>Ground Truth<span class="id-block">Label Acuan</span></strong><p>Labels come from GitHub GraphQL/local advisory/fallback references and drive TP/TN/FP/FN.<span class="id-block">Label berasal dari referensi GitHub GraphQL/advisory lokal/fallback dan menjadi dasar TP/TN/FP/FN.</span></p></div>
 </div>
 </section>
 """);
 
-        AppendComparisonChart(builder, results);
+        AppendExecutiveSummary(builder, results);
 
-        builder.AppendLine("<section><div class=\"section-title\"><h2>Interactive Tables</h2><div class=\"toolbar\"><input id=\"q\" placeholder=\"Search project, package, CVE, severity...\"><div class=\"tabs\"><button class=\"tab active\" data-tab=\"projects\">Projects</button><button class=\"tab\" data-tab=\"findings\">Findings</button><button class=\"tab\" data-tab=\"errors\">Errors</button><button class=\"tab\" data-tab=\"artifacts\">Artifacts</button></div></div></div>");
-        builder.AppendLine("<div id=\"projects\" class=\"panel active\">");
+        builder.AppendLine("<section><div class=\"section-title\"><h2>Interactive Dashboard<span class=\"id-block\">Dashboard Interaktif</span></h2><span class=\"hint\">Search and filter without opening Excel.<span class=\"id-block\">Cari dan filter tanpa membuka Excel.</span></span></div>");
+        builder.AppendLine("""
+<div class="toolbar">
+<input id="q" placeholder="Search / Cari project, package, CVE, severity, mitigation...">
+<select id="scenarioFilter"><option value="">All scenarios - Semua skenario</option><option>RAG-LLM</option><option>Zero-Shot</option><option>CodeBERT</option></select>
+<select id="statusFilter"><option value="">All statuses - Semua status</option><option>SUCCESS</option><option>VULNERABLE</option><option>SAFE</option><option>False Positive</option><option>False Negative</option><option>GROUNDED</option><option>UNGROUNDED</option></select>
+<label><input type="checkbox" id="vulnerableOnly"> Vulnerable only <span class="id">Hanya rentan</span></label>
+<button id="clearFilters" type="button">Clear <span class="id">Bersihkan</span></button>
+</div>
+<div class="tabs">
+<button class="tab active" data-tab="overview">Overview <span class="id">Ringkasan</span></button>
+<button class="tab" data-tab="projects">Projects <span class="id">Proyek</span></button>
+<button class="tab" data-tab="findings">Findings <span class="id">Temuan</span></button>
+<button class="tab" data-tab="errors">Error Review <span class="id">Ulasan Error</span></button>
+<button class="tab" data-tab="groundtruth">Ground Truth <span class="id">Label Acuan</span></button>
+<button class="tab" data-tab="artifacts">Artifacts <span class="id">Artefak</span></button>
+</div>
+""");
+        builder.AppendLine("<div id=\"overview\" class=\"panel active\">");
+        AppendScenarioSummaryCards(builder, results);
+        AppendComparisonChart(builder, results);
+        AppendConfusionMatrixTable(builder, results);
+        AppendHotspotTable(builder, allFindings, allMetricRecords);
+        builder.AppendLine("</div><div id=\"projects\" class=\"panel\">");
         AppendProjectTable(builder, results);
         builder.AppendLine("</div><div id=\"findings\" class=\"panel\">");
         AppendFindingTable(builder, allFindings);
         builder.AppendLine("</div><div id=\"errors\" class=\"panel\">");
         AppendErrorReviewTable(builder, results);
+        builder.AppendLine("</div><div id=\"groundtruth\" class=\"panel\">");
+        AppendGroundTruthTable(builder, results);
         builder.AppendLine("</div><div id=\"artifacts\" class=\"panel card files\">");
         AppendArtifactLinks(builder, artifactSet);
         builder.AppendLine("</div></section>");
         builder.AppendLine("""
 <script>
-const tabs=[...document.querySelectorAll('.tab')],panels=[...document.querySelectorAll('.panel')],q=document.getElementById('q');
+const tabs=[...document.querySelectorAll('.tab')],panels=[...document.querySelectorAll('.panel')],q=document.getElementById('q'),scenarioFilter=document.getElementById('scenarioFilter'),statusFilter=document.getElementById('statusFilter'),vulnerableOnly=document.getElementById('vulnerableOnly'),clearFilters=document.getElementById('clearFilters');
 tabs.forEach(t=>t.addEventListener('click',()=>{tabs.forEach(x=>x.classList.remove('active'));panels.forEach(p=>p.classList.remove('active'));t.classList.add('active');document.getElementById(t.dataset.tab).classList.add('active');filter()}));
-q.addEventListener('input',filter);
-function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.panel.active tbody tr').forEach(r=>{r.style.display=r.innerText.toLowerCase().includes(term)?'':'none'})}
+[q,scenarioFilter,statusFilter,vulnerableOnly].forEach(x=>x.addEventListener('input',filter));
+clearFilters.addEventListener('click',()=>{q.value='';scenarioFilter.value='';statusFilter.value='';vulnerableOnly.checked=false;filter()});
+function filter(){
+ const term=q.value.toLowerCase(), scenario=scenarioFilter.value, status=statusFilter.value;
+ document.querySelectorAll('.panel.active tbody tr').forEach(r=>{
+  const text=r.innerText.toLowerCase(), rowScenario=r.dataset.scenario||'', rowStatus=r.dataset.status||'', rowVuln=r.dataset.vulnerable||'';
+  const okText=!term||text.includes(term), okScenario=!scenario||rowScenario===scenario||rowScenario==='All', okStatus=!status||rowStatus.includes(status), okVuln=!vulnerableOnly.checked||rowVuln==='true';
+  r.classList.toggle('row-hidden',!(okText&&okScenario&&okStatus&&okVuln));
+ });
+}
 </script>
 """);
         builder.AppendLine("</main></body></html>");
         File.WriteAllText(outputFilePath, builder.ToString(), Encoding.UTF8);
     }
 
-    private static void AppendMetricCard(StringBuilder builder, string label, string value)
+    private static void AppendMetricCard(StringBuilder builder, string labelEnglish, string labelIndonesia, string value, string subtitleEnglish, string subtitleIndonesia)
     {
-        builder.AppendLine($"<div class=\"card metric\"><div class=\"label\">{Html(label)}</div><div class=\"value\">{Html(value)}</div></div>");
+        builder.AppendLine($"<div class=\"card metric\"><div class=\"label\">{Html(labelEnglish)}<span class=\"id-block\">{Html(labelIndonesia)}</span></div><div class=\"value\">{Html(value)}</div><div class=\"sub\">{Html(subtitleEnglish)}<span class=\"id-block\">{Html(subtitleIndonesia)}</span></div></div>");
+    }
+
+    private static void AppendExecutiveSummary(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var scenarioMetrics = new[]
+        {
+            (Scenario: AuditScenario.RagLlm, Metrics: AggregateScenarioMetrics(results, AuditScenario.RagLlm)),
+            (Scenario: AuditScenario.ZeroShot, Metrics: AggregateScenarioMetrics(results, AuditScenario.ZeroShot)),
+            (Scenario: AuditScenario.CodeBert, Metrics: AggregateScenarioMetrics(results, AuditScenario.CodeBert))
+        };
+        var best = scenarioMetrics.OrderByDescending(x => x.Metrics.F1Score).First();
+        var apiFailed = results.SelectMany(x => x.Scenarios).Count(x => x.Status == "API_FAILED");
+        var codeBertScenario = results.SelectMany(x => x.Scenarios).FirstOrDefault(x => x.Scenario == AuditScenario.CodeBert);
+        var hasMockCodeBert = IsMockCodeBertScenario(codeBertScenario);
+
+        builder.AppendLine("<section class=\"card\">");
+        builder.AppendLine("<div class=\"section-title\"><h2>Executive Summary<span class=\"id-block\">Ringkasan Eksekutif</span></h2><span class=\"hint\">Generated automatically from this run.<span class=\"id-block\">Dibuat otomatis dari hasil run ini.</span></span></div>");
+        builder.AppendLine("<div class=\"three\">");
+        builder.AppendLine("<div><strong>Best F1<span class=\"id-block\">F1 Terbaik</span></strong>");
+        builder.AppendLine($"<p>{Html(GetScenarioDisplayName(best.Scenario))}: {best.Metrics.F1Score:P1}. Accuracy <span class=\"id\">Akurasi</span> {best.Metrics.Accuracy:P1}, Recall {best.Metrics.Recall:P1}.</p></div>");
+        builder.AppendLine("<div><strong>Execution Health<span class=\"id-block\">Kesehatan Eksekusi</span></strong>");
+        builder.AppendLine($"<p>{results.Count(IsProjectFullySuccessfulForResume)} / {results.Count} project complete. API failed scenarios: {apiFailed}.<span class=\"id-block\">{results.Count(IsProjectFullySuccessfulForResume)} / {results.Count} proyek selesai. Skenario API gagal: {apiFailed}.</span></p></div>");
+        builder.AppendLine("<div><strong>CodeBERT Status<span class=\"id-block\">Status CodeBERT</span></strong>");
+        builder.AppendLine(hasMockCodeBert
+            ? "<p>CodeBERT uses mock-codebert. Metrics validate the bridge and report pipeline only.<span class=\"id-block\">CodeBERT memakai mock-codebert. Metrik hanya memvalidasi bridge dan pipeline laporan.</span></p>"
+            : "<p>CodeBERT prediction file was evaluated as a Python bridge output.<span class=\"id-block\">File prediksi CodeBERT dievaluasi sebagai output Python bridge.</span></p>");
+        builder.AppendLine("</div></div>");
+
+        if (results.Count < 1000)
+        {
+            builder.AppendLine($"<p class=\"hint\">Dataset scope note: this run contains {results.Count} project file(s), so use it as a sample validation run before the full 1,000-file audit.<span class=\"id-block\">Catatan cakupan dataset: run ini berisi {results.Count} file project, sehingga cocok sebagai validasi sample sebelum audit penuh 1.000 file.</span></p>");
+        }
+
+        builder.AppendLine("</section>");
+    }
+
+    private static void AppendScenarioSummaryCards(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var scenarios = new[]
+        {
+            AuditScenario.RagLlm,
+            AuditScenario.ZeroShot,
+            AuditScenario.CodeBert
+        };
+
+        builder.AppendLine("<section><div class=\"section-title\"><h2>Scenario Scorecards / Kartu Skor Skenario</h2><span class=\"hint\">Aggregate model quality and execution mode. / Ringkasan kualitas model dan mode eksekusi.</span></div><div class=\"three\">");
+        foreach (var scenario in scenarios)
+        {
+            var metrics = AggregateScenarioMetrics(results, scenario);
+            var scenarioResults = results.SelectMany(x => x.Scenarios.Where(s => s.Scenario == scenario)).ToList();
+            var firstScenario = scenarioResults.FirstOrDefault();
+            var className = scenario switch
+            {
+                AuditScenario.ZeroShot => "summary-card zero",
+                AuditScenario.CodeBert => "summary-card codebert",
+                _ => "summary-card"
+            };
+
+            builder.AppendLine($"<div class=\"card {className}\">");
+            builder.AppendLine($"<div class=\"label\">{Html(GetScenarioDisplayName(scenario))}</div>");
+            builder.AppendLine($"<div class=\"score\">F1 {metrics.F1Score:P1}</div>");
+            builder.AppendLine($"<div class=\"hint\">Accuracy/Akurasi {metrics.Accuracy:P1} | Precision/Presisi {metrics.Precision:P1} | Recall {metrics.Recall:P1}</div>");
+            builder.AppendLine($"<div style=\"margin-top:10px\">{StatusPill(scenarioResults.All(x => x.Status == "SUCCESS") ? "SUCCESS" : "PARTIAL")}</div>");
+            builder.AppendLine($"<p class=\"hint\">Mode / Mode: {Html(GetInferenceMode(firstScenario))}<br>Model / Model: {Html(GetPredictionModelName(firstScenario))}<br>Total evaluated / Total dievaluasi: {metrics.Total}</p>");
+            builder.AppendLine("</div>");
+        }
+        builder.AppendLine("</div></section>");
+    }
+
+    private static void AppendConfusionMatrixTable(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        builder.AppendLine("<section><div class=\"section-title\"><h2>Confusion Matrix / Matriks Kebingungan</h2><span class=\"hint\">TP/TN/FP/FN aggregated per scenario. / TP/TN/FP/FN agregat per skenario.</span></div>");
+        builder.AppendLine("<table><thead><tr><th>Scenario / Skenario</th><th>Total</th><th>TP</th><th>TN</th><th>FP</th><th>FN</th><th>Accuracy / Akurasi</th><th>Precision / Presisi</th><th>Recall</th><th>F1</th><th>Note / Catatan</th></tr></thead><tbody>");
+        foreach (var scenario in new[] { AuditScenario.RagLlm, AuditScenario.ZeroShot, AuditScenario.CodeBert })
+        {
+            var metrics = AggregateScenarioMetrics(results, scenario);
+            var firstScenario = results.SelectMany(x => x.Scenarios).FirstOrDefault(x => x.Scenario == scenario);
+            builder.AppendLine($"<tr data-scenario=\"{Html(GetScenarioDisplayName(scenario))}\" data-status=\"{Html(firstScenario?.Status ?? "NOT_RUN")}\" data-vulnerable=\"false\">");
+            builder.AppendLine($"<td>{Html(GetScenarioDisplayName(scenario))}</td><td>{metrics.Total}</td><td>{metrics.TruePositive}</td><td>{metrics.TrueNegative}</td><td>{metrics.FalsePositive}</td><td>{metrics.FalseNegative}</td>");
+            builder.AppendLine($"<td>{metrics.Accuracy:P1}</td><td>{metrics.Precision:P1}</td><td>{metrics.Recall:P1}</td><td>{metrics.F1Score:P1}</td><td>{Html(GetMetricNote(firstScenario))}</td>");
+            builder.AppendLine("</tr>");
+        }
+        builder.AppendLine("</tbody></table></section>");
+    }
+
+    private static void AppendHotspotTable(
+        StringBuilder builder,
+        IReadOnlyCollection<(ProjectAuditResult Project, ScenarioAuditResult Scenario, VulnerabilityReport Report)> findings,
+        IReadOnlyCollection<(ProjectAuditResult Project, ScenarioAuditResult Scenario, EvaluationRecord Record)> metricRecords)
+    {
+        var vulnerableHotspots = findings
+            .Where(x => x.Report.IsVulnerable)
+            .GroupBy(x => x.Report.PackageName, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new
+            {
+                PackageName = x.Key,
+                Count = x.Count(),
+                Scenarios = string.Join(", ", x.Select(y => GetScenarioDisplayName(y.Scenario.Scenario)).Distinct().OrderBy(y => y)),
+                Versions = string.Join(", ", x.Select(y => y.Report.CurrentVersion).Where(y => !string.IsNullOrWhiteSpace(y)).Distinct().Take(4))
+            })
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.PackageName)
+            .Take(12)
+            .ToList();
+
+        var errorHotspots = metricRecords
+            .Where(x => x.Record.MatchResult is "False Positive" or "False Negative")
+            .GroupBy(x => x.Record.PackageName, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new
+            {
+                PackageName = x.Key,
+                Count = x.Count(),
+                Errors = string.Join(", ", x.Select(y => y.Record.MatchResult).Distinct().OrderBy(y => y)),
+                Scenarios = string.Join(", ", x.Select(y => GetScenarioDisplayName(y.Scenario.Scenario)).Distinct().OrderBy(y => y))
+            })
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.PackageName)
+            .Take(12)
+            .ToList();
+
+        builder.AppendLine("<section><div class=\"section-title\"><h2>Hotspots / Titik Perhatian</h2><span class=\"hint\">Packages most often flagged or misclassified. / Package yang paling sering ditandai atau salah klasifikasi.</span></div><div class=\"two\">");
+        builder.AppendLine("<div><h2>Vulnerable Findings / Temuan Rentan</h2><table><thead><tr><th>Package / Paket</th><th>Count / Jumlah</th><th>Scenarios / Skenario</th><th>Versions / Versi</th></tr></thead><tbody>");
+        foreach (var item in vulnerableHotspots)
+        {
+            builder.AppendLine($"<tr data-scenario=\"All\" data-status=\"VULNERABLE\" data-vulnerable=\"true\"><td>{Html(item.PackageName)}</td><td>{item.Count}</td><td>{Html(item.Scenarios)}</td><td>{Html(item.Versions)}</td></tr>");
+        }
+        builder.AppendLine("</tbody></table></div>");
+
+        builder.AppendLine("<div><h2>Error Hotspots / Titik Error</h2><table><thead><tr><th>Package / Paket</th><th>Error Count / Jumlah Error</th><th>Error Types / Jenis Error</th><th>Scenarios / Skenario</th></tr></thead><tbody>");
+        foreach (var item in errorHotspots)
+        {
+            builder.AppendLine($"<tr data-scenario=\"All\" data-status=\"{Html(item.Errors)}\" data-vulnerable=\"false\"><td>{Html(item.PackageName)}</td><td>{item.Count}</td><td>{Html(item.Errors)}</td><td>{Html(item.Scenarios)}</td></tr>");
+        }
+        builder.AppendLine("</tbody></table></div></div></section>");
     }
 
     private static void AppendProjectTable(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
     {
-        builder.AppendLine("<table><thead><tr><th>Project</th><th>Packages</th><th>RAG</th><th>Zero-Shot</th><th>CodeBERT</th><th>Reference</th><th>Elapsed</th></tr></thead><tbody>");
+        builder.AppendLine("<table><thead><tr><th>Project / Proyek</th><th>Packages / Paket</th><th>RAG</th><th>Zero-Shot</th><th>CodeBERT</th><th>Reference / Referensi</th><th>Elapsed / Durasi</th></tr></thead><tbody>");
         foreach (var project in results.OrderBy(x => x.ProjectName, StringComparer.OrdinalIgnoreCase))
         {
             var rag = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.RagLlm);
             var zero = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.ZeroShot);
-            builder.AppendLine("<tr>");
+            var codeBert = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.CodeBert);
+            var statuses = string.Join(" ", project.Scenarios.Select(x => x.Status));
+            builder.AppendLine($"<tr data-scenario=\"All\" data-status=\"{Html(statuses)}\" data-vulnerable=\"{project.GroundTruthLabels.Any(x => x.IsVulnerable).ToString().ToLowerInvariant()}\">");
             builder.AppendLine($"<td><strong>{Html(project.ProjectName)}</strong><br><span class=\"hint\">{Html(project.ProjectKey)}</span></td>");
             builder.AppendLine($"<td>{project.PackageCount}</td>");
             builder.AppendLine($"<td>{StatusPill(rag?.Status ?? "NOT_RUN")}<br>{MetricMini(rag?.Metrics)}</td>");
             builder.AppendLine($"<td>{StatusPill(zero?.Status ?? "NOT_RUN")}<br>{MetricMini(zero?.Metrics)}</td>");
-            builder.AppendLine($"<td>{StatusPill(project.CodeBertRecords.Count > 0 || project.PackageCount == 0 ? "EXPORTED" : "NOT_EXPORTED")}<br>{project.CodeBertRecords.Count} records</td>");
+            builder.AppendLine($"<td>{StatusPill(codeBert?.Status ?? "NOT_RUN")}<br>{MetricMini(codeBert?.Metrics)}<br>{Html(GetInferenceMode(codeBert))}<br><span class=\"hint\">{Html(GetPredictionModelName(codeBert))}</span><br>{project.CodeBertRecords.Count} records</td>");
             builder.AppendLine($"<td>{Html(project.SecurityReferenceSource)}</td>");
             builder.AppendLine($"<td>{project.ElapsedSeconds:0.0}s</td>");
             builder.AppendLine("</tr>");
@@ -2380,48 +2911,52 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
     {
         var rag = AggregateScenarioMetrics(results, AuditScenario.RagLlm);
         var zero = AggregateScenarioMetrics(results, AuditScenario.ZeroShot);
-        builder.AppendLine("<section class=\"card\"><div class=\"section-title\"><h2>RAG-LLM vs Zero-Shot</h2><span class=\"hint\">Aggregate metrics across all evaluated packages.</span></div>");
+        var codeBert = AggregateScenarioMetrics(results, AuditScenario.CodeBert);
+        builder.AppendLine("<section class=\"card\"><div class=\"section-title\"><h2>RAG-LLM vs Zero-Shot vs CodeBERT</h2><span class=\"hint\">Aggregate metrics across all evaluated packages. / Metrik agregat untuk semua package yang dievaluasi.</span></div>");
         builder.AppendLine("<div class=\"two\">");
-        AppendBarGroup(builder, "Accuracy", rag.Accuracy, zero.Accuracy);
-        AppendBarGroup(builder, "Precision", rag.Precision, zero.Precision);
-        AppendBarGroup(builder, "Recall", rag.Recall, zero.Recall);
-        AppendBarGroup(builder, "F1Score", rag.F1Score, zero.F1Score);
+        AppendBarGroup(builder, "Accuracy", rag.Accuracy, zero.Accuracy, codeBert.Accuracy);
+        AppendBarGroup(builder, "Precision", rag.Precision, zero.Precision, codeBert.Precision);
+        AppendBarGroup(builder, "Recall", rag.Recall, zero.Recall, codeBert.Recall);
+        AppendBarGroup(builder, "F1Score", rag.F1Score, zero.F1Score, codeBert.F1Score);
         builder.AppendLine("</div></section>");
     }
 
-    private static void AppendBarGroup(StringBuilder builder, string label, double rag, double zero)
+    private static void AppendBarGroup(StringBuilder builder, string label, double rag, double zero, double codeBert)
     {
         builder.AppendLine("<div>");
         builder.AppendLine($"<strong>{Html(label)}</strong>");
         AppendBar(builder, "RAG-LLM", rag, "#1d4ed8");
         AppendBar(builder, "Zero-Shot", zero, "#0f766e");
+        AppendBar(builder, "CodeBERT", codeBert, "#7c3aed");
         builder.AppendLine("</div>");
     }
 
     private static void AppendBar(StringBuilder builder, string label, double value, string color)
     {
         var pct = Math.Clamp(value, 0d, 1d) * 100d;
-        builder.AppendLine($"<div class=\"hint\" style=\"margin-top:8px\">{Html(label)} {pct:0.0}%</div>");
-        builder.AppendLine($"<div style=\"height:12px;background:#e5e7eb;border-radius:999px;overflow:hidden\"><div style=\"height:12px;width:{pct:0.##}%;background:{color}\"></div></div>");
+        builder.AppendLine($"<div class=\"hint bar-label\"><span>{Html(label)}</span><span>{pct:0.0}%</span></div>");
+        builder.AppendLine($"<div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:{pct:0.##}%;background:{color}\"></div></div>");
     }
 
     private static void AppendFindingTable(
         StringBuilder builder,
         IReadOnlyCollection<(ProjectAuditResult Project, ScenarioAuditResult Scenario, VulnerabilityReport Report)> findings)
     {
-        builder.AppendLine("<table><thead><tr><th>Project</th><th>Scenario</th><th>Package</th><th>Version</th><th>Vulnerable</th><th>CVE</th><th>Severity</th><th>Grounded</th><th>Mitigation</th></tr></thead><tbody>");
+        builder.AppendLine("<table><thead><tr><th>Project / Proyek</th><th>Scenario / Skenario</th><th>Package / Paket</th><th>Version / Versi</th><th>Vulnerable / Rentan</th><th>CVE</th><th>Severity / Tingkat</th><th>Grounded / Berbasis Referensi</th><th>Mitigation / Mitigasi</th></tr></thead><tbody>");
         foreach (var item in findings.OrderByDescending(x => x.Report.IsVulnerable).ThenBy(x => x.Project.ProjectName).ThenBy(x => x.Report.PackageName))
         {
-            builder.AppendLine("<tr>");
+            var scenarioName = GetScenarioDisplayName(item.Scenario.Scenario);
+            var status = item.Report.IsVulnerable ? "VULNERABLE" : "SAFE";
+            builder.AppendLine($"<tr data-scenario=\"{Html(scenarioName)}\" data-status=\"{Html(status)} {(item.Report.IsGroundedInReference ? "GROUNDED" : "UNGROUNDED")}\" data-vulnerable=\"{item.Report.IsVulnerable.ToString().ToLowerInvariant()}\">");
             builder.AppendLine($"<td>{Html(item.Project.ProjectName)}</td>");
-            builder.AppendLine($"<td>{Html(GetScenarioDisplayName(item.Scenario.Scenario))}</td>");
+            builder.AppendLine($"<td>{Html(scenarioName)}</td>");
             builder.AppendLine($"<td>{Html(item.Report.PackageName)}</td>");
             builder.AppendLine($"<td>{Html(item.Report.CurrentVersion)}</td>");
             builder.AppendLine($"<td>{StatusPill(item.Report.IsVulnerable ? "VULNERABLE" : "SAFE")}</td>");
             builder.AppendLine($"<td>{Html(item.Report.CVE_ID)}</td>");
             builder.AppendLine($"<td>{Html(item.Report.Severity)}</td>");
             builder.AppendLine($"<td>{StatusPill(item.Report.IsGroundedInReference ? "GROUNDED" : "UNGROUNDED")}</td>");
-            builder.AppendLine($"<td>{Html(TruncateForDisplay(item.Report.MitigationPlanIndonesia, 240))}</td>");
+            builder.AppendLine($"<td class=\"detail\"><details><summary>{Html(TruncateForDisplay(item.Report.MitigationPlanIndonesia, 120))}</summary><p>{Html(item.Report.MitigationPlanIndonesia)}</p><p class=\"hint\">{Html(item.Report.ReasoningTraceIndonesia)}</p></details></td>");
             builder.AppendLine("</tr>");
         }
         builder.AppendLine("</tbody></table>");
@@ -2429,7 +2964,7 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
 
     private static void AppendErrorReviewTable(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
     {
-        builder.AppendLine("<table><thead><tr><th>Project</th><th>Scenario</th><th>Package</th><th>Version</th><th>Error</th><th>CVE</th><th>Range</th><th>Version Evaluation</th><th>Review Hint</th></tr></thead><tbody>");
+        builder.AppendLine("<table><thead><tr><th>Project / Proyek</th><th>Scenario / Skenario</th><th>Package / Paket</th><th>Version / Versi</th><th>Error</th><th>CVE</th><th>Range / Rentang</th><th>Version Evaluation / Evaluasi Versi</th><th>Review Hint / Petunjuk Review</th></tr></thead><tbody>");
         foreach (var project in results)
         {
             var groundTruthLookup = project.GroundTruthLabels
@@ -2442,19 +2977,34 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
                 foreach (var record in scenario.Metrics!.Records.Where(x => x.MatchResult is "False Positive" or "False Negative"))
                 {
                     groundTruthLookup.TryGetValue(record.PackageName, out var groundTruth);
-                    builder.AppendLine("<tr>");
+                    var scenarioName = GetScenarioDisplayName(scenario.Scenario);
+                    builder.AppendLine($"<tr data-scenario=\"{Html(scenarioName)}\" data-status=\"{Html(record.MatchResult)}\" data-vulnerable=\"{record.PredictedVulnerable.ToString().ToLowerInvariant()}\">");
                     builder.AppendLine($"<td>{Html(project.ProjectName)}</td>");
-                    builder.AppendLine($"<td>{Html(GetScenarioDisplayName(scenario.Scenario))}</td>");
+                    builder.AppendLine($"<td>{Html(scenarioName)}</td>");
                     builder.AppendLine($"<td>{Html(record.PackageName)}</td>");
                     builder.AppendLine($"<td>{Html(record.CurrentVersion)}</td>");
                     builder.AppendLine($"<td>{StatusPill(record.MatchResult)}</td>");
                     builder.AppendLine($"<td>{Html(record.CVE_ID)}</td>");
                     builder.AppendLine($"<td>{Html(groundTruth?.VulnerableVersionRange)}</td>");
                     builder.AppendLine($"<td>{Html(groundTruth?.VersionRangeEvaluation)}</td>");
-                    builder.AppendLine($"<td>{Html(record.MatchResult == "False Positive" ? "Check hallucination or missing advisory range." : "Check conservative prompt/reference interpretation.")}</td>");
+                    builder.AppendLine($"<td>{Html(record.MatchResult == "False Positive" ? "Check hallucination or missing advisory range. / Cek kemungkinan halusinasi atau rentang advisory yang hilang." : "Check conservative prompt/reference interpretation. / Cek apakah prompt atau referensi terlalu konservatif.")}</td>");
                     builder.AppendLine("</tr>");
                 }
             }
+        }
+        builder.AppendLine("</tbody></table>");
+    }
+
+    private static void AppendGroundTruthTable(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        builder.AppendLine("<table><thead><tr><th>Project / Proyek</th><th>Package / Paket</th><th>Version / Versi</th><th>Ground Truth / Label Acuan</th><th>CVE</th><th>Severity / Tingkat</th><th>Advisory</th><th>Vulnerable Range / Rentang Rentan</th><th>Patched Version / Versi Patch</th><th>Version Evaluation / Evaluasi Versi</th></tr></thead><tbody>");
+        foreach (var item in results.SelectMany(project => project.GroundTruthLabels.Select(label => (Project: project, Label: label))).OrderByDescending(x => x.Label.IsVulnerable).ThenBy(x => x.Project.ProjectName).ThenBy(x => x.Label.PackageName))
+        {
+            var status = item.Label.IsVulnerable ? "VULNERABLE" : "SAFE";
+            builder.AppendLine($"<tr data-scenario=\"All\" data-status=\"{Html(status)}\" data-vulnerable=\"{item.Label.IsVulnerable.ToString().ToLowerInvariant()}\">");
+            builder.AppendLine($"<td>{Html(item.Project.ProjectName)}</td><td>{Html(item.Label.PackageName)}</td><td>{Html(item.Label.CurrentVersion)}</td><td>{StatusPill(status)}</td>");
+            builder.AppendLine($"<td>{Html(item.Label.CVE_ID)}</td><td>{Html(item.Label.Severity)}</td><td>{Html(item.Label.AdvisoryId)}</td><td>{Html(item.Label.VulnerableVersionRange)}</td><td>{Html(item.Label.FirstPatchedVersion)}</td><td>{Html(item.Label.VersionRangeEvaluation)}</td>");
+            builder.AppendLine("</tr>");
         }
         builder.AppendLine("</tbody></table>");
     }
@@ -2466,6 +3016,7 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
             ("RAG-LLM JSON", artifactSet.RagJsonPath),
             ("Zero-Shot JSON", artifactSet.ZeroShotJsonPath),
             ("CodeBERT JSON", artifactSet.CodeBertJsonPath),
+            ("Comprehensive Metrics CSV", artifactSet.CsvReportPath),
             ("Excel Workbook", artifactSet.ExcelReportPath),
             ("API Diagnostics JSON", artifactSet.ApiDiagnosticsJsonPath),
             ("Console Log JSON", artifactSet.ConsoleLogJsonPath)
@@ -2489,7 +3040,7 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
         var css = status switch
         {
             "SUCCESS" or "EXPORTED" or "SAFE" or "GROUNDED" => "good",
-            "API_FAILED" or "NOT_EXPORTED" or "VULNERABLE" or "False Positive" or "False Negative" => "bad",
+            "API_FAILED" or "CODEBERT_FAILED" or "NOT_EXPORTED" or "VULNERABLE" or "False Positive" or "False Negative" => "bad",
             "NOT_RUN" or "UNGROUNDED" => "warn",
             _ => "neutral"
         };
@@ -2499,6 +3050,14 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
     private static string Html(string? value)
     {
         return WebUtility.HtmlEncode(value ?? string.Empty);
+    }
+
+    private static string Csv(string? value)
+    {
+        var safe = value ?? string.Empty;
+        return safe.Contains(',') || safe.Contains('"') || safe.Contains('\n') || safe.Contains('\r')
+            ? $"\"{safe.Replace("\"", "\"\"", StringComparison.Ordinal)}\""
+            : safe;
     }
 
     private static void WriteHeaders(IXLWorksheet sheet, IReadOnlyList<string> headers)
@@ -2959,6 +3518,7 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
         public string RagJsonPath { get; set; } = string.Empty;
         public string ZeroShotJsonPath { get; set; } = string.Empty;
         public string CodeBertJsonPath { get; set; } = string.Empty;
+        public string CsvReportPath { get; set; } = string.Empty;
         public string ExcelReportPath { get; set; } = string.Empty;
         public string HtmlReportPath { get; set; } = string.Empty;
         public string ApiDiagnosticsJsonPath { get; set; } = string.Empty;
@@ -3099,6 +3659,7 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
         public string AugmentationStrategy { get; set; } = string.Empty;
         public string EvaluationStatus { get; set; } = string.Empty;
         public string EvaluationNote { get; set; } = string.Empty;
+        public string MockPredictionWarning { get; set; } = "If PredictionModelName contains 'mock', CodeBERT metrics are for pipeline validation only.";
         public Dictionary<string, string> DatasetFieldDescriptions { get; set; } = new();
         public List<ProjectCodeBertJsonReport> Projects { get; set; } = new();
     }
@@ -3115,7 +3676,14 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
         public int ValidationCount { get; set; }
         public int TestingCount { get; set; }
         public string EvaluationStatus { get; set; } = string.Empty;
+        public string PredictionModelName { get; set; } = string.Empty;
+        public string InferenceMode { get; set; } = string.Empty;
+        public bool IsMockPrediction { get; set; }
         public string EvaluationNote { get; set; } = string.Empty;
+        public string InputJsonPath { get; set; } = string.Empty;
+        public string PredictionJsonPath { get; set; } = string.Empty;
+        public List<VulnerabilityReport> Predictions { get; set; } = new();
+        public EvaluationMetrics? Metrics { get; set; }
         public List<CodeBertDatasetRecord> Records { get; set; } = new();
     }
 
@@ -3126,6 +3694,8 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
         public string ProjectPath { get; set; } = string.Empty;
         public string ModelName { get; set; } = string.Empty;
         public string CheckpointSchemaVersion { get; set; } = string.Empty;
+        public string CodeBertInputJsonPath { get; set; } = string.Empty;
+        public string CodeBertPredictionJsonPath { get; set; } = string.Empty;
         public int PackageCount { get; set; }
         public bool Success { get; set; }
         public string ErrorMessage { get; set; } = string.Empty;
@@ -3154,8 +3724,18 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
         public DateTimeOffset StartedAtUtc { get; set; }
         public DateTimeOffset CompletedAtUtc { get; set; }
         public double ElapsedSeconds { get; set; }
+        public string InputJsonPath { get; set; } = string.Empty;
+        public string PredictionJsonPath { get; set; } = string.Empty;
         public GeminiResponse? Response { get; set; }
         public EvaluationMetrics? Metrics { get; set; }
+    }
+
+    private sealed class CodeBertInferenceInput
+    {
+        public string ProjectKey { get; set; } = string.Empty;
+        public DateTimeOffset GeneratedAtUtc { get; set; }
+        public List<CodeBertDatasetRecord> Records { get; set; } = new();
+        public List<GroundTruthLabel> GroundTruthLabels { get; set; } = new();
     }
 
     private sealed class CapturingConsoleWriter : TextWriter

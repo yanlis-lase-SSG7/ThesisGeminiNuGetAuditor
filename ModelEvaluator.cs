@@ -1,9 +1,45 @@
 using ClosedXML.Excel;
+using System.Text.Json;
 
 namespace GeminiNuGetAuditor;
 
 public static class ModelEvaluator
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true
+    };
+
+    public static GeminiResponse LoadCodeBertPredictions(string predictionJsonPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(predictionJsonPath);
+
+        if (!File.Exists(predictionJsonPath))
+        {
+            throw new FileNotFoundException("CodeBERT prediction JSON was not found.", predictionJsonPath);
+        }
+
+        var json = File.ReadAllText(predictionJsonPath);
+        var response = JsonSerializer.Deserialize<GeminiResponse>(json, JsonOptions);
+
+        if (response?.VulnerabilityReports is not { Count: > 0 })
+        {
+            var reports = JsonSerializer.Deserialize<List<VulnerabilityReport>>(json, JsonOptions);
+            response = new GeminiResponse
+            {
+                VulnerabilityReports = reports ?? new List<VulnerabilityReport>()
+            };
+        }
+
+        if (response.VulnerabilityReports.Count == 0)
+        {
+            throw new InvalidOperationException("CodeBERT prediction JSON does not contain any VulnerabilityReports.");
+        }
+
+        return response;
+    }
+
     public static EvaluationMetrics Calculate(
         string scenario,
         IReadOnlyCollection<VulnerabilityReport> predictions,
