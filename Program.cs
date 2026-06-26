@@ -14,6 +14,7 @@ public class Program
 {
     private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
     private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
+    private const string CheckpointSchemaVersion = "2026-06-26-version-range-v2";
     private const int ProjectMaxDegreeOfParallelism = 4;
     private const int GeminiGlobalConcurrencyLimit = 4;
 
@@ -393,6 +394,7 @@ public class Program
             ProjectKey = projectKey,
             ProjectPath = csprojPath,
             ModelName = modelName,
+            CheckpointSchemaVersion = CheckpointSchemaVersion,
             StartedAtUtc = DateTimeOffset.UtcNow
         };
 
@@ -1483,6 +1485,7 @@ Security reference data:
     private static bool IsCheckpointModelCompatible(ProjectAuditResult result, string modelName)
     {
         return !string.IsNullOrWhiteSpace(result.ModelName) &&
+               string.Equals(result.CheckpointSchemaVersion, CheckpointSchemaVersion, StringComparison.OrdinalIgnoreCase) &&
                string.Equals(
                    NormalizeModelName(result.ModelName),
                    NormalizeModelName(modelName),
@@ -1634,6 +1637,8 @@ Security reference data:
                 TrainingCount = project.CodeBertRecords.Count(x => x.Split == "training"),
                 ValidationCount = project.CodeBertRecords.Count(x => x.Split == "validation"),
                 TestingCount = project.CodeBertRecords.Count(x => x.Split == "testing"),
+                EvaluationStatus = "DATASET_EXPORTED",
+                EvaluationNote = "No neural CodeBERT inference was executed in this run; train/import CodeBERT predictions to compute TP/TN/FP/FN.",
                 Records = project.CodeBertRecords
             })
             .ToList();
@@ -1650,6 +1655,8 @@ Security reference data:
             TestingCount = projectReports.Sum(x => x.TestingCount),
             SplitStrategy = "70% training, 15% validation, 15% testing. For very small datasets, each split is preserved when possible.",
             AugmentationStrategy = "original, semantic_version_normalization, and safe_dummy_dependency records generated from parsed NuGet dependencies and ground-truth labels.",
+            EvaluationStatus = "DATASET_EXPORTED",
+            EvaluationNote = "This artifact is a labeled dataset baseline. It is ready for CodeBERT training/inference, but it is not itself a neural model prediction result.",
             DatasetFieldDescriptions = GetCodeBertDatasetFieldDescriptions(),
             Projects = projectReports
         };
@@ -1669,8 +1676,11 @@ Security reference data:
         WriteProjectStatusSheet(workbook, results);
         WriteScenarioMetricsSheet(workbook, results);
         WriteFindingDetailSheet(workbook, results);
+        WriteFalseReviewSheet(workbook, results, "False Positive Review", "False Positive");
+        WriteFalseReviewSheet(workbook, results, "False Negative Review", "False Negative");
         WriteGroundTruthSheet(workbook, results);
         WriteCodeBertSheet(workbook, results);
+        WriteCodeBertEvaluationSheet(workbook, results);
         WriteRetrievalDiagnosticsSheet(workbook, results);
         WriteFieldDescriptionsSheet(workbook);
         WriteMetricDefinitionsSheet(workbook);
@@ -1702,7 +1712,9 @@ Security reference data:
             ("CodeBertProjectResults", results.Count(x => x.CodeBertRecords.Count > 0 || x.PackageCount == 0).ToString()),
             ("ApiFailedScenarioResults", results.SelectMany(x => x.Scenarios).Count(s => s.Status == "API_FAILED").ToString()),
             ("MetricExclusionPolicy", "Scenario with API_FAILED or missing LLM prediction is excluded from confusion matrix; no Ground Truth fallback is used."),
+            ("GroundTruthPolicy", "A package is labeled vulnerable only when its current version satisfies the advisory vulnerable version range."),
             ("CodeBertRecords", results.Sum(x => x.CodeBertRecords.Count).ToString()),
+            ("CodeBertEvaluationPolicy", "CodeBERT dataset rows are exported in this run. CodeBERT prediction metrics require a trained model or imported prediction file."),
             ("MetricRows", metrics.Count.ToString())
         };
 
@@ -1801,11 +1813,13 @@ Security reference data:
             ("RAG-LLM", "LLM menerima package list plus security reference hasil retrieval. Gunakan sheet Scenario Metrics dan Finding Detail untuk membaca prediksi dan evaluasinya."),
             ("Zero-Shot", "LLM hanya menerima package list tanpa konteks advisory. Bandingkan dengan RAG-LLM untuk melihat efek retrieval."),
             ("CodeBERT", "Bukan prediksi LLM di workbook ini. Sheet CodeBERT Dataset adalah dataset baseline untuk training/evaluasi model CodeBERT, memakai label ground truth."),
+            ("Ground Truth Version Range", "Package hanya dianggap vulnerable jika CurrentVersion masuk VulnerableVersionRange. Ini mencegah package patched tetap dihitung sebagai vulnerable hanya karena namanya punya advisory."),
             ("Run Summary", "Ringkasan eksekusi: model, jumlah project, jumlah sukses/gagal, concurrency, dan jumlah record."),
             ("Method Comparison", "Tabel cepat untuk melihat status tiga metode per project: RAG-LLM, Zero-Shot, dan CodeBERT."),
             ("Project Status", "Status per project, termasuk status RAG, Zero-Shot, jumlah record CodeBERT, dan error jika ada."),
             ("Scenario Metrics", "Confusion matrix dan metrik untuk RAG-LLM dan Zero-Shot. CodeBERT tidak muncul di sini karena belum melakukan inference."),
             ("Finding Detail", "Detail package-level: prediksi model, ground truth, CVE, severity, mitigasi, dan reasoning bilingual."),
+            ("False Review", "Sheet False Positive Review dan False Negative Review memisahkan error prediksi agar mudah dianalisis."),
             ("Ground Truth", "Label pembanding dari GitHub API/local advisory/fallback. Ini dasar TP/TN/FP/FN."),
             ("CodeBERT Dataset", "Record dataset yang diekspor: original, semantic_version_normalization, dan safe_dummy_dependency."),
             ("Retrieval Diagnostics", "Jejak sumber advisory yang dipakai untuk tiap project."),
@@ -1858,7 +1872,7 @@ Security reference data:
             sheet.Cell(row, 16).Value = codeBertRecords.Count(x => x.Split == "training");
             sheet.Cell(row, 17).Value = codeBertRecords.Count(x => x.Split == "validation");
             sheet.Cell(row, 18).Value = codeBertRecords.Count(x => x.Split == "testing");
-            sheet.Cell(row, 19).Value = "CodeBERT rows are dataset records, not LLM predictions in this run.";
+            sheet.Cell(row, 19).Value = "Dataset exported. Import/train CodeBERT predictions to produce neural baseline metrics.";
             row++;
         }
 
@@ -1973,7 +1987,8 @@ Security reference data:
             "ProjectName", "ProjectKey", "Scenario", "PackageName", "CurrentVersion", "PredictedVulnerable",
             "GroundTruthVulnerable", "MatchResult", "CVE_ID", "Severity", "SeverityIndonesia", "Grounded",
             "MitigationPlan", "MitigationPlanIndonesia", "ReasoningTrace", "ReasoningTraceIndonesia",
-            "GroundTruthSeverity", "GroundTruthAdvisoryId", "GroundTruthVulnerableRange", "GroundTruthFirstPatchedVersion", "GroundTruthReferenceUrl"
+            "GroundTruthSeverity", "GroundTruthAdvisoryId", "GroundTruthVulnerableRange", "GroundTruthFirstPatchedVersion",
+            "GroundTruthReferenceUrl", "GroundTruthVersionRangeMatched", "GroundTruthVersionRangeEvaluation"
         };
         WriteHeaders(sheet, headers);
 
@@ -2017,6 +2032,64 @@ Security reference data:
                     sheet.Cell(row, 19).Value = groundTruth?.VulnerableVersionRange ?? string.Empty;
                     sheet.Cell(row, 20).Value = groundTruth?.FirstPatchedVersion ?? string.Empty;
                     sheet.Cell(row, 21).Value = groundTruth?.ReferenceUrl ?? string.Empty;
+                    sheet.Cell(row, 22).Value = groundTruth?.IsVersionRangeMatched ?? false;
+                    sheet.Cell(row, 23).Value = groundTruth?.VersionRangeEvaluation ?? string.Empty;
+                    row++;
+                }
+            }
+        }
+
+        FormatUsedRangeAsTable(sheet, headers.Length);
+    }
+
+    private static void WriteFalseReviewSheet(
+        XLWorkbook workbook,
+        IReadOnlyCollection<ProjectAuditResult> results,
+        string sheetName,
+        string matchResult)
+    {
+        var sheet = workbook.Worksheets.Add(sheetName);
+        var headers = new[]
+        {
+            "ProjectName", "ProjectKey", "Scenario", "PackageName", "CurrentVersion", "MatchResult",
+            "PredictedVulnerable", "GroundTruthVulnerable", "CVE_ID", "Severity", "Grounded",
+            "GroundTruthAdvisoryId", "GroundTruthVulnerableRange", "GroundTruthFirstPatchedVersion",
+            "GroundTruthReferenceUrl", "VersionRangeEvaluation", "SuggestedReview"
+        };
+        WriteHeaders(sheet, headers);
+
+        var row = 2;
+        foreach (var project in results)
+        {
+            var groundTruthLookup = project.GroundTruthLabels
+                .Where(x => !string.IsNullOrWhiteSpace(x.PackageName))
+                .GroupBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var scenario in project.Scenarios.Where(x => x.Metrics is not null))
+            {
+                foreach (var record in scenario.Metrics!.Records.Where(x => x.MatchResult == matchResult))
+                {
+                    groundTruthLookup.TryGetValue(record.PackageName, out var groundTruth);
+                    sheet.Cell(row, 1).Value = project.ProjectName;
+                    sheet.Cell(row, 2).Value = project.ProjectKey;
+                    sheet.Cell(row, 3).Value = GetScenarioDisplayName(scenario.Scenario);
+                    sheet.Cell(row, 4).Value = record.PackageName;
+                    sheet.Cell(row, 5).Value = record.CurrentVersion;
+                    sheet.Cell(row, 6).Value = record.MatchResult;
+                    sheet.Cell(row, 7).Value = record.PredictedVulnerable;
+                    sheet.Cell(row, 8).Value = record.GroundTruthVulnerable;
+                    sheet.Cell(row, 9).Value = record.CVE_ID;
+                    sheet.Cell(row, 10).Value = record.Severity;
+                    sheet.Cell(row, 11).Value = record.IsGroundedInReference;
+                    sheet.Cell(row, 12).Value = groundTruth?.AdvisoryId ?? string.Empty;
+                    sheet.Cell(row, 13).Value = groundTruth?.VulnerableVersionRange ?? string.Empty;
+                    sheet.Cell(row, 14).Value = groundTruth?.FirstPatchedVersion ?? string.Empty;
+                    sheet.Cell(row, 15).Value = groundTruth?.ReferenceUrl ?? string.Empty;
+                    sheet.Cell(row, 16).Value = groundTruth?.VersionRangeEvaluation ?? string.Empty;
+                    sheet.Cell(row, 17).Value = matchResult == "False Positive"
+                        ? "Check whether LLM hallucinated an advisory or ground truth range is missing."
+                        : "Check whether prompt/reference context made the model too conservative.";
                     row++;
                 }
             }
@@ -2067,7 +2140,8 @@ Security reference data:
         var headers = new[]
         {
             "ProjectName", "ProjectKey", "PackageName", "CurrentVersion", "IsVulnerable",
-            "CVE_ID", "Severity", "AdvisoryId", "VulnerableVersionRange", "FirstPatchedVersion", "ReferenceUrl"
+            "CVE_ID", "Severity", "AdvisoryId", "VulnerableVersionRange", "FirstPatchedVersion", "ReferenceUrl",
+            "IsVersionRangeMatched", "VersionRangeEvaluation"
         };
         WriteHeaders(sheet, headers);
 
@@ -2087,8 +2161,33 @@ Security reference data:
                 sheet.Cell(row, 9).Value = label.VulnerableVersionRange;
                 sheet.Cell(row, 10).Value = label.FirstPatchedVersion;
                 sheet.Cell(row, 11).Value = label.ReferenceUrl;
+                sheet.Cell(row, 12).Value = label.IsVersionRangeMatched;
+                sheet.Cell(row, 13).Value = label.VersionRangeEvaluation;
                 row++;
             }
+        }
+
+        FormatUsedRangeAsTable(sheet, headers.Length);
+    }
+
+    private static void WriteCodeBertEvaluationSheet(XLWorkbook workbook, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var sheet = workbook.Worksheets.Add("CodeBERT Evaluation");
+        var headers = new[] { "ProjectName", "ProjectKey", "Status", "DatasetRecords", "Training", "Validation", "Testing", "Explanation" };
+        WriteHeaders(sheet, headers);
+
+        var row = 2;
+        foreach (var project in results)
+        {
+            sheet.Cell(row, 1).Value = project.ProjectName;
+            sheet.Cell(row, 2).Value = project.ProjectKey;
+            sheet.Cell(row, 3).Value = project.CodeBertRecords.Count > 0 || project.PackageCount == 0 ? "DATASET_EXPORTED" : "NOT_EXPORTED";
+            sheet.Cell(row, 4).Value = project.CodeBertRecords.Count;
+            sheet.Cell(row, 5).Value = project.CodeBertRecords.Count(x => x.Split == "training");
+            sheet.Cell(row, 6).Value = project.CodeBertRecords.Count(x => x.Split == "validation");
+            sheet.Cell(row, 7).Value = project.CodeBertRecords.Count(x => x.Split == "testing");
+            sheet.Cell(row, 8).Value = "Neural CodeBERT metrics require training/inference output. This sheet prevents treating dataset export as model prediction.";
+            row++;
         }
 
         FormatUsedRangeAsTable(sheet, headers.Length);
@@ -2228,11 +2327,15 @@ table{width:100%;border-collapse:collapse;background:var(--panel);border:1px sol
 </section>
 """);
 
-        builder.AppendLine("<section><div class=\"section-title\"><h2>Interactive Tables</h2><div class=\"toolbar\"><input id=\"q\" placeholder=\"Search project, package, CVE, severity...\"><div class=\"tabs\"><button class=\"tab active\" data-tab=\"projects\">Projects</button><button class=\"tab\" data-tab=\"findings\">Findings</button><button class=\"tab\" data-tab=\"artifacts\">Artifacts</button></div></div></div>");
+        AppendComparisonChart(builder, results);
+
+        builder.AppendLine("<section><div class=\"section-title\"><h2>Interactive Tables</h2><div class=\"toolbar\"><input id=\"q\" placeholder=\"Search project, package, CVE, severity...\"><div class=\"tabs\"><button class=\"tab active\" data-tab=\"projects\">Projects</button><button class=\"tab\" data-tab=\"findings\">Findings</button><button class=\"tab\" data-tab=\"errors\">Errors</button><button class=\"tab\" data-tab=\"artifacts\">Artifacts</button></div></div></div>");
         builder.AppendLine("<div id=\"projects\" class=\"panel active\">");
         AppendProjectTable(builder, results);
         builder.AppendLine("</div><div id=\"findings\" class=\"panel\">");
         AppendFindingTable(builder, allFindings);
+        builder.AppendLine("</div><div id=\"errors\" class=\"panel\">");
+        AppendErrorReviewTable(builder, results);
         builder.AppendLine("</div><div id=\"artifacts\" class=\"panel card files\">");
         AppendArtifactLinks(builder, artifactSet);
         builder.AppendLine("</div></section>");
@@ -2273,6 +2376,35 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
         builder.AppendLine("</tbody></table>");
     }
 
+    private static void AppendComparisonChart(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var rag = AggregateScenarioMetrics(results, AuditScenario.RagLlm);
+        var zero = AggregateScenarioMetrics(results, AuditScenario.ZeroShot);
+        builder.AppendLine("<section class=\"card\"><div class=\"section-title\"><h2>RAG-LLM vs Zero-Shot</h2><span class=\"hint\">Aggregate metrics across all evaluated packages.</span></div>");
+        builder.AppendLine("<div class=\"two\">");
+        AppendBarGroup(builder, "Accuracy", rag.Accuracy, zero.Accuracy);
+        AppendBarGroup(builder, "Precision", rag.Precision, zero.Precision);
+        AppendBarGroup(builder, "Recall", rag.Recall, zero.Recall);
+        AppendBarGroup(builder, "F1Score", rag.F1Score, zero.F1Score);
+        builder.AppendLine("</div></section>");
+    }
+
+    private static void AppendBarGroup(StringBuilder builder, string label, double rag, double zero)
+    {
+        builder.AppendLine("<div>");
+        builder.AppendLine($"<strong>{Html(label)}</strong>");
+        AppendBar(builder, "RAG-LLM", rag, "#1d4ed8");
+        AppendBar(builder, "Zero-Shot", zero, "#0f766e");
+        builder.AppendLine("</div>");
+    }
+
+    private static void AppendBar(StringBuilder builder, string label, double value, string color)
+    {
+        var pct = Math.Clamp(value, 0d, 1d) * 100d;
+        builder.AppendLine($"<div class=\"hint\" style=\"margin-top:8px\">{Html(label)} {pct:0.0}%</div>");
+        builder.AppendLine($"<div style=\"height:12px;background:#e5e7eb;border-radius:999px;overflow:hidden\"><div style=\"height:12px;width:{pct:0.##}%;background:{color}\"></div></div>");
+    }
+
     private static void AppendFindingTable(
         StringBuilder builder,
         IReadOnlyCollection<(ProjectAuditResult Project, ScenarioAuditResult Scenario, VulnerabilityReport Report)> findings)
@@ -2291,6 +2423,38 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
             builder.AppendLine($"<td>{StatusPill(item.Report.IsGroundedInReference ? "GROUNDED" : "UNGROUNDED")}</td>");
             builder.AppendLine($"<td>{Html(TruncateForDisplay(item.Report.MitigationPlanIndonesia, 240))}</td>");
             builder.AppendLine("</tr>");
+        }
+        builder.AppendLine("</tbody></table>");
+    }
+
+    private static void AppendErrorReviewTable(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        builder.AppendLine("<table><thead><tr><th>Project</th><th>Scenario</th><th>Package</th><th>Version</th><th>Error</th><th>CVE</th><th>Range</th><th>Version Evaluation</th><th>Review Hint</th></tr></thead><tbody>");
+        foreach (var project in results)
+        {
+            var groundTruthLookup = project.GroundTruthLabels
+                .Where(x => !string.IsNullOrWhiteSpace(x.PackageName))
+                .GroupBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var scenario in project.Scenarios.Where(x => x.Metrics is not null))
+            {
+                foreach (var record in scenario.Metrics!.Records.Where(x => x.MatchResult is "False Positive" or "False Negative"))
+                {
+                    groundTruthLookup.TryGetValue(record.PackageName, out var groundTruth);
+                    builder.AppendLine("<tr>");
+                    builder.AppendLine($"<td>{Html(project.ProjectName)}</td>");
+                    builder.AppendLine($"<td>{Html(GetScenarioDisplayName(scenario.Scenario))}</td>");
+                    builder.AppendLine($"<td>{Html(record.PackageName)}</td>");
+                    builder.AppendLine($"<td>{Html(record.CurrentVersion)}</td>");
+                    builder.AppendLine($"<td>{StatusPill(record.MatchResult)}</td>");
+                    builder.AppendLine($"<td>{Html(record.CVE_ID)}</td>");
+                    builder.AppendLine($"<td>{Html(groundTruth?.VulnerableVersionRange)}</td>");
+                    builder.AppendLine($"<td>{Html(groundTruth?.VersionRangeEvaluation)}</td>");
+                    builder.AppendLine($"<td>{Html(record.MatchResult == "False Positive" ? "Check hallucination or missing advisory range." : "Check conservative prompt/reference interpretation.")}</td>");
+                    builder.AppendLine("</tr>");
+                }
+            }
         }
         builder.AppendLine("</tbody></table>");
     }
@@ -2325,7 +2489,7 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
         var css = status switch
         {
             "SUCCESS" or "EXPORTED" or "SAFE" or "GROUNDED" => "good",
-            "API_FAILED" or "NOT_EXPORTED" or "VULNERABLE" => "bad",
+            "API_FAILED" or "NOT_EXPORTED" or "VULNERABLE" or "False Positive" or "False Negative" => "bad",
             "NOT_RUN" or "UNGROUNDED" => "warn",
             _ => "neutral"
         };
@@ -2933,6 +3097,8 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
         public int TestingCount { get; set; }
         public string SplitStrategy { get; set; } = string.Empty;
         public string AugmentationStrategy { get; set; } = string.Empty;
+        public string EvaluationStatus { get; set; } = string.Empty;
+        public string EvaluationNote { get; set; } = string.Empty;
         public Dictionary<string, string> DatasetFieldDescriptions { get; set; } = new();
         public List<ProjectCodeBertJsonReport> Projects { get; set; } = new();
     }
@@ -2948,6 +3114,8 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
         public int TrainingCount { get; set; }
         public int ValidationCount { get; set; }
         public int TestingCount { get; set; }
+        public string EvaluationStatus { get; set; } = string.Empty;
+        public string EvaluationNote { get; set; } = string.Empty;
         public List<CodeBertDatasetRecord> Records { get; set; } = new();
     }
 
@@ -2957,6 +3125,7 @@ function filter(){const term=q.value.toLowerCase();document.querySelectorAll('.p
         public string ProjectKey { get; set; } = string.Empty;
         public string ProjectPath { get; set; } = string.Empty;
         public string ModelName { get; set; } = string.Empty;
+        public string CheckpointSchemaVersion { get; set; } = string.Empty;
         public int PackageCount { get; set; }
         public bool Success { get; set; }
         public string ErrorMessage { get; set; } = string.Empty;

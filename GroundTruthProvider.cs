@@ -18,24 +18,27 @@ public static class GroundTruthProvider
 
         var advisoryLookup = ParseSecurityContext(securityContext)
             .GroupBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(x => x.Key, x => x.ToList(), StringComparer.OrdinalIgnoreCase);
 
         return packageReferences.Select(package =>
         {
             var packageName = package.PackageName ?? string.Empty;
-            advisoryLookup.TryGetValue(packageName, out var advisory);
+            advisoryLookup.TryGetValue(packageName, out var advisories);
+            var advisory = SelectMatchingAdvisory(package.CurrentVersion ?? string.Empty, advisories ?? new List<SecurityAdvisoryLabel>(), out var evaluation);
 
             return new GroundTruthLabel
             {
                 PackageName = packageName,
                 CurrentVersion = package.CurrentVersion ?? string.Empty,
-                IsVulnerable = advisory is not null,
+                IsVulnerable = advisory is not null && evaluation.IsAffected,
                 CVE_ID = advisory?.CVE_ID ?? string.Empty,
                 Severity = advisory?.Severity ?? string.Empty,
                 AdvisoryId = advisory?.AdvisoryId ?? string.Empty,
                 VulnerableVersionRange = advisory?.VulnerableVersionRange ?? string.Empty,
                 FirstPatchedVersion = advisory?.FirstPatchedVersion ?? string.Empty,
-                ReferenceUrl = advisory?.ReferenceUrl ?? string.Empty
+                ReferenceUrl = advisory?.ReferenceUrl ?? string.Empty,
+                IsVersionRangeMatched = advisory is not null && evaluation.IsAffected,
+                VersionRangeEvaluation = evaluation.Reason
             };
         }).ToList();
     }
@@ -67,6 +70,41 @@ public static class GroundTruthProvider
         {
             return Array.Empty<SecurityAdvisoryLabel>();
         }
+    }
+
+    private static SecurityAdvisoryLabel? SelectMatchingAdvisory(
+        string currentVersion,
+        IReadOnlyCollection<SecurityAdvisoryLabel> advisories,
+        out VersionRangeEvaluation selectedEvaluation)
+    {
+        selectedEvaluation = VersionRangeEvaluation.NotAffected("No advisory matched the package version.");
+
+        foreach (var advisory in advisories)
+        {
+            var evaluation = PackageVersionRangeEvaluator.Evaluate(currentVersion, advisory.VulnerableVersionRange);
+            if (evaluation.IsKnown && evaluation.IsAffected)
+            {
+                selectedEvaluation = evaluation;
+                return advisory;
+            }
+        }
+
+        var firstKnown = advisories
+            .Select(advisory => (Advisory: advisory, Evaluation: PackageVersionRangeEvaluator.Evaluate(currentVersion, advisory.VulnerableVersionRange)))
+            .FirstOrDefault(item => item.Evaluation.IsKnown);
+
+        if (firstKnown.Advisory is not null)
+        {
+            selectedEvaluation = firstKnown.Evaluation;
+            return firstKnown.Advisory;
+        }
+
+        if (advisories.Count > 0)
+        {
+            selectedEvaluation = VersionRangeEvaluation.Unknown("Advisory exists, but no vulnerable version range could be evaluated for this package version.");
+        }
+
+        return null;
     }
 
     private static IEnumerable<JsonElement> GetAdvisories(JsonElement root)
