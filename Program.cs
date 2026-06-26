@@ -14,8 +14,8 @@ public class Program
 {
     private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
     private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
-    private const int ProjectMaxDegreeOfParallelism = 10;
-    private const int GeminiGlobalConcurrencyLimit = 15;
+    private const int ProjectMaxDegreeOfParallelism = 4;
+    private const int GeminiGlobalConcurrencyLimit = 4;
 
     private static readonly object ConsoleLock = new();
     private static readonly SemaphoreSlim GeminiRequestGate = new(GeminiGlobalConcurrencyLimit, GeminiGlobalConcurrencyLimit);
@@ -57,7 +57,7 @@ public class Program
 
             var auditResultsDirectory = Path.Combine(GetApplicationRootDirectory(), "audit-results");
             var runFolderName = DateTime.Now.ToString("yyyyMMdd HH-mm-ss", CultureInfo.InvariantCulture);
-            var outputDirectory = CreateRunOutputDirectory(auditResultsDirectory, runFolderName);
+            var outputDirectory = ResolveRunOutputDirectory(auditResultsDirectory, runFolderName, csprojFiles, modelName);
 
             WriteLine($"Audit root folder: {rootFolder}");
             WriteLine($"Found {csprojFiles.Count} .csproj file(s).");
@@ -68,8 +68,9 @@ public class Program
             var checkpointDirectory = Path.Combine(outputDirectory, "checkpoints");
             Directory.CreateDirectory(checkpointDirectory);
 
-            var completedCheckpointResults = LoadCheckpointResults(checkpointDirectory, csprojFiles);
+            var completedCheckpointResults = LoadCheckpointResults(checkpointDirectory, csprojFiles, modelName);
             var completedProjectPaths = completedCheckpointResults
+                .Where(IsProjectFullySuccessfulForResume)
                 .Select(x => Path.GetFullPath(x.ProjectPath))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var pendingCsprojFiles = csprojFiles
@@ -95,13 +96,20 @@ public class Program
                 await artifactWriteLock.WaitAsync(cancellationToken);
                 try
                 {
-                    SaveFinalAuditArtifacts(
-                        artifactSet,
-                        rootFolder,
-                        modelName,
-                        resultsByProjectPath.Values
-                            .OrderBy(x => x.ProjectPath, StringComparer.OrdinalIgnoreCase)
-                            .ToList());
+                    try
+                    {
+                        SaveFinalAuditArtifacts(
+                            artifactSet,
+                            rootFolder,
+                            modelName,
+                            resultsByProjectPath.Values
+                                .OrderBy(x => x.ProjectPath, StringComparer.OrdinalIgnoreCase)
+                                .ToList());
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteError($"[Artifacts] Interim aggregate save failed and will be retried later: {ex.Message}");
+                    }
                 }
                 finally
                 {
@@ -125,12 +133,18 @@ public class Program
                     var checkpointPath = CreateProjectCheckpointPath(checkpointDirectory, BuildProjectKey(csprojPath));
 
                     if (File.Exists(checkpointPath) &&
-                        TryLoadCheckpointResult(checkpointPath, csprojFiles, out var existingResult))
+                        TryLoadCheckpointResult(checkpointPath, csprojFiles, modelName, out var existingResult) &&
+                        IsProjectFullySuccessfulForResume(existingResult))
                     {
                         resultsByProjectPath[Path.GetFullPath(existingResult.ProjectPath)] = existingResult;
                         WriteLine($"[Checkpoint] Skipping existing project result {projectNumber}/{pendingCsprojFiles.Count}: {existingResult.ProjectPath}");
                         await SaveAggregateArtifactsAsync(cancellationToken);
                         return;
+                    }
+
+                    if (File.Exists(checkpointPath))
+                    {
+                        WriteLine($"[Checkpoint] Existing checkpoint is incomplete/API_FAILED and will be retried: {csprojPath}");
                     }
 
                     WriteLine($"Processing project {projectNumber}/{pendingCsprojFiles.Count}: {csprojPath}");
@@ -153,7 +167,7 @@ public class Program
                 .OrderBy(x => x.ProjectPath, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            var missingCheckpointResults = LoadCheckpointResults(checkpointDirectory, csprojFiles)
+            var missingCheckpointResults = LoadCheckpointResults(checkpointDirectory, csprojFiles, modelName)
                 .Where(x => !resultsByProjectPath.ContainsKey(Path.GetFullPath(x.ProjectPath)))
                 .ToList();
 
@@ -249,6 +263,7 @@ public class Program
         var preferredModels = new[]
         {
             "gemini-2.5-pro",
+            "gemini-3.5-flash",
             "gemini-2.5-flash",
             "gemini-2.0-flash",
             "gemini-flash-latest",
@@ -344,7 +359,7 @@ public class Program
             return generateContentEndpointTemplate[..markerIndex] + "/models";
         }
 
-        return "https://generativelanguage.googleapis.com/v1beta/models";
+        return "https://generativelanguage.googleapis.com/v1/models";
     }
 
     private static string NormalizeModelName(string modelName)
@@ -376,6 +391,7 @@ public class Program
             ProjectName = projectName,
             ProjectKey = projectKey,
             ProjectPath = csprojPath,
+            ModelName = modelName,
             StartedAtUtc = DateTimeOffset.UtcNow
         };
 
@@ -625,7 +641,7 @@ public class Program
         {
             try
             {
-                return await AnalyzeWithGemini(
+                var response = await AnalyzeWithGemini(
                     apiKey,
                     modelName,
                     packageReferences,
@@ -633,6 +649,18 @@ public class Program
                     settings,
                     scenario,
                     cancellationToken);
+
+                if (response is not null)
+                {
+                    return response;
+                }
+
+                if (attempt < maxAttempts)
+                {
+                    var delay = CalculateBackoffDelay(settings.RetryDelayMilliseconds, attempt);
+                    WriteLine($"[Gemini] Empty response attempt {attempt}/{maxAttempts}. Retrying in {delay.TotalMilliseconds:0}ms.");
+                    await Task.Delay(delay, cancellationToken);
+                }
             }
             catch (TimeoutException ex) when (attempt < maxAttempts)
             {
@@ -644,6 +672,12 @@ public class Program
             {
                 var delay = CalculateBackoffDelay(settings.RetryDelayMilliseconds, attempt);
                 WriteLine($"[Gemini] Transient HTTP attempt {attempt}/{maxAttempts}: {ex.StatusCode}. Retrying in {delay.TotalMilliseconds:0}ms.");
+                await Task.Delay(delay, cancellationToken);
+            }
+            catch (JsonException ex) when (attempt < maxAttempts)
+            {
+                var delay = CalculateBackoffDelay(settings.RetryDelayMilliseconds, attempt);
+                WriteLine($"[Gemini] Invalid JSON attempt {attempt}/{maxAttempts}: {ex.Message}. Retrying in {delay.TotalMilliseconds:0}ms.");
                 await Task.Delay(delay, cancellationToken);
             }
         }
@@ -1299,6 +1333,74 @@ Security reference data:
         throw new IOException($"Could not create a unique audit result folder for timestamp '{runFolderName}'.");
     }
 
+    private static string ResolveRunOutputDirectory(
+        string auditResultsDirectory,
+        string runFolderName,
+        IReadOnlyCollection<string> csprojFiles,
+        string modelName)
+    {
+        Directory.CreateDirectory(auditResultsDirectory);
+
+        var resumableDirectory = FindLatestCompatibleCheckpointDirectory(auditResultsDirectory, csprojFiles, modelName);
+        if (!string.IsNullOrWhiteSpace(resumableDirectory))
+        {
+            WriteLine($"[Checkpoint] Resuming latest compatible run folder: {resumableDirectory}");
+            return resumableDirectory;
+        }
+
+        return CreateRunOutputDirectory(auditResultsDirectory, runFolderName);
+    }
+
+    private static string? FindLatestCompatibleCheckpointDirectory(
+        string auditResultsDirectory,
+        IReadOnlyCollection<string> csprojFiles,
+        string modelName)
+    {
+        var allowedProjectPaths = csprojFiles
+            .Select(Path.GetFullPath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return Directory.EnumerateDirectories(auditResultsDirectory)
+            .Select(path => new DirectoryInfo(path))
+            .OrderByDescending(directory => directory.LastWriteTimeUtc)
+            .Select(directory => directory.FullName)
+            .FirstOrDefault(directory => HasCompatibleCheckpoint(directory, allowedProjectPaths, modelName));
+    }
+
+    private static bool HasCompatibleCheckpoint(
+        string outputDirectory,
+        HashSet<string> allowedProjectPaths,
+        string modelName)
+    {
+        var checkpointDirectory = Path.Combine(outputDirectory, "checkpoints");
+        if (!Directory.Exists(checkpointDirectory))
+        {
+            return false;
+        }
+
+        foreach (var checkpointPath in Directory.EnumerateFiles(checkpointDirectory, "*.json", SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                var json = File.ReadAllText(checkpointPath, Encoding.UTF8);
+                var loadedResult = JsonSerializer.Deserialize<ProjectAuditResult>(json, SerializerOptions);
+                if (loadedResult is not null &&
+                    !string.IsNullOrWhiteSpace(loadedResult.ProjectPath) &&
+                    allowedProjectPaths.Contains(Path.GetFullPath(loadedResult.ProjectPath)) &&
+                    IsCheckpointModelCompatible(loadedResult, modelName))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                // Corrupt checkpoints are ignored; later loading logs the details.
+            }
+        }
+
+        return false;
+    }
+
     private static void SaveFinalAuditArtifacts(
         FinalArtifactSet artifactSet,
         string rootFolder,
@@ -1318,17 +1420,18 @@ Security reference data:
 
     private static IReadOnlyList<ProjectAuditResult> LoadCheckpointResults(
         string checkpointDirectory,
-        IReadOnlyCollection<string> csprojFiles)
+        IReadOnlyCollection<string> csprojFiles,
+        string modelName)
     {
         Directory.CreateDirectory(checkpointDirectory);
         var results = new List<ProjectAuditResult>();
 
         foreach (var checkpointPath in Directory.EnumerateFiles(checkpointDirectory, "*.json", SearchOption.TopDirectoryOnly))
         {
-            if (TryLoadCheckpointResult(checkpointPath, csprojFiles, out var result))
+            if (TryLoadCheckpointResult(checkpointPath, csprojFiles, modelName, out var result))
             {
                 results.Add(result);
-                WriteLine($"[Checkpoint] Loaded existing checkpoint and will skip: {result.ProjectPath}");
+                WriteLine($"[Checkpoint] Loaded compatible checkpoint: {result.ProjectPath}");
             }
         }
 
@@ -1342,6 +1445,7 @@ Security reference data:
     private static bool TryLoadCheckpointResult(
         string checkpointPath,
         IReadOnlyCollection<string> csprojFiles,
+        string modelName,
         out ProjectAuditResult result)
     {
         result = new ProjectAuditResult();
@@ -1356,7 +1460,8 @@ Security reference data:
 
             if (loadedResult is null ||
                 string.IsNullOrWhiteSpace(loadedResult.ProjectPath) ||
-                !allowedProjectPaths.Contains(Path.GetFullPath(loadedResult.ProjectPath)))
+                !allowedProjectPaths.Contains(Path.GetFullPath(loadedResult.ProjectPath)) ||
+                !IsCheckpointModelCompatible(loadedResult, modelName))
             {
                 return false;
             }
@@ -1371,11 +1476,22 @@ Security reference data:
         }
     }
 
+    private static bool IsCheckpointModelCompatible(ProjectAuditResult result, string modelName)
+    {
+        return !string.IsNullOrWhiteSpace(result.ModelName) &&
+               string.Equals(
+                   NormalizeModelName(result.ModelName),
+                   NormalizeModelName(modelName),
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void SaveProjectCheckpoint(string checkpointDirectory, ProjectAuditResult result)
     {
         Directory.CreateDirectory(checkpointDirectory);
         var checkpointPath = CreateProjectCheckpointPath(checkpointDirectory, result.ProjectKey);
-        File.WriteAllText(checkpointPath, JsonSerializer.Serialize(result, SerializerOptions), Encoding.UTF8);
+        var tempCheckpointPath = $"{checkpointPath}.{Guid.NewGuid():N}.tmp";
+        File.WriteAllText(tempCheckpointPath, JsonSerializer.Serialize(result, SerializerOptions), Encoding.UTF8);
+        File.Move(tempCheckpointPath, checkpointPath, true);
         WriteLine($"[{result.ProjectKey}] Checkpoint saved: {checkpointPath}");
     }
 
@@ -2276,12 +2392,12 @@ Security reference data:
     private sealed class GeminiSettings
     {
         public string ApiKey { get; set; } = string.Empty;
-        public string Model { get; set; } = string.Empty;
-        public string GenerateContentEndpointTemplate { get; set; } = string.Empty;
-        public int RequestTimeoutSeconds { get; set; }
+        public string Model { get; set; } = "gemini-2.5-pro";
+        public string GenerateContentEndpointTemplate { get; set; } = "https://generativelanguage.googleapis.com/v1/models/{0}:generateContent";
+        public int RequestTimeoutSeconds { get; set; } = 300;
         public int MaxPackagesPerRequest { get; set; } = 15;
-        public int MaxRetryCount { get; set; } = 2;
-        public int RetryDelayMilliseconds { get; set; } = 2000;
+        public int MaxRetryCount { get; set; } = 5;
+        public int RetryDelayMilliseconds { get; set; } = 5000;
     }
 
     private sealed class GeminiApiResponse
@@ -2488,6 +2604,7 @@ Security reference data:
         public string ProjectName { get; set; } = string.Empty;
         public string ProjectKey { get; set; } = string.Empty;
         public string ProjectPath { get; set; } = string.Empty;
+        public string ModelName { get; set; } = string.Empty;
         public int PackageCount { get; set; }
         public bool Success { get; set; }
         public string ErrorMessage { get; set; } = string.Empty;

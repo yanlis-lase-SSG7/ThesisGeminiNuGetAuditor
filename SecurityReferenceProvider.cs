@@ -645,10 +645,9 @@ public static class SecurityReferenceProvider
             throw new InvalidOperationException("Konfigurasi 'SecurityReference:GitHubUserAgentProductName' dan 'SecurityReference:GitHubUserAgentProductVersion' wajib diisi.");
         }
 
-        if (string.IsNullOrWhiteSpace(settings.FallbackAdvisoriesJson))
-        {
-            throw new InvalidOperationException("Konfigurasi 'SecurityReference:FallbackAdvisories' wajib diisi.");
-        }
+        settings.FallbackAdvisoriesJson = string.IsNullOrWhiteSpace(settings.FallbackAdvisoriesJson)
+            ? "[]"
+            : settings.FallbackAdvisoriesJson;
     }
 
     private static IEnumerable<string> GetAppSettingsPaths()
@@ -857,13 +856,13 @@ public static class SecurityReferenceProvider
 
     private sealed class SecurityReferenceSettings
     {
-        public string AdvisoryDbFileName { get; set; } = string.Empty;
-        public string GitHubGraphQlUrl { get; set; } = string.Empty;
-        public string GitHubGraphQlNuGetQuery { get; set; } = string.Empty;
+        public string AdvisoryDbFileName { get; set; } = "github-advisory-db.json";
+        public string GitHubGraphQlUrl { get; set; } = "https://api.github.com/graphql";
+        public string GitHubGraphQlNuGetQuery { get; set; } = "query($package:String!){ securityVulnerabilities(first:20, ecosystem:NUGET, package:$package){ nodes{ package{ name } vulnerableVersionRange firstPatchedVersion{ identifier } severity advisory{ ghsaId summary permalink identifiers{ type value } } } } }";
         public string GitHubToken { get; set; } = string.Empty;
-        public string GitHubUserAgentProductName { get; set; } = string.Empty;
-        public string GitHubUserAgentProductVersion { get; set; } = string.Empty;
-        public string FallbackAdvisoriesJson { get; set; } = string.Empty;
+        public string GitHubUserAgentProductName { get; set; } = "GeminiNuGetAuditor";
+        public string GitHubUserAgentProductVersion { get; set; } = "1.0";
+        public string FallbackAdvisoriesJson { get; set; } = "[]";
     }
 
     private sealed class SecurityAdvisoryRecord
