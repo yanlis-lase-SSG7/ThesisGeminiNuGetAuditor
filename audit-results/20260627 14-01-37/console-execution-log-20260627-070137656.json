@@ -1,0 +1,1386 @@
+﻿{
+  "GeneratedAtUtc": "2026-06-27T07:05:10.0159785+00:00",
+  "EntryCount": 197,
+  "FullText": "[Gemini] generateContent-capable models discovered: 13.\r\nPlease enter the folder path containing the .csproj files to audit: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\r\nAudit root folder: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\r\nFound 3 .csproj file(s).\r\nUsing Gemini model: gemini-2.5-pro\r\nRun output directory: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\r\nMax concurrent project processing: 4\r\nGlobal Gemini request concurrency: 4\r\nCheckpoint directory: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\checkpoints\r\nExisting checkpoint(s) loaded for resume: 0.\r\nPending .csproj file(s) to process in this run: 3.\r\nStarting parallel checkpointed evaluation: RAG-LLM, Zero-Shot, and CodeBERT Python inference.\r\nProcessing project 3/3: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\Dummy3.csproj\r\nProcessing project 1/3: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\Dummy1.csproj\r\nProcessing project 2/3: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\Dummy2.csproj\r\n[Dummy1-3BD1A055] Extracting packages...\r\n[Dummy3-0B93FA13] Extracting packages...\r\n[Dummy2-23B2CD34] Extracting packages...\r\n[Dummy3-0B93FA13] Found 43 package(s). Starting strict live GitHub GraphQL retrieval.\r\n[Dummy1-3BD1A055] Found 3 package(s). Starting strict live GitHub GraphQL retrieval.\r\n[Dummy2-23B2CD34] Found 4 package(s). Starting strict live GitHub GraphQL retrieval.\r\n[Retrieval] GitHub GraphQL API returned no advisory entries for the requested NuGet packages. Returning empty live context.\r\n[Dummy1-3BD1A055] [Retrieval] Strict real-time retrieval enabled. GitHub GraphQL API is the sole source of truth for vulnerability advisories.\r\n[Dummy1-3BD1A055] [Retrieval] GitHub API package \u0027Swashbuckle.AspNetCore\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy1-3BD1A055] [Retrieval] GitHub API package \u0027Microsoft.EntityFrameworkCore\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy1-3BD1A055] [Retrieval] GitHub API package \u0027Npgsql.EntityFrameworkCore.PostgreSQL\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy1-3BD1A055] [Retrieval] GitHub GraphQL API returned no advisory entries for the requested NuGet packages. Returning empty live context.\r\n[Dummy1-3BD1A055] Ground truth prepared from live GitHub GraphQL data. Starting Zero-Shot, RAG-LLM, and CodeBERT preparation.\r\n[Dummy1-3BD1A055] [Zero-Shot] Starting Gemini inference.\r\n[Dummy1-3BD1A055] [RAG-LLM] Starting Gemini inference.\r\n[Retrieval] Security reference source selected: GitHubGraphQLApi. Matched advisory entries: 2.\r\n[Dummy2-23B2CD34] [Retrieval] Strict real-time retrieval enabled. GitHub GraphQL API is the sole source of truth for vulnerability advisories.\r\n[Dummy2-23B2CD34] [Retrieval] GitHub API package \u0027FluentValidation.AspNetCore\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy2-23B2CD34] [Retrieval] GitHub API package \u0027AutoMapper\u0027: HTTP 200 (OK), pages=1, advisories=2.\r\n[Dummy2-23B2CD34] [Retrieval] GitHub API package \u0027Serilog\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy2-23B2CD34] [Retrieval] GitHub API package \u0027Dapper\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy2-23B2CD34] [Retrieval] Security reference source selected: GitHubGraphQLApi. Matched advisory entries: 2.\r\n[Dummy2-23B2CD34] Ground truth prepared from live GitHub GraphQL data. Starting Zero-Shot, RAG-LLM, and CodeBERT preparation.\r\n[Dummy2-23B2CD34] [Zero-Shot] Starting Gemini inference.\r\n[Dummy2-23B2CD34] [RAG-LLM] Starting Gemini inference.\r\n[Dummy1-3BD1A055] [RAG-LLM] Finished. Vulnerable detections: 0.\r\n[Retrieval] Security reference source selected: GitHubGraphQLApi. Matched advisory entries: 105.\r\n[Dummy3-0B93FA13] [Retrieval] Strict real-time retrieval enabled. GitHub GraphQL API is the sole source of truth for vulnerability advisories.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Newtonsoft.Json\u0027: HTTP 200 (OK), pages=1, advisories=2.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Serilog\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Dapper\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027AdvancedAgilityPack\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Azure.Identity\u0027: HTTP 200 (OK), pages=1, advisories=3.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Binus.WS.Pattern\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Binus.WS.Pattern.AzureStorage\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Binus.WS.Pattern.MessageQueue\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027BuildBundlerMinifier\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027ClosedXML\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027FastReport.OpenSource\u0027: HTTP 200 (OK), pages=1, advisories=1.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027FastReport.OpenSource.Export.PdfSimple\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027FastReport.OpenSource.Web\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027itext7\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.ApplicationInsights.AspNetCore\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.AspNet.Mvc\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.AspNetCore.Authentication.OpenIdConnect\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.AspNetCore.Http\u0027: HTTP 200 (OK), pages=1, advisories=1.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.AspNetCore.Mvc.Core\u0027: HTTP 200 (OK), pages=1, advisories=11.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.EntityFrameworkCore\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.EntityFrameworkCore.Design\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.EntityFrameworkCore.SqlServer\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.Extensions.Caching.StackExchangeRedis\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.Identity.Web\u0027: HTTP 200 (OK), pages=1, advisories=1.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.VisualStudio.Web.CodeGeneration.Design\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027MimeTypeMapOfficial\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Nancy\u0027: HTTP 200 (OK), pages=1, advisories=2.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027NetCoreAutoLinkDropdown\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027PdfSharpCore\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027SixLabors.ImageSharp\u0027: HTTP 200 (OK), pages=1, advisories=14.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027starkbank-ecdsa\u0027: HTTP 200 (OK), pages=1, advisories=2.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.Data.SqlClient\u0027: HTTP 200 (OK), pages=1, advisories=6.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.Data.SqlClient\u0027: HTTP 200 (OK), pages=1, advisories=2.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.Drawing.Common\u0027: HTTP 200 (OK), pages=1, advisories=2.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.Globalization.Calendars\u0027: HTTP 200 (OK), pages=1, advisories=0.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.Private.ServiceModel\u0027: HTTP 200 (OK), pages=1, advisories=7.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.Security.Cryptography.Xml\u0027: HTTP 200 (OK), pages=1, advisories=12.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.ServiceModel.Duplex\u0027: HTTP 200 (OK), pages=1, advisories=7.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.ServiceModel.Http\u0027: HTTP 200 (OK), pages=1, advisories=7.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.ServiceModel.NetTcp\u0027: HTTP 200 (OK), pages=1, advisories=7.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.ServiceModel.Security\u0027: HTTP 200 (OK), pages=1, advisories=7.\r\n[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.Text.Encodings.Web\u0027: HTTP 200 (OK), pages=1, advisories=11.\r\n[Dummy3-0B93FA13] [Retrieval] Security reference source selected: GitHubGraphQLApi. Matched advisory entries: 105.\r\n[Dummy3-0B93FA13] Ground truth prepared from live GitHub GraphQL data. Starting Zero-Shot, RAG-LLM, and CodeBERT preparation.\r\n[Dummy3-0B93FA13] [Zero-Shot] Starting Gemini inference.\r\n[Gemini] Zero-Shot batch 1/3, packages=15.\r\n[Dummy3-0B93FA13] [RAG-LLM] Starting Gemini inference.\r\n[Gemini] RAG-LLM batch 1/3, packages=15.\r\n[Dummy2-23B2CD34] [RAG-LLM] Finished. Vulnerable detections: 1.\r\n[Dummy2-23B2CD34] [Zero-Shot] Finished. Vulnerable detections: 1.\r\n[Dummy2-23B2CD34] [CodeBERT] Preparing Python inference input.\r\n[CodeBERT] Executing local Python inference: python codebert_inference.py --input \u0022D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy2-23B2CD34-codebert-input.json\u0022 --output \u0022D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy2-23B2CD34-codebert-predictions.json\u0022\r\n[CodeBERT] Loading CodeBERT bridge input: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy2-23B2CD34-codebert-input.json\r\n[CodeBERT] Loaded 12 dataset record(s). Running deterministic local inference.\r\n[CodeBERT] [1/4] CodeBERT bridge inferred Serilog@2.10.0 =\u003E vulnerable=false confidence=0.1606\r\n[CodeBERT] [2/4] CodeBERT bridge inferred FluentValidation.AspNetCore@11.2.2 =\u003E vulnerable=false confidence=0.3244\r\n[CodeBERT] [3/4] CodeBERT bridge inferred AutoMapper@12.0.1 =\u003E vulnerable=true confidence=0.7327\r\n[CodeBERT] [4/4] CodeBERT bridge inferred Dapper@2.0.123 =\u003E vulnerable=true confidence=0.5315\r\n[CodeBERT] Wrote 4 CodeBERT bridge prediction(s) to D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy2-23B2CD34-codebert-predictions.json\r\n[CodeBERT] Python inference completed successfully. Prediction file: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy2-23B2CD34-codebert-predictions.json\r\n[Dummy2-23B2CD34] [CodeBERT] Finished. Vulnerable detections: 2.\r\n[Dummy2-23B2CD34] Completed in 24,73s.\r\n[Dummy2-23B2CD34] Checkpoint saved: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\checkpoints\\Dummy2-23B2CD34.json\r\nCheckpoint and aggregate reports saved after project: Dummy2-23B2CD34\r\n[Dummy1-3BD1A055] [Zero-Shot] Finished. Vulnerable detections: 2.\r\n[Dummy1-3BD1A055] [CodeBERT] Preparing Python inference input.\r\n[CodeBERT] Executing local Python inference: python codebert_inference.py --input \u0022D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy1-3BD1A055-codebert-input.json\u0022 --output \u0022D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy1-3BD1A055-codebert-predictions.json\u0022\r\n[CodeBERT] Loading CodeBERT bridge input: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy1-3BD1A055-codebert-input.json\r\n[CodeBERT] Loaded 9 dataset record(s). Running deterministic local inference.\r\n[CodeBERT] [1/3] CodeBERT bridge inferred Npgsql.EntityFrameworkCore.PostgreSQL@7.0.11 =\u003E vulnerable=true confidence=0.8534\r\n[CodeBERT] [2/3] CodeBERT bridge inferred Microsoft.EntityFrameworkCore@8.0.4 =\u003E vulnerable=false confidence=0.1257\r\n[CodeBERT] [3/3] CodeBERT bridge inferred Swashbuckle.AspNetCore@6.5.0 =\u003E vulnerable=true confidence=0.6094\r\n[CodeBERT] Wrote 3 CodeBERT bridge prediction(s) to D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy1-3BD1A055-codebert-predictions.json\r\n[CodeBERT] Python inference completed successfully. Prediction file: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy1-3BD1A055-codebert-predictions.json\r\n[Dummy1-3BD1A055] [CodeBERT] Finished. Vulnerable detections: 2.\r\n[Dummy1-3BD1A055] Completed in 26,32s.\r\n[Dummy1-3BD1A055] Checkpoint saved: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\checkpoints\\Dummy1-3BD1A055.json\r\nCheckpoint and aggregate reports saved after project: Dummy1-3BD1A055\r\n[Gemini] Zero-Shot batch 2/3, packages=15.\r\n[Gemini] RAG-LLM batch 2/3, packages=15.\r\n[Gemini] RAG-LLM batch 3/3, packages=13.\r\n[Gemini] Zero-Shot batch 3/3, packages=13.\r\n[Dummy3-0B93FA13] [Zero-Shot] Finished. Vulnerable detections: 27.\r\n[Dummy3-0B93FA13] [RAG-LLM] Finished. Vulnerable detections: 8.\r\n[Dummy3-0B93FA13] [CodeBERT] Preparing Python inference input.\r\n[CodeBERT] Executing local Python inference: python codebert_inference.py --input \u0022D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy3-0B93FA13-codebert-input.json\u0022 --output \u0022D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy3-0B93FA13-codebert-predictions.json\u0022\r\n[CodeBERT] Loading CodeBERT bridge input: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy3-0B93FA13-codebert-input.json\r\n[CodeBERT] Loaded 129 dataset record(s). Running deterministic local inference.\r\n[CodeBERT] [1/43] CodeBERT bridge inferred Binus.WS.Pattern@1.0.5 =\u003E vulnerable=false confidence=0.2756\r\n[CodeBERT] [2/43] CodeBERT bridge inferred AdvancedAgilityPack@1.1.0 =\u003E vulnerable=true confidence=0.9218\r\n[CodeBERT] [3/43] CodeBERT bridge inferred ClosedXML@0.95.4 =\u003E vulnerable=true confidence=0.6142\r\n[CodeBERT] [4/43] CodeBERT bridge inferred Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation@3.1.6 =\u003E vulnerable=false confidence=0.2811\r\n[CodeBERT] [5/43] CodeBERT bridge inferred Microsoft.Data.SqlClient@2.1.7 =\u003E vulnerable=true confidence=0.9555\r\n[CodeBERT] [6/43] CodeBERT bridge inferred FastReport.OpenSource@2021.2.7 =\u003E vulnerable=false confidence=0.0780\r\n[CodeBERT] [7/43] CodeBERT bridge inferred Dapper@2.1.35 =\u003E vulnerable=false confidence=0.4738\r\n[CodeBERT] [8/43] CodeBERT bridge inferred Newtonsoft.Json@13.0.3 =\u003E vulnerable=true confidence=0.8079\r\n[CodeBERT] [9/43] CodeBERT bridge inferred Microsoft.EntityFrameworkCore@3.1.6 =\u003E vulnerable=true confidence=0.7824\r\n[CodeBERT] [10/43] CodeBERT bridge inferred itext7@7.1.16 =\u003E vulnerable=true confidence=0.6003\r\n[CodeBERT] [11/43] CodeBERT bridge inferred Azure.Identity@1.10.2 =\u003E vulnerable=false confidence=0.0400\r\n[CodeBERT] [12/43] CodeBERT bridge inferred Microsoft.AspNetCore.Http@2.2.2 =\u003E vulnerable=true confidence=0.9115\r\n[CodeBERT] [13/43] CodeBERT bridge inferred Serilog@4.0.1 =\u003E vulnerable=false confidence=0.3873\r\n[CodeBERT] [14/43] CodeBERT bridge inferred BuildBundlerMinifier@3.2.449 =\u003E vulnerable=false confidence=0.4426\r\n[CodeBERT] [15/43] CodeBERT bridge inferred SixLabors.ImageSharp@2.1.10 =\u003E vulnerable=false confidence=0.2255\r\n[CodeBERT] [16/43] CodeBERT bridge inferred Microsoft.Identity.Web@1.15.2 =\u003E vulnerable=true confidence=0.7559\r\n[CodeBERT] [17/43] CodeBERT bridge inferred System.Globalization.Calendars@4.3.0 =\u003E vulnerable=false confidence=0.2044\r\n[CodeBERT] [18/43] CodeBERT bridge inferred Binus.WS.Pattern.AzureStorage@1.0.7 =\u003E vulnerable=true confidence=0.9609\r\n[CodeBERT] [19/43] CodeBERT bridge inferred System.Drawing.Common@4.7.2 =\u003E vulnerable=true confidence=0.7115\r\n[CodeBERT] [20/43] CodeBERT bridge inferred NetCoreAutoLinkDropdown@1.0.2 =\u003E vulnerable=true confidence=0.8222\r\n[CodeBERT] [21/43] CodeBERT bridge inferred Microsoft.AspNetCore.Mvc.Core@2.2.5 =\u003E vulnerable=false confidence=0.2620\r\n[CodeBERT] [22/43] CodeBERT bridge inferred Microsoft.AspNetCore.Authentication.OpenIdConnect@3.1.17 =\u003E vulnerable=true confidence=0.6174\r\n[CodeBERT] [23/43] CodeBERT bridge inferred FastReport.OpenSource.Export.PdfSimple@2021.2.0 =\u003E vulnerable=true confidence=0.6433\r\n[CodeBERT] [24/43] CodeBERT bridge inferred Nancy@2.0.0 =\u003E vulnerable=true confidence=0.8108\r\n[CodeBERT] [25/43] CodeBERT bridge inferred System.Security.Cryptography.Xml@4.5.0 =\u003E vulnerable=false confidence=0.4644\r\n[CodeBERT] [26/43] CodeBERT bridge inferred System.Private.ServiceModel@4.7.0 =\u003E vulnerable=true confidence=0.8386\r\n[CodeBERT] [27/43] CodeBERT bridge inferred FastReport.OpenSource.Web@2021.2.7 =\u003E vulnerable=false confidence=0.1802\r\n[CodeBERT] [28/43] CodeBERT bridge inferred Microsoft.ApplicationInsights.AspNetCore@2.14.0 =\u003E vulnerable=true confidence=0.5936\r\n[CodeBERT] [29/43] CodeBERT bridge inferred PdfSharpCore@1.2.17 =\u003E vulnerable=true confidence=0.9515\r\n[CodeBERT] [30/43] CodeBERT bridge inferred MimeTypeMapOfficial@1.0.17 =\u003E vulnerable=true confidence=0.6911\r\n[CodeBERT] [31/43] CodeBERT bridge inferred System.ServiceModel.NetTcp@4.4.* =\u003E vulnerable=true confidence=0.5115\r\n[CodeBERT] [32/43] CodeBERT bridge inferred Microsoft.EntityFrameworkCore.SqlServer@3.1.6 =\u003E vulnerable=true confidence=0.8385\r\n[CodeBERT] [33/43] CodeBERT bridge inferred System.Text.Encodings.Web@5.0.1 =\u003E vulnerable=false confidence=0.0374\r\n[CodeBERT] [34/43] CodeBERT bridge inferred System.ServiceModel.Security@4.4.* =\u003E vulnerable=false confidence=0.0289\r\n[CodeBERT] [35/43] CodeBERT bridge inferred Microsoft.Extensions.Caching.StackExchangeRedis@5.0.1 =\u003E vulnerable=false confidence=0.1564\r\n[CodeBERT] [36/43] CodeBERT bridge inferred Microsoft.AspNet.Mvc@5.2.7 =\u003E vulnerable=false confidence=0.2939\r\n[CodeBERT] [37/43] CodeBERT bridge inferred System.ServiceModel.Duplex@4.4.* =\u003E vulnerable=false confidence=0.4604\r\n[CodeBERT] [38/43] CodeBERT bridge inferred Microsoft.EntityFrameworkCore.Design@3.1.6 =\u003E vulnerable=true confidence=0.8744\r\n[CodeBERT] [39/43] CodeBERT bridge inferred Binus.WS.Pattern.MessageQueue@1.2.0 =\u003E vulnerable=true confidence=0.9753\r\n[CodeBERT] [40/43] CodeBERT bridge inferred Microsoft.VisualStudio.Web.CodeGeneration.Design@3.1.5 =\u003E vulnerable=true confidence=0.6328\r\n[CodeBERT] [41/43] CodeBERT bridge inferred System.ServiceModel.Http@4.4.* =\u003E vulnerable=false confidence=0.3411\r\n[CodeBERT] [42/43] CodeBERT bridge inferred System.Data.SqlClient@4.8.6 =\u003E vulnerable=true confidence=0.8522\r\n[CodeBERT] [43/43] CodeBERT bridge inferred starkbank-ecdsa@1.3.2 =\u003E vulnerable=false confidence=0.0176\r\n[CodeBERT] Wrote 43 CodeBERT bridge prediction(s) to D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy3-0B93FA13-codebert-predictions.json\r\n[CodeBERT] Python inference completed successfully. Prediction file: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy3-0B93FA13-codebert-predictions.json\r\n[Dummy3-0B93FA13] [CodeBERT] Finished. Vulnerable detections: 24.\r\n[Dummy3-0B93FA13] Completed in 204,58s.\r\n[Dummy3-0B93FA13] Checkpoint saved: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\checkpoints\\Dummy3-0B93FA13.json\r\nCheckpoint and aggregate reports saved after project: Dummy3-0B93FA13\r\n[Checkpoint] Loaded compatible checkpoint: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\Dummy1.csproj\r\n[Checkpoint] Loaded compatible checkpoint: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\Dummy2.csproj\r\n[Checkpoint] Loaded compatible checkpoint: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\Dummy3.csproj\r\nBatch audit completed.\r\nSucceeded projects: 3.\r\nIncomplete/API_FAILED projects: 0.\r\nTotal elapsed time: 219,17s.\r\nRAG-LLM JSON report: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\audit-rag-llm-20260627-070137656.json\r\nZero-Shot JSON report: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\audit-zero-shot-20260627-070137656.json\r\nCodeBERT JSON report: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\audit-codebert-20260627-070137656.json\r\nComprehensive CSV report: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\audit-comprehensive-metrics-20260627-070137656.csv\r\nComprehensive Excel report: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\audit-comprehensive-report-20260627-070137656.xlsx\r\nInteractive HTML report: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\audit-interactive-report-20260627-070137656.html\r\nGemini API diagnostics JSON: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\api-diagnostics-20260627-070137656.json\r\nConsole execution log JSON: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\console-execution-log-20260627-070137656.json\r\n",
+  "Entries": [
+    {
+      "Sequence": 1,
+      "TimestampUtc": "2026-06-27T07:01:31.7129404+00:00",
+      "Stream": "stdout",
+      "Message": "[Gemini] generateContent-capable models discovered: 13.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 2,
+      "TimestampUtc": "2026-06-27T07:01:31.7183898+00:00",
+      "Stream": "stdout",
+      "Message": "Please enter the folder path containing the .csproj files to audit: ",
+      "EndsLine": false
+    },
+    {
+      "Sequence": 3,
+      "TimestampUtc": "2026-06-27T07:01:37.6381542+00:00",
+      "Stream": "stdin",
+      "Message": "D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 4,
+      "TimestampUtc": "2026-06-27T07:01:37.6559691+00:00",
+      "Stream": "stdout",
+      "Message": "Audit root folder: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 5,
+      "TimestampUtc": "2026-06-27T07:01:37.6560848+00:00",
+      "Stream": "stdout",
+      "Message": "Found 3 .csproj file(s).",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 6,
+      "TimestampUtc": "2026-06-27T07:01:37.6562257+00:00",
+      "Stream": "stdout",
+      "Message": "Using Gemini model: gemini-2.5-pro",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 7,
+      "TimestampUtc": "2026-06-27T07:01:37.6563272+00:00",
+      "Stream": "stdout",
+      "Message": "Run output directory: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 8,
+      "TimestampUtc": "2026-06-27T07:01:37.6656823+00:00",
+      "Stream": "stdout",
+      "Message": "Max concurrent project processing: 4",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 9,
+      "TimestampUtc": "2026-06-27T07:01:37.6657616+00:00",
+      "Stream": "stdout",
+      "Message": "Global Gemini request concurrency: 4",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 10,
+      "TimestampUtc": "2026-06-27T07:01:37.6658304+00:00",
+      "Stream": "stdout",
+      "Message": "Checkpoint directory: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\checkpoints",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 11,
+      "TimestampUtc": "2026-06-27T07:01:37.6659018+00:00",
+      "Stream": "stdout",
+      "Message": "Existing checkpoint(s) loaded for resume: 0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 12,
+      "TimestampUtc": "2026-06-27T07:01:37.6659509+00:00",
+      "Stream": "stdout",
+      "Message": "Pending .csproj file(s) to process in this run: 3.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 13,
+      "TimestampUtc": "2026-06-27T07:01:37.6660179+00:00",
+      "Stream": "stdout",
+      "Message": "Starting parallel checkpointed evaluation: RAG-LLM, Zero-Shot, and CodeBERT Python inference.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 14,
+      "TimestampUtc": "2026-06-27T07:01:44.714398+00:00",
+      "Stream": "stdout",
+      "Message": "Processing project 3/3: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\Dummy3.csproj",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 15,
+      "TimestampUtc": "2026-06-27T07:01:44.7177877+00:00",
+      "Stream": "stdout",
+      "Message": "Processing project 1/3: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\Dummy1.csproj",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 16,
+      "TimestampUtc": "2026-06-27T07:01:44.722606+00:00",
+      "Stream": "stdout",
+      "Message": "Processing project 2/3: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\Dummy2.csproj",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 17,
+      "TimestampUtc": "2026-06-27T07:01:44.7261162+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] Extracting packages...",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 18,
+      "TimestampUtc": "2026-06-27T07:01:44.7265569+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] Extracting packages...",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 19,
+      "TimestampUtc": "2026-06-27T07:01:44.7275334+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] Extracting packages...",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 20,
+      "TimestampUtc": "2026-06-27T07:01:44.7571147+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] Found 43 package(s). Starting strict live GitHub GraphQL retrieval.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 21,
+      "TimestampUtc": "2026-06-27T07:01:44.7572833+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] Found 3 package(s). Starting strict live GitHub GraphQL retrieval.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 22,
+      "TimestampUtc": "2026-06-27T07:01:44.7598061+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] Found 4 package(s). Starting strict live GitHub GraphQL retrieval.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 23,
+      "TimestampUtc": "2026-06-27T07:01:45.9068631+00:00",
+      "Stream": "stdout",
+      "Message": "[Retrieval] GitHub GraphQL API returned no advisory entries for the requested NuGet packages. Returning empty live context.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 24,
+      "TimestampUtc": "2026-06-27T07:01:45.9085825+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] [Retrieval] Strict real-time retrieval enabled. GitHub GraphQL API is the sole source of truth for vulnerability advisories.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 25,
+      "TimestampUtc": "2026-06-27T07:01:45.908687+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] [Retrieval] GitHub API package \u0027Swashbuckle.AspNetCore\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 26,
+      "TimestampUtc": "2026-06-27T07:01:45.9087557+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] [Retrieval] GitHub API package \u0027Microsoft.EntityFrameworkCore\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 27,
+      "TimestampUtc": "2026-06-27T07:01:45.9088285+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] [Retrieval] GitHub API package \u0027Npgsql.EntityFrameworkCore.PostgreSQL\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 28,
+      "TimestampUtc": "2026-06-27T07:01:45.9089647+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] [Retrieval] GitHub GraphQL API returned no advisory entries for the requested NuGet packages. Returning empty live context.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 29,
+      "TimestampUtc": "2026-06-27T07:01:45.9206262+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] Ground truth prepared from live GitHub GraphQL data. Starting Zero-Shot, RAG-LLM, and CodeBERT preparation.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 30,
+      "TimestampUtc": "2026-06-27T07:01:45.9230128+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] [Zero-Shot] Starting Gemini inference.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 31,
+      "TimestampUtc": "2026-06-27T07:01:45.9342372+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] [RAG-LLM] Starting Gemini inference.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 32,
+      "TimestampUtc": "2026-06-27T07:01:46.2462347+00:00",
+      "Stream": "stdout",
+      "Message": "[Retrieval] Security reference source selected: GitHubGraphQLApi. Matched advisory entries: 2.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 33,
+      "TimestampUtc": "2026-06-27T07:01:46.2464224+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] [Retrieval] Strict real-time retrieval enabled. GitHub GraphQL API is the sole source of truth for vulnerability advisories.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 34,
+      "TimestampUtc": "2026-06-27T07:01:46.2466574+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] [Retrieval] GitHub API package \u0027FluentValidation.AspNetCore\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 35,
+      "TimestampUtc": "2026-06-27T07:01:46.2467758+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] [Retrieval] GitHub API package \u0027AutoMapper\u0027: HTTP 200 (OK), pages=1, advisories=2.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 36,
+      "TimestampUtc": "2026-06-27T07:01:46.2468884+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] [Retrieval] GitHub API package \u0027Serilog\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 37,
+      "TimestampUtc": "2026-06-27T07:01:46.2471432+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] [Retrieval] GitHub API package \u0027Dapper\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 38,
+      "TimestampUtc": "2026-06-27T07:01:46.2472437+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] [Retrieval] Security reference source selected: GitHubGraphQLApi. Matched advisory entries: 2.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 39,
+      "TimestampUtc": "2026-06-27T07:01:46.2804114+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] Ground truth prepared from live GitHub GraphQL data. Starting Zero-Shot, RAG-LLM, and CodeBERT preparation.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 40,
+      "TimestampUtc": "2026-06-27T07:01:46.2805021+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] [Zero-Shot] Starting Gemini inference.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 41,
+      "TimestampUtc": "2026-06-27T07:01:46.2811268+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] [RAG-LLM] Starting Gemini inference.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 42,
+      "TimestampUtc": "2026-06-27T07:01:59.3445566+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] [RAG-LLM] Finished. Vulnerable detections: 0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 43,
+      "TimestampUtc": "2026-06-27T07:02:01.3568754+00:00",
+      "Stream": "stdout",
+      "Message": "[Retrieval] Security reference source selected: GitHubGraphQLApi. Matched advisory entries: 105.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 44,
+      "TimestampUtc": "2026-06-27T07:02:01.3569973+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] Strict real-time retrieval enabled. GitHub GraphQL API is the sole source of truth for vulnerability advisories.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 45,
+      "TimestampUtc": "2026-06-27T07:02:01.3570823+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Newtonsoft.Json\u0027: HTTP 200 (OK), pages=1, advisories=2.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 46,
+      "TimestampUtc": "2026-06-27T07:02:01.3571683+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Serilog\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 47,
+      "TimestampUtc": "2026-06-27T07:02:01.3572471+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Dapper\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 48,
+      "TimestampUtc": "2026-06-27T07:02:01.3573362+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027AdvancedAgilityPack\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 49,
+      "TimestampUtc": "2026-06-27T07:02:01.3574208+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Azure.Identity\u0027: HTTP 200 (OK), pages=1, advisories=3.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 50,
+      "TimestampUtc": "2026-06-27T07:02:01.3575023+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Binus.WS.Pattern\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 51,
+      "TimestampUtc": "2026-06-27T07:02:01.3575789+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Binus.WS.Pattern.AzureStorage\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 52,
+      "TimestampUtc": "2026-06-27T07:02:01.357655+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Binus.WS.Pattern.MessageQueue\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 53,
+      "TimestampUtc": "2026-06-27T07:02:01.357724+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027BuildBundlerMinifier\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 54,
+      "TimestampUtc": "2026-06-27T07:02:01.3578052+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027ClosedXML\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 55,
+      "TimestampUtc": "2026-06-27T07:02:01.3578736+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027FastReport.OpenSource\u0027: HTTP 200 (OK), pages=1, advisories=1.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 56,
+      "TimestampUtc": "2026-06-27T07:02:01.3579498+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027FastReport.OpenSource.Export.PdfSimple\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 57,
+      "TimestampUtc": "2026-06-27T07:02:01.358008+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027FastReport.OpenSource.Web\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 58,
+      "TimestampUtc": "2026-06-27T07:02:01.3580731+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027itext7\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 59,
+      "TimestampUtc": "2026-06-27T07:02:01.3581329+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.ApplicationInsights.AspNetCore\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 60,
+      "TimestampUtc": "2026-06-27T07:02:01.358198+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.AspNet.Mvc\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 61,
+      "TimestampUtc": "2026-06-27T07:02:01.3582639+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.AspNetCore.Authentication.OpenIdConnect\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 62,
+      "TimestampUtc": "2026-06-27T07:02:01.3583385+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.AspNetCore.Http\u0027: HTTP 200 (OK), pages=1, advisories=1.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 63,
+      "TimestampUtc": "2026-06-27T07:02:01.3584092+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.AspNetCore.Mvc.Core\u0027: HTTP 200 (OK), pages=1, advisories=11.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 64,
+      "TimestampUtc": "2026-06-27T07:02:01.3584918+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 65,
+      "TimestampUtc": "2026-06-27T07:02:01.3585882+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.EntityFrameworkCore\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 66,
+      "TimestampUtc": "2026-06-27T07:02:01.358657+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.EntityFrameworkCore.Design\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 67,
+      "TimestampUtc": "2026-06-27T07:02:01.3587218+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.EntityFrameworkCore.SqlServer\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 68,
+      "TimestampUtc": "2026-06-27T07:02:01.3587928+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.Extensions.Caching.StackExchangeRedis\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 69,
+      "TimestampUtc": "2026-06-27T07:02:01.3588761+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.Identity.Web\u0027: HTTP 200 (OK), pages=1, advisories=1.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 70,
+      "TimestampUtc": "2026-06-27T07:02:01.3589462+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.VisualStudio.Web.CodeGeneration.Design\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 71,
+      "TimestampUtc": "2026-06-27T07:02:01.3590212+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027MimeTypeMapOfficial\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 72,
+      "TimestampUtc": "2026-06-27T07:02:01.3590854+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Nancy\u0027: HTTP 200 (OK), pages=1, advisories=2.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 73,
+      "TimestampUtc": "2026-06-27T07:02:01.3591445+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027NetCoreAutoLinkDropdown\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 74,
+      "TimestampUtc": "2026-06-27T07:02:01.3592172+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027PdfSharpCore\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 75,
+      "TimestampUtc": "2026-06-27T07:02:01.3592816+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027SixLabors.ImageSharp\u0027: HTTP 200 (OK), pages=1, advisories=14.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 76,
+      "TimestampUtc": "2026-06-27T07:02:01.3593618+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027starkbank-ecdsa\u0027: HTTP 200 (OK), pages=1, advisories=2.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 77,
+      "TimestampUtc": "2026-06-27T07:02:01.359426+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027Microsoft.Data.SqlClient\u0027: HTTP 200 (OK), pages=1, advisories=6.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 78,
+      "TimestampUtc": "2026-06-27T07:02:01.3595088+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.Data.SqlClient\u0027: HTTP 200 (OK), pages=1, advisories=2.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 79,
+      "TimestampUtc": "2026-06-27T07:02:01.3595837+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.Drawing.Common\u0027: HTTP 200 (OK), pages=1, advisories=2.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 80,
+      "TimestampUtc": "2026-06-27T07:02:01.359651+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.Globalization.Calendars\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 81,
+      "TimestampUtc": "2026-06-27T07:02:01.3597132+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.Private.ServiceModel\u0027: HTTP 200 (OK), pages=1, advisories=7.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 82,
+      "TimestampUtc": "2026-06-27T07:02:01.3598477+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.Security.Cryptography.Xml\u0027: HTTP 200 (OK), pages=1, advisories=12.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 83,
+      "TimestampUtc": "2026-06-27T07:02:01.3599952+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.ServiceModel.Duplex\u0027: HTTP 200 (OK), pages=1, advisories=7.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 84,
+      "TimestampUtc": "2026-06-27T07:02:01.3601402+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.ServiceModel.Http\u0027: HTTP 200 (OK), pages=1, advisories=7.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 85,
+      "TimestampUtc": "2026-06-27T07:02:01.3602947+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.ServiceModel.NetTcp\u0027: HTTP 200 (OK), pages=1, advisories=7.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 86,
+      "TimestampUtc": "2026-06-27T07:02:01.360374+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.ServiceModel.Security\u0027: HTTP 200 (OK), pages=1, advisories=7.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 87,
+      "TimestampUtc": "2026-06-27T07:02:01.3604639+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] GitHub API package \u0027System.Text.Encodings.Web\u0027: HTTP 200 (OK), pages=1, advisories=11.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 88,
+      "TimestampUtc": "2026-06-27T07:02:01.3605302+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Retrieval] Security reference source selected: GitHubGraphQLApi. Matched advisory entries: 105.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 89,
+      "TimestampUtc": "2026-06-27T07:02:01.3674624+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] Ground truth prepared from live GitHub GraphQL data. Starting Zero-Shot, RAG-LLM, and CodeBERT preparation.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 90,
+      "TimestampUtc": "2026-06-27T07:02:01.3675187+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Zero-Shot] Starting Gemini inference.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 91,
+      "TimestampUtc": "2026-06-27T07:02:01.3680879+00:00",
+      "Stream": "stdout",
+      "Message": "[Gemini] Zero-Shot batch 1/3, packages=15.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 92,
+      "TimestampUtc": "2026-06-27T07:02:01.3684518+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [RAG-LLM] Starting Gemini inference.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 93,
+      "TimestampUtc": "2026-06-27T07:02:01.3718189+00:00",
+      "Stream": "stdout",
+      "Message": "[Gemini] RAG-LLM batch 1/3, packages=15.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 94,
+      "TimestampUtc": "2026-06-27T07:02:02.7561797+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] [RAG-LLM] Finished. Vulnerable detections: 1.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 95,
+      "TimestampUtc": "2026-06-27T07:02:09.15945+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] [Zero-Shot] Finished. Vulnerable detections: 1.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 96,
+      "TimestampUtc": "2026-06-27T07:02:09.1812069+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] [CodeBERT] Preparing Python inference input.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 97,
+      "TimestampUtc": "2026-06-27T07:02:09.2207041+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Executing local Python inference: python codebert_inference.py --input \u0022D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy2-23B2CD34-codebert-input.json\u0022 --output \u0022D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy2-23B2CD34-codebert-predictions.json\u0022",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 98,
+      "TimestampUtc": "2026-06-27T07:02:09.408231+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Loading CodeBERT bridge input: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy2-23B2CD34-codebert-input.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 99,
+      "TimestampUtc": "2026-06-27T07:02:09.4092918+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Loaded 12 dataset record(s). Running deterministic local inference.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 100,
+      "TimestampUtc": "2026-06-27T07:02:09.4094348+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [1/4] CodeBERT bridge inferred Serilog@2.10.0 =\u003E vulnerable=false confidence=0.1606",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 101,
+      "TimestampUtc": "2026-06-27T07:02:09.4094712+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [2/4] CodeBERT bridge inferred FluentValidation.AspNetCore@11.2.2 =\u003E vulnerable=false confidence=0.3244",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 102,
+      "TimestampUtc": "2026-06-27T07:02:09.4095014+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [3/4] CodeBERT bridge inferred AutoMapper@12.0.1 =\u003E vulnerable=true confidence=0.7327",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 103,
+      "TimestampUtc": "2026-06-27T07:02:09.4095467+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [4/4] CodeBERT bridge inferred Dapper@2.0.123 =\u003E vulnerable=true confidence=0.5315",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 104,
+      "TimestampUtc": "2026-06-27T07:02:09.4116264+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Wrote 4 CodeBERT bridge prediction(s) to D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy2-23B2CD34-codebert-predictions.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 105,
+      "TimestampUtc": "2026-06-27T07:02:09.4271946+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Python inference completed successfully. Prediction file: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy2-23B2CD34-codebert-predictions.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 106,
+      "TimestampUtc": "2026-06-27T07:02:09.4450133+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] [CodeBERT] Finished. Vulnerable detections: 2.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 107,
+      "TimestampUtc": "2026-06-27T07:02:09.4563663+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] Completed in 24,73s.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 108,
+      "TimestampUtc": "2026-06-27T07:02:09.4899873+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy2-23B2CD34] Checkpoint saved: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\checkpoints\\Dummy2-23B2CD34.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 109,
+      "TimestampUtc": "2026-06-27T07:02:09.7678187+00:00",
+      "Stream": "stdout",
+      "Message": "Checkpoint and aggregate reports saved after project: Dummy2-23B2CD34",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 110,
+      "TimestampUtc": "2026-06-27T07:02:10.8648592+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] [Zero-Shot] Finished. Vulnerable detections: 2.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 111,
+      "TimestampUtc": "2026-06-27T07:02:10.8649187+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] [CodeBERT] Preparing Python inference input.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 112,
+      "TimestampUtc": "2026-06-27T07:02:10.867208+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Executing local Python inference: python codebert_inference.py --input \u0022D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy1-3BD1A055-codebert-input.json\u0022 --output \u0022D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy1-3BD1A055-codebert-predictions.json\u0022",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 113,
+      "TimestampUtc": "2026-06-27T07:02:11.0061476+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Loading CodeBERT bridge input: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy1-3BD1A055-codebert-input.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 114,
+      "TimestampUtc": "2026-06-27T07:02:11.0078192+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Loaded 9 dataset record(s). Running deterministic local inference.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 115,
+      "TimestampUtc": "2026-06-27T07:02:11.0079952+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [1/3] CodeBERT bridge inferred Npgsql.EntityFrameworkCore.PostgreSQL@7.0.11 =\u003E vulnerable=true confidence=0.8534",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 116,
+      "TimestampUtc": "2026-06-27T07:02:11.0080316+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [2/3] CodeBERT bridge inferred Microsoft.EntityFrameworkCore@8.0.4 =\u003E vulnerable=false confidence=0.1257",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 117,
+      "TimestampUtc": "2026-06-27T07:02:11.0080808+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [3/3] CodeBERT bridge inferred Swashbuckle.AspNetCore@6.5.0 =\u003E vulnerable=true confidence=0.6094",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 118,
+      "TimestampUtc": "2026-06-27T07:02:11.0109965+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Wrote 3 CodeBERT bridge prediction(s) to D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy1-3BD1A055-codebert-predictions.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 119,
+      "TimestampUtc": "2026-06-27T07:02:11.026063+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Python inference completed successfully. Prediction file: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy1-3BD1A055-codebert-predictions.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 120,
+      "TimestampUtc": "2026-06-27T07:02:11.0378463+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] [CodeBERT] Finished. Vulnerable detections: 2.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 121,
+      "TimestampUtc": "2026-06-27T07:02:11.0380959+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] Completed in 26,32s.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 122,
+      "TimestampUtc": "2026-06-27T07:02:11.0413145+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy1-3BD1A055] Checkpoint saved: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\checkpoints\\Dummy1-3BD1A055.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 123,
+      "TimestampUtc": "2026-06-27T07:02:11.1287752+00:00",
+      "Stream": "stdout",
+      "Message": "Checkpoint and aggregate reports saved after project: Dummy1-3BD1A055",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 124,
+      "TimestampUtc": "2026-06-27T07:02:46.2794409+00:00",
+      "Stream": "stdout",
+      "Message": "[Gemini] Zero-Shot batch 2/3, packages=15.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 125,
+      "TimestampUtc": "2026-06-27T07:02:48.7103366+00:00",
+      "Stream": "stdout",
+      "Message": "[Gemini] RAG-LLM batch 2/3, packages=15.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 126,
+      "TimestampUtc": "2026-06-27T07:03:47.1743023+00:00",
+      "Stream": "stdout",
+      "Message": "[Gemini] RAG-LLM batch 3/3, packages=13.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 127,
+      "TimestampUtc": "2026-06-27T07:03:51.1697162+00:00",
+      "Stream": "stdout",
+      "Message": "[Gemini] Zero-Shot batch 3/3, packages=13.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 128,
+      "TimestampUtc": "2026-06-27T07:04:50.6618689+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [Zero-Shot] Finished. Vulnerable detections: 27.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 129,
+      "TimestampUtc": "2026-06-27T07:05:09.0217199+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [RAG-LLM] Finished. Vulnerable detections: 8.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 130,
+      "TimestampUtc": "2026-06-27T07:05:09.0220457+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [CodeBERT] Preparing Python inference input.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 131,
+      "TimestampUtc": "2026-06-27T07:05:09.0420733+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Executing local Python inference: python codebert_inference.py --input \u0022D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy3-0B93FA13-codebert-input.json\u0022 --output \u0022D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy3-0B93FA13-codebert-predictions.json\u0022",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 132,
+      "TimestampUtc": "2026-06-27T07:05:09.2664487+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Loading CodeBERT bridge input: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy3-0B93FA13-codebert-input.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 133,
+      "TimestampUtc": "2026-06-27T07:05:09.2678784+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Loaded 129 dataset record(s). Running deterministic local inference.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 134,
+      "TimestampUtc": "2026-06-27T07:05:09.268077+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [1/43] CodeBERT bridge inferred Binus.WS.Pattern@1.0.5 =\u003E vulnerable=false confidence=0.2756",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 135,
+      "TimestampUtc": "2026-06-27T07:05:09.2681188+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [2/43] CodeBERT bridge inferred AdvancedAgilityPack@1.1.0 =\u003E vulnerable=true confidence=0.9218",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 136,
+      "TimestampUtc": "2026-06-27T07:05:09.2681577+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [3/43] CodeBERT bridge inferred ClosedXML@0.95.4 =\u003E vulnerable=true confidence=0.6142",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 137,
+      "TimestampUtc": "2026-06-27T07:05:09.2681964+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [4/43] CodeBERT bridge inferred Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation@3.1.6 =\u003E vulnerable=false confidence=0.2811",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 138,
+      "TimestampUtc": "2026-06-27T07:05:09.268233+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [5/43] CodeBERT bridge inferred Microsoft.Data.SqlClient@2.1.7 =\u003E vulnerable=true confidence=0.9555",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 139,
+      "TimestampUtc": "2026-06-27T07:05:09.2684665+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [6/43] CodeBERT bridge inferred FastReport.OpenSource@2021.2.7 =\u003E vulnerable=false confidence=0.0780",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 140,
+      "TimestampUtc": "2026-06-27T07:05:09.2685079+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [7/43] CodeBERT bridge inferred Dapper@2.1.35 =\u003E vulnerable=false confidence=0.4738",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 141,
+      "TimestampUtc": "2026-06-27T07:05:09.2685404+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [8/43] CodeBERT bridge inferred Newtonsoft.Json@13.0.3 =\u003E vulnerable=true confidence=0.8079",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 142,
+      "TimestampUtc": "2026-06-27T07:05:09.268569+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [9/43] CodeBERT bridge inferred Microsoft.EntityFrameworkCore@3.1.6 =\u003E vulnerable=true confidence=0.7824",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 143,
+      "TimestampUtc": "2026-06-27T07:05:09.2686114+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [10/43] CodeBERT bridge inferred itext7@7.1.16 =\u003E vulnerable=true confidence=0.6003",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 144,
+      "TimestampUtc": "2026-06-27T07:05:09.2686501+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [11/43] CodeBERT bridge inferred Azure.Identity@1.10.2 =\u003E vulnerable=false confidence=0.0400",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 145,
+      "TimestampUtc": "2026-06-27T07:05:09.2686859+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [12/43] CodeBERT bridge inferred Microsoft.AspNetCore.Http@2.2.2 =\u003E vulnerable=true confidence=0.9115",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 146,
+      "TimestampUtc": "2026-06-27T07:05:09.2687179+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [13/43] CodeBERT bridge inferred Serilog@4.0.1 =\u003E vulnerable=false confidence=0.3873",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 147,
+      "TimestampUtc": "2026-06-27T07:05:09.2687496+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [14/43] CodeBERT bridge inferred BuildBundlerMinifier@3.2.449 =\u003E vulnerable=false confidence=0.4426",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 148,
+      "TimestampUtc": "2026-06-27T07:05:09.2687827+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [15/43] CodeBERT bridge inferred SixLabors.ImageSharp@2.1.10 =\u003E vulnerable=false confidence=0.2255",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 149,
+      "TimestampUtc": "2026-06-27T07:05:09.2696502+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [16/43] CodeBERT bridge inferred Microsoft.Identity.Web@1.15.2 =\u003E vulnerable=true confidence=0.7559",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 150,
+      "TimestampUtc": "2026-06-27T07:05:09.2697041+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [17/43] CodeBERT bridge inferred System.Globalization.Calendars@4.3.0 =\u003E vulnerable=false confidence=0.2044",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 151,
+      "TimestampUtc": "2026-06-27T07:05:09.2697938+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [18/43] CodeBERT bridge inferred Binus.WS.Pattern.AzureStorage@1.0.7 =\u003E vulnerable=true confidence=0.9609",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 152,
+      "TimestampUtc": "2026-06-27T07:05:09.2698265+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [19/43] CodeBERT bridge inferred System.Drawing.Common@4.7.2 =\u003E vulnerable=true confidence=0.7115",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 153,
+      "TimestampUtc": "2026-06-27T07:05:09.269857+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [20/43] CodeBERT bridge inferred NetCoreAutoLinkDropdown@1.0.2 =\u003E vulnerable=true confidence=0.8222",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 154,
+      "TimestampUtc": "2026-06-27T07:05:09.2699002+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [21/43] CodeBERT bridge inferred Microsoft.AspNetCore.Mvc.Core@2.2.5 =\u003E vulnerable=false confidence=0.2620",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 155,
+      "TimestampUtc": "2026-06-27T07:05:09.2699427+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [22/43] CodeBERT bridge inferred Microsoft.AspNetCore.Authentication.OpenIdConnect@3.1.17 =\u003E vulnerable=true confidence=0.6174",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 156,
+      "TimestampUtc": "2026-06-27T07:05:09.2699792+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [23/43] CodeBERT bridge inferred FastReport.OpenSource.Export.PdfSimple@2021.2.0 =\u003E vulnerable=true confidence=0.6433",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 157,
+      "TimestampUtc": "2026-06-27T07:05:09.2700159+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [24/43] CodeBERT bridge inferred Nancy@2.0.0 =\u003E vulnerable=true confidence=0.8108",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 158,
+      "TimestampUtc": "2026-06-27T07:05:09.2700495+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [25/43] CodeBERT bridge inferred System.Security.Cryptography.Xml@4.5.0 =\u003E vulnerable=false confidence=0.4644",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 159,
+      "TimestampUtc": "2026-06-27T07:05:09.2702389+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [26/43] CodeBERT bridge inferred System.Private.ServiceModel@4.7.0 =\u003E vulnerable=true confidence=0.8386",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 160,
+      "TimestampUtc": "2026-06-27T07:05:09.2702847+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [27/43] CodeBERT bridge inferred FastReport.OpenSource.Web@2021.2.7 =\u003E vulnerable=false confidence=0.1802",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 161,
+      "TimestampUtc": "2026-06-27T07:05:09.2704075+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [28/43] CodeBERT bridge inferred Microsoft.ApplicationInsights.AspNetCore@2.14.0 =\u003E vulnerable=true confidence=0.5936",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 162,
+      "TimestampUtc": "2026-06-27T07:05:09.2704874+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [29/43] CodeBERT bridge inferred PdfSharpCore@1.2.17 =\u003E vulnerable=true confidence=0.9515",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 163,
+      "TimestampUtc": "2026-06-27T07:05:09.2705231+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [30/43] CodeBERT bridge inferred MimeTypeMapOfficial@1.0.17 =\u003E vulnerable=true confidence=0.6911",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 164,
+      "TimestampUtc": "2026-06-27T07:05:09.2705535+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [31/43] CodeBERT bridge inferred System.ServiceModel.NetTcp@4.4.* =\u003E vulnerable=true confidence=0.5115",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 165,
+      "TimestampUtc": "2026-06-27T07:05:09.2706001+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [32/43] CodeBERT bridge inferred Microsoft.EntityFrameworkCore.SqlServer@3.1.6 =\u003E vulnerable=true confidence=0.8385",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 166,
+      "TimestampUtc": "2026-06-27T07:05:09.2706326+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [33/43] CodeBERT bridge inferred System.Text.Encodings.Web@5.0.1 =\u003E vulnerable=false confidence=0.0374",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 167,
+      "TimestampUtc": "2026-06-27T07:05:09.2706614+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [34/43] CodeBERT bridge inferred System.ServiceModel.Security@4.4.* =\u003E vulnerable=false confidence=0.0289",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 168,
+      "TimestampUtc": "2026-06-27T07:05:09.2707677+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [35/43] CodeBERT bridge inferred Microsoft.Extensions.Caching.StackExchangeRedis@5.0.1 =\u003E vulnerable=false confidence=0.1564",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 169,
+      "TimestampUtc": "2026-06-27T07:05:09.2707993+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [36/43] CodeBERT bridge inferred Microsoft.AspNet.Mvc@5.2.7 =\u003E vulnerable=false confidence=0.2939",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 170,
+      "TimestampUtc": "2026-06-27T07:05:09.2708299+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [37/43] CodeBERT bridge inferred System.ServiceModel.Duplex@4.4.* =\u003E vulnerable=false confidence=0.4604",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 171,
+      "TimestampUtc": "2026-06-27T07:05:09.2708725+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [38/43] CodeBERT bridge inferred Microsoft.EntityFrameworkCore.Design@3.1.6 =\u003E vulnerable=true confidence=0.8744",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 172,
+      "TimestampUtc": "2026-06-27T07:05:09.2709025+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [39/43] CodeBERT bridge inferred Binus.WS.Pattern.MessageQueue@1.2.0 =\u003E vulnerable=true confidence=0.9753",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 173,
+      "TimestampUtc": "2026-06-27T07:05:09.270933+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [40/43] CodeBERT bridge inferred Microsoft.VisualStudio.Web.CodeGeneration.Design@3.1.5 =\u003E vulnerable=true confidence=0.6328",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 174,
+      "TimestampUtc": "2026-06-27T07:05:09.270962+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [41/43] CodeBERT bridge inferred System.ServiceModel.Http@4.4.* =\u003E vulnerable=false confidence=0.3411",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 175,
+      "TimestampUtc": "2026-06-27T07:05:09.2709905+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [42/43] CodeBERT bridge inferred System.Data.SqlClient@4.8.6 =\u003E vulnerable=true confidence=0.8522",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 176,
+      "TimestampUtc": "2026-06-27T07:05:09.2710191+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] [43/43] CodeBERT bridge inferred starkbank-ecdsa@1.3.2 =\u003E vulnerable=false confidence=0.0176",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 177,
+      "TimestampUtc": "2026-06-27T07:05:09.2730068+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Wrote 43 CodeBERT bridge prediction(s) to D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy3-0B93FA13-codebert-predictions.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 178,
+      "TimestampUtc": "2026-06-27T07:05:09.2855603+00:00",
+      "Stream": "stdout",
+      "Message": "[CodeBERT] Python inference completed successfully. Prediction file: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy3-0B93FA13-codebert-predictions.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 179,
+      "TimestampUtc": "2026-06-27T07:05:09.3029567+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] [CodeBERT] Finished. Vulnerable detections: 24.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 180,
+      "TimestampUtc": "2026-06-27T07:05:09.3032344+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] Completed in 204,58s.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 181,
+      "TimestampUtc": "2026-06-27T07:05:09.3115336+00:00",
+      "Stream": "stdout",
+      "Message": "[Dummy3-0B93FA13] Checkpoint saved: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\checkpoints\\Dummy3-0B93FA13.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 182,
+      "TimestampUtc": "2026-06-27T07:05:09.6486775+00:00",
+      "Stream": "stdout",
+      "Message": "Checkpoint and aggregate reports saved after project: Dummy3-0B93FA13",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 183,
+      "TimestampUtc": "2026-06-27T07:05:09.6805329+00:00",
+      "Stream": "stdout",
+      "Message": "[Checkpoint] Loaded compatible checkpoint: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\Dummy1.csproj",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 184,
+      "TimestampUtc": "2026-06-27T07:05:09.6813825+00:00",
+      "Stream": "stdout",
+      "Message": "[Checkpoint] Loaded compatible checkpoint: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\Dummy2.csproj",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 185,
+      "TimestampUtc": "2026-06-27T07:05:09.6853479+00:00",
+      "Stream": "stdout",
+      "Message": "[Checkpoint] Loaded compatible checkpoint: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\Dummy3.csproj",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 186,
+      "TimestampUtc": "2026-06-27T07:05:10.0093981+00:00",
+      "Stream": "stdout",
+      "Message": "Batch audit completed.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 187,
+      "TimestampUtc": "2026-06-27T07:05:10.0094852+00:00",
+      "Stream": "stdout",
+      "Message": "Succeeded projects: 3.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 188,
+      "TimestampUtc": "2026-06-27T07:05:10.0123082+00:00",
+      "Stream": "stdout",
+      "Message": "Incomplete/API_FAILED projects: 0.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 189,
+      "TimestampUtc": "2026-06-27T07:05:10.012362+00:00",
+      "Stream": "stdout",
+      "Message": "Total elapsed time: 219,17s.",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 190,
+      "TimestampUtc": "2026-06-27T07:05:10.0124004+00:00",
+      "Stream": "stdout",
+      "Message": "RAG-LLM JSON report: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\audit-rag-llm-20260627-070137656.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 191,
+      "TimestampUtc": "2026-06-27T07:05:10.0124349+00:00",
+      "Stream": "stdout",
+      "Message": "Zero-Shot JSON report: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\audit-zero-shot-20260627-070137656.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 192,
+      "TimestampUtc": "2026-06-27T07:05:10.0124674+00:00",
+      "Stream": "stdout",
+      "Message": "CodeBERT JSON report: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\audit-codebert-20260627-070137656.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 193,
+      "TimestampUtc": "2026-06-27T07:05:10.012502+00:00",
+      "Stream": "stdout",
+      "Message": "Comprehensive CSV report: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\audit-comprehensive-metrics-20260627-070137656.csv",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 194,
+      "TimestampUtc": "2026-06-27T07:05:10.0125377+00:00",
+      "Stream": "stdout",
+      "Message": "Comprehensive Excel report: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\audit-comprehensive-report-20260627-070137656.xlsx",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 195,
+      "TimestampUtc": "2026-06-27T07:05:10.0125761+00:00",
+      "Stream": "stdout",
+      "Message": "Interactive HTML report: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\audit-interactive-report-20260627-070137656.html",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 196,
+      "TimestampUtc": "2026-06-27T07:05:10.0126086+00:00",
+      "Stream": "stdout",
+      "Message": "Gemini API diagnostics JSON: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\api-diagnostics-20260627-070137656.json",
+      "EndsLine": true
+    },
+    {
+      "Sequence": 197,
+      "TimestampUtc": "2026-06-27T07:05:10.0126445+00:00",
+      "Stream": "stdout",
+      "Message": "Console execution log JSON: D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\console-execution-log-20260627-070137656.json",
+      "EndsLine": true
+    }
+  ]
+}

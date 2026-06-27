@@ -68,6 +68,7 @@ public static class ModelEvaluator
                     return new GeminiResponse
                     {
                         ModelName = ReadJsonString(document.RootElement, "ModelName", "modelName"),
+                        InferenceMode = ReadJsonString(document.RootElement, "InferenceMode", "inferenceMode"),
                         VulnerabilityReports = JsonSerializer.Deserialize<List<VulnerabilityReport>>(property.GetRawText(), JsonOptions) ?? new List<VulnerabilityReport>()
                     };
                 }

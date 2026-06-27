@@ -16,8 +16,9 @@ public class Program
     private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
     private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
     private const string CodeBertPythonEnvironmentVariableName = "CODEBERT_PYTHON";
+    private const string CodeBertModelEnvironmentVariableName = "CODEBERT_MODEL_PATH";
     private const string CodeBertInferenceScriptName = "codebert_inference.py";
-    private const string CheckpointSchemaVersion = "2026-06-26-codebert-python-v3";
+    private const string CheckpointSchemaVersion = "2026-06-27-codebert-real-local-v4";
     private const int ProjectMaxDegreeOfParallelism = 4;
     private const int GeminiGlobalConcurrencyLimit = 4;
 
@@ -737,6 +738,12 @@ public class Program
         startInfo.ArgumentList.Add(inputPath);
         startInfo.ArgumentList.Add("--output");
         startInfo.ArgumentList.Add(outputPath);
+        var codeBertModelPath = Environment.GetEnvironmentVariable(CodeBertModelEnvironmentVariableName);
+        if (!string.IsNullOrWhiteSpace(codeBertModelPath))
+        {
+            startInfo.ArgumentList.Add("--model");
+            startInfo.ArgumentList.Add(codeBertModelPath);
+        }
 
         var stderrBuilder = new StringBuilder();
         using var process = new Process
@@ -762,7 +769,10 @@ public class Program
             }
         };
 
-        WriteLine($"[CodeBERT] Executing local Python inference: {pythonExecutable} {CodeBertInferenceScriptName} --input \"{inputPath}\" --output \"{outputPath}\"");
+        var modelLog = string.IsNullOrWhiteSpace(codeBertModelPath)
+            ? $"no {CodeBertModelEnvironmentVariableName} configured"
+            : $"model \"{codeBertModelPath}\"";
+        WriteLine($"[CodeBERT] Executing local Python inference: {pythonExecutable} {CodeBertInferenceScriptName} --input \"{inputPath}\" --output \"{outputPath}\" ({modelLog})");
 
         try
         {
@@ -1513,6 +1523,7 @@ Security reference data:
         return new GeminiResponse
         {
             ModelName = geminiResponse?.ModelName ?? string.Empty,
+            InferenceMode = geminiResponse?.InferenceMode ?? string.Empty,
             VulnerabilityReports = normalizedReports
         };
     }
@@ -1895,7 +1906,7 @@ Security reference data:
                     EvaluationStatus = codeBert?.Status ?? "NOT_RUN",
                     PredictionModelName = GetPredictionModelName(codeBert),
                     InferenceMode = GetInferenceMode(codeBert),
-                    IsMockPrediction = IsMockCodeBertScenario(codeBert),
+                    IsSyntheticPrediction = IsSyntheticCodeBertScenario(codeBert),
                     EvaluationNote = codeBert?.Success == true
                         ? GetCodeBertEvaluationNote(codeBert)
                         : codeBert?.ErrorMessage ?? "CodeBERT inference was not executed.",
@@ -1923,7 +1934,7 @@ Security reference data:
             EvaluationStatus = projectReports.All(x => string.Equals(x.EvaluationStatus, "SUCCESS", StringComparison.OrdinalIgnoreCase))
                 ? "SUCCESS"
                 : "PARTIAL_OR_FAILED",
-            EvaluationNote = "CodeBERT metrics are produced by running codebert_inference.py and evaluating its prediction JSON with the same ModelEvaluator used by RAG-LLM and Zero-Shot. If PredictionModelName contains 'mock', treat the metrics as pipeline-validation only.",
+            EvaluationNote = "CodeBERT metrics are produced only when codebert_inference.py completes real local inference and writes prediction JSON. If the local model or Python libraries are unavailable, CodeBERT is marked CODEBERT_FAILED and excluded from metrics.",
             DatasetFieldDescriptions = GetCodeBertDatasetFieldDescriptions(),
             Projects = projectReports
         };
@@ -1973,16 +1984,19 @@ Security reference data:
 
         if (scenario.Scenario == AuditScenario.CodeBert)
         {
-            return IsMockCodeBertScenario(scenario) ? "MOCK_PYTHON_BRIDGE" : "PYTHON_BRIDGE";
+            return string.IsNullOrWhiteSpace(scenario.Response?.InferenceMode)
+                ? "PYTHON_BRIDGE"
+                : scenario.Response.InferenceMode;
         }
 
         return "GEMINI_API";
     }
 
-    private static bool IsMockCodeBertScenario(ScenarioAuditResult? scenario)
+    private static bool IsSyntheticCodeBertScenario(ScenarioAuditResult? scenario)
     {
         return scenario?.Scenario == AuditScenario.CodeBert &&
-               GetPredictionModelName(scenario).Contains("mock", StringComparison.OrdinalIgnoreCase);
+               (GetPredictionModelName(scenario).Contains("mock", StringComparison.OrdinalIgnoreCase) ||
+                GetPredictionModelName(scenario).Contains("synthetic", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string GetMetricNote(ScenarioAuditResult? scenario)
@@ -1997,9 +2011,9 @@ Security reference data:
             return scenario.MetricExclusionReason;
         }
 
-        if (IsMockCodeBertScenario(scenario))
+        if (IsSyntheticCodeBertScenario(scenario))
         {
-            return "Mock CodeBERT predictions. Use these metrics only to validate the reporting pipeline.";
+            return "Synthetic CodeBERT predictions were detected. Do not use this scenario as model-quality evidence.";
         }
 
         return "Metrics calculated from model predictions and ground truth labels.";
@@ -2007,9 +2021,9 @@ Security reference data:
 
     private static string GetCodeBertEvaluationNote(ScenarioAuditResult? scenario)
     {
-        return IsMockCodeBertScenario(scenario)
-            ? "Mock Python CodeBERT inference completed. Metrics validate the pipeline only; replace codebert_inference.py with real fine-tuned inference before using these as CodeBERT model quality."
-            : "Python CodeBERT inference completed and metrics were calculated with ModelEvaluator.";
+        return IsSyntheticCodeBertScenario(scenario)
+            ? "Synthetic CodeBERT predictions were detected. Metrics are retained only for traceability and must not be used as model-quality evidence."
+            : "Local Python CodeBERT inference completed and metrics were calculated with ModelEvaluator.";
     }
 
     private static void SaveComprehensiveCsvReport(string outputFilePath, IReadOnlyCollection<ProjectAuditResult> results)
@@ -2074,7 +2088,7 @@ Security reference data:
             ("MetricExclusionPolicy", "Scenario with API_FAILED, RETRIEVAL_FAILED, or missing prediction is excluded from confusion matrix; no Ground Truth fallback is used."),
             ("GroundTruthPolicy", "A package is labeled vulnerable only when its current version satisfies the advisory vulnerable version range."),
             ("CodeBertRecords", results.Sum(x => x.CodeBertRecords.Count).ToString()),
-            ("CodeBertEvaluationPolicy", "CodeBERT dataset rows are exported in this run. CodeBERT prediction metrics require a trained model or imported prediction file."),
+            ("CodeBertEvaluationPolicy", "CodeBERT prediction metrics require local Python inference with a fine-tuned model configured through CODEBERT_MODEL_PATH. Missing model or libraries mark CodeBERT as CODEBERT_FAILED and exclude it from metrics."),
             ("MetricRows", metrics.Count.ToString())
         };
 
@@ -2189,7 +2203,7 @@ Security reference data:
             ("Purpose", "Workbook ini merangkum audit dependency NuGet dari file .csproj. Tiga jalur yang dihasilkan adalah RAG-LLM, Zero-Shot, dan CodeBERT dataset export."),
             ("RAG-LLM", "LLM menerima package list plus security reference hasil retrieval. Gunakan sheet Scenario Metrics dan Finding Detail untuk membaca prediksi dan evaluasinya."),
             ("Zero-Shot", "LLM hanya menerima package list tanpa konteks advisory. Bandingkan dengan RAG-LLM untuk melihat efek retrieval."),
-            ("CodeBERT", "Dataset CodeBERT diekspor, lalu codebert_inference.py dijalankan melalui Python bridge. Jika PredictionModelName berisi mock-codebert, metriknya hanya validasi pipeline, bukan kualitas model fine-tuned."),
+            ("CodeBERT", "Dataset CodeBERT diekspor, lalu codebert_inference.py menjalankan inferensi lokal dengan model fine-tuned dari CODEBERT_MODEL_PATH. Jika model atau library Python belum tersedia, skenario ditandai CODEBERT_FAILED dan tidak masuk metrik."),
             ("Ground Truth Version Range", "Package hanya dianggap vulnerable jika CurrentVersion masuk VulnerableVersionRange. Ini mencegah package patched tetap dihitung sebagai vulnerable hanya karena namanya punya advisory."),
             ("Run Summary", "Ringkasan eksekusi: model, jumlah project, jumlah sukses/gagal, concurrency, dan jumlah record."),
             ("Method Comparison", "Tabel cepat untuk melihat status tiga metode per project: RAG-LLM, Zero-Shot, dan CodeBERT."),
@@ -2718,21 +2732,23 @@ Security reference data:
         builder.AppendLine("<title>GeminiNuGetAuditor Interactive Audit Report / Laporan Audit Interaktif</title>");
         builder.AppendLine("""
 <style>
-:root{--bg:#f5f7fb;--panel:#ffffff;--ink:#172033;--muted:#657089;--line:#dbe3ef;--brand:#1d4ed8;--brand2:#0f766e;--bert:#7c3aed;--good:#15803d;--warn:#b45309;--bad:#b91c1c}
+:root{--bg:#f5f7fb;--panel:#ffffff;--ink:#172033;--muted:#657089;--line:#dbe3ef;--brand:#1d4ed8;--brand2:#0f766e;--bert:#7c3aed;--good:#065f46;--good-bg:#d1fae5;--good-dark:#bbf7d0;--warn:#92400e;--bad:#991b1b;--tp:#047857;--tn:#2563eb;--fp:#ea580c;--fn:#dc2626}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:Segoe UI,Roboto,Arial,sans-serif;line-height:1.45}
 header{background:linear-gradient(135deg,#0f172a,#1d4ed8 58%,#0f766e);color:white;padding:34px 42px}
-header h1{margin:0 0 8px;font-size:30px;letter-spacing:0} header p{margin:0;color:#dbeafe;max-width:1100px}.hero-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.hero-meta span{border:1px solid rgba(255,255,255,.26);background:rgba(255,255,255,.1);border-radius:999px;padding:6px 10px;font-size:12px}
+header h1{margin:0 0 8px;font-size:30px;letter-spacing:0} header p{margin:0;color:#dbeafe;max-width:1100px}header .id,header .id-block{color:var(--good-dark)!important}.hero-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.hero-meta span{border:1px solid rgba(255,255,255,.34);background:rgba(255,255,255,.14);border-radius:999px;padding:6px 10px;font-size:12px;color:#f8fafc}
 main{padding:24px 42px 48px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
 .metric .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.metric .value{font-size:28px;font-weight:700;margin-top:4px}.metric .sub{color:var(--muted);font-size:12px;margin-top:4px}
 section{margin-top:18px}.section-title{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:24px 0 10px}h2{font-size:20px;margin:0}.hint{color:var(--muted);font-size:13px}.mono{font-family:Consolas,Menlo,monospace}.id{color:var(--brand2);font-style:italic;font-weight:650}.id-block{display:block;color:var(--brand2);font-style:italic;font-weight:550;margin-top:2px}.id-soft{color:#0f766e;font-style:italic}
 table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:13px}th{background:#eef4ff;color:#24324b;position:sticky;top:0;z-index:1}tr:hover td{background:#f8fbff}
-.pill{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:12px;font-weight:600}.good{background:#dcfce7;color:var(--good)}.bad{background:#fee2e2;color:var(--bad)}.warn{background:#fef3c7;color:var(--warn)}.neutral{background:#e5e7eb;color:#374151}
+.pill{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:12px;font-weight:700}.good{background:var(--good-bg);color:var(--good)}.bad{background:#fee2e2;color:var(--bad)}.warn{background:#fef3c7;color:var(--warn)}.neutral{background:#e5e7eb;color:#374151}
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#eef4ff;border:1px solid var(--line);border-radius:8px;padding:10px}.toolbar input,.toolbar select{min-width:190px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:white}.toolbar input{min-width:300px}.toolbar label{font-size:13px;color:#24324b;display:flex;gap:6px;align-items:center}.toolbar button{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:white;cursor:pointer}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.tab{border:1px solid var(--line);background:white;border-radius:999px;padding:8px 12px;cursor:pointer}.tab.active{background:var(--brand);color:white;border-color:var(--brand)}.tab.active .id{color:#dbeafe}
 .panel{display:none}.panel.active{display:block}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.files a{display:block;color:var(--brand);text-decoration:none;margin:6px 0}.files a:hover{text-decoration:underline}
 .summary-card{border-left:4px solid var(--brand)}.summary-card.codebert{border-left-color:var(--bert)}.summary-card.zero{border-left-color:var(--brand2)}.score{font-size:22px;font-weight:700}.bar-label{display:flex;justify-content:space-between;gap:8px;margin-top:8px}.bar-track{height:12px;background:#e5e7eb;border-radius:999px;overflow:hidden}.bar-fill{height:12px}.detail{max-width:520px}.row-hidden{display:none!important}
+.flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.flow-step{border:1px solid var(--line);border-radius:8px;padding:12px;background:#f8fbff;position:relative}.flow-step strong{display:block}.flow-step .num{display:inline-flex;width:24px;height:24px;align-items:center;justify-content:center;border-radius:999px;background:var(--brand);color:white;font-weight:700;margin-bottom:8px}.flow-step:not(:last-child)::after{content:"";position:absolute;right:-10px;top:50%;width:10px;border-top:2px solid #93c5fd}
+.chart-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.donut-card{display:flex;gap:14px;align-items:center}.donut{width:112px;height:112px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto}.donut span{width:72px;height:72px;border-radius:50%;background:white;display:grid;place-items:center;text-align:center;font-size:12px;font-weight:700}.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.legend span{font-size:12px;color:var(--muted)}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}.stack{height:16px;background:#e5e7eb;border-radius:999px;overflow:hidden;display:flex}.stack span{display:block;height:16px}.mini-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.mini-kpi{border:1px solid var(--line);border-radius:8px;padding:12px;background:#f8fbff}.mini-kpi strong{font-size:20px}.small-table td,.small-table th{font-size:12px}.codebert-note{border:1px solid #c4b5fd;background:#f5f3ff;color:#4c1d95;border-radius:8px;padding:10px;margin-top:10px}
 details{background:#f8fbff;border:1px solid var(--line);border-radius:8px;padding:10px}summary{cursor:pointer;font-weight:600}
-@media(max-width:1100px){main,header{padding-left:18px;padding-right:18px}.grid,.two,.three{grid-template-columns:1fr}.toolbar input,.toolbar select{min-width:100%;width:100%}}
+@media(max-width:1100px){main,header{padding-left:18px;padding-right:18px}.grid,.two,.three,.flow,.chart-grid,.mini-kpis{grid-template-columns:1fr}.toolbar input,.toolbar select{min-width:100%;width:100%}.flow-step:not(:last-child)::after{display:none}}
 </style>
 """);
         builder.AppendLine("</head><body>");
@@ -2762,13 +2778,14 @@ details{background:#f8fbff;border:1px solid var(--line);border-radius:8px;paddin
 <div class="two">
 <div><strong>RAG-LLM</strong><p>Gemini receives package references plus retrieved security context.<span class="id-block">Gemini menerima daftar package plus konteks keamanan hasil retrieval.</span></p></div>
 <div><strong>Zero-Shot</strong><p>Gemini receives only package references.<span class="id-block">Gemini hanya menerima daftar package tanpa konteks advisory.</span></p></div>
-<div><strong>CodeBERT</strong><p>The app exports labeled rows, executes codebert_inference.py, and evaluates predictions with the same confusion matrix. If model is mock-codebert, metrics validate the pipeline only.<span class="id-block">Aplikasi mengekspor dataset berlabel, menjalankan codebert_inference.py, lalu mengevaluasi prediksi dengan confusion matrix yang sama. Jika model mock-codebert, metrik hanya validasi pipeline.</span></p></div>
+<div><strong>CodeBERT</strong><p>The app exports labeled rows, executes codebert_inference.py, and evaluates predictions with the same confusion matrix only when local CodeBERT inference succeeds.<span class="id-block">Aplikasi mengekspor dataset berlabel, menjalankan codebert_inference.py, lalu mengevaluasi prediksi dengan confusion matrix yang sama hanya ketika inferensi CodeBERT lokal berhasil.</span></p></div>
 <div><strong>Ground Truth<span class="id-block">Label Acuan</span></strong><p>Labels come exclusively from live GitHub GraphQL advisory retrieval and version-range evaluation.<span class="id-block">Label berasal secara eksklusif dari retrieval advisory GitHub GraphQL real-time dan evaluasi rentang versi sebagai dasar TP/TN/FP/FN.</span></p></div>
 </div>
 </section>
 """);
 
         AppendExecutiveSummary(builder, results);
+        AppendExperimentFlow(builder, results);
 
         builder.AppendLine("<section><div class=\"section-title\"><h2>Interactive Dashboard<span class=\"id-block\">Dashboard Interaktif</span></h2><span class=\"hint\">Search and filter without opening Excel.<span class=\"id-block\">Cari dan filter tanpa membuka Excel.</span></span></div>");
         builder.AppendLine("""
@@ -2790,7 +2807,10 @@ details{background:#f8fbff;border:1px solid var(--line);border-radius:8px;paddin
 """);
         builder.AppendLine("<div id=\"overview\" class=\"panel active\">");
         AppendScenarioSummaryCards(builder, results);
+        AppendRetrievalCoverageChart(builder, results);
         AppendComparisonChart(builder, results);
+        AppendConfusionDonutChart(builder, results);
+        AppendPredictionOutcomeChart(builder, results);
         AppendConfusionMatrixTable(builder, results);
         AppendHotspotTable(builder, allFindings, allMetricRecords);
         builder.AppendLine("</div><div id=\"projects\" class=\"panel\">");
@@ -2839,8 +2859,9 @@ function filter(){
         };
         var best = scenarioMetrics.OrderByDescending(x => x.Metrics.F1Score).First();
         var apiFailed = results.SelectMany(x => x.Scenarios).Count(x => x.Status == "API_FAILED");
-        var codeBertScenario = results.SelectMany(x => x.Scenarios).FirstOrDefault(x => x.Scenario == AuditScenario.CodeBert);
-        var hasMockCodeBert = IsMockCodeBertScenario(codeBertScenario);
+        var codeBertScenarios = results.SelectMany(x => x.Scenarios).Where(x => x.Scenario == AuditScenario.CodeBert).ToList();
+        var codeBertSucceeded = codeBertScenarios.Count(x => x.Success);
+        var codeBertFailed = codeBertScenarios.Count(x => !x.Success);
 
         builder.AppendLine("<section class=\"card\">");
         builder.AppendLine("<div class=\"section-title\"><h2>Executive Summary<span class=\"id-block\">Ringkasan Eksekutif</span></h2><span class=\"hint\">Generated automatically from this run.<span class=\"id-block\">Dibuat otomatis dari hasil run ini.</span></span></div>");
@@ -2850,9 +2871,9 @@ function filter(){
         builder.AppendLine("<div><strong>Execution Health<span class=\"id-block\">Kesehatan Eksekusi</span></strong>");
         builder.AppendLine($"<p>{results.Count(IsProjectFullySuccessfulForResume)} / {results.Count} project complete. API failed scenarios: {apiFailed}.<span class=\"id-block\">{results.Count(IsProjectFullySuccessfulForResume)} / {results.Count} proyek selesai. Skenario API gagal: {apiFailed}.</span></p></div>");
         builder.AppendLine("<div><strong>CodeBERT Status<span class=\"id-block\">Status CodeBERT</span></strong>");
-        builder.AppendLine(hasMockCodeBert
-            ? "<p>CodeBERT uses mock-codebert. Metrics validate the bridge and report pipeline only.<span class=\"id-block\">CodeBERT memakai mock-codebert. Metrik hanya memvalidasi bridge dan pipeline laporan.</span></p>"
-            : "<p>CodeBERT prediction file was evaluated as a Python bridge output.<span class=\"id-block\">File prediksi CodeBERT dievaluasi sebagai output Python bridge.</span></p>");
+        builder.AppendLine(codeBertSucceeded > 0
+            ? $"<p>{codeBertSucceeded} CodeBERT local inference result(s) were evaluated; {codeBertFailed} failed or excluded.<span class=\"id-block\">{codeBertSucceeded} hasil inferensi CodeBERT lokal dievaluasi; {codeBertFailed} gagal atau dikeluarkan.</span></p>"
+            : $"<p>No CodeBERT metrics were counted because local inference did not complete. Configure {Html(CodeBertModelEnvironmentVariableName)} to enable this scenario.<span class=\"id-block\">Tidak ada metrik CodeBERT yang dihitung karena inferensi lokal tidak selesai. Atur {Html(CodeBertModelEnvironmentVariableName)} untuk mengaktifkan skenario ini.</span></p>");
         builder.AppendLine("</div></div>");
 
         if (results.Count < 1000)
@@ -2861,6 +2882,74 @@ function filter(){
         }
 
         builder.AppendLine("</section>");
+    }
+
+    private static void AppendExperimentFlow(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var packageCount = results.Sum(x => x.PackageCount);
+        var retrievalSuccess = results.Count(x => string.Equals(x.SecurityReferenceSource, "GitHubGraphQLApi", StringComparison.OrdinalIgnoreCase));
+        var retrievalFailed = results.Count - retrievalSuccess;
+        var llmSuccess = results.SelectMany(x => x.Scenarios).Count(x => (x.Scenario is AuditScenario.RagLlm or AuditScenario.ZeroShot) && x.Success);
+        var codeBertSuccess = results.SelectMany(x => x.Scenarios).Count(x => x.Scenario == AuditScenario.CodeBert && x.Success);
+
+        builder.AppendLine("<section class=\"card\">");
+        builder.AppendLine("<div class=\"section-title\"><h2>Experiment Flow<span class=\"id-block\">Alur Eksperimen</span></h2><span class=\"hint\">Live-only ground truth, local inference, unified metrics.<span class=\"id-block\">Ground truth live-only, inferensi lokal, metrik terpadu.</span></span></div>");
+        builder.AppendLine("<div class=\"flow\">");
+        AppendFlowStep(builder, 1, "Scan", "Pindai", $"{results.Count} project", $"{results.Count} proyek");
+        AppendFlowStep(builder, 2, "Extract", "Ekstraksi", $"{packageCount} packages", $"{packageCount} paket");
+        AppendFlowStep(builder, 3, "Live Retrieval", "Retrieval Live", $"{retrievalSuccess} ok / {retrievalFailed} failed", $"{retrievalSuccess} sukses / {retrievalFailed} gagal");
+        AppendFlowStep(builder, 4, "Inference", "Inferensi", $"{llmSuccess} Gemini scenarios, {codeBertSuccess} CodeBERT", $"{llmSuccess} skenario Gemini, {codeBertSuccess} CodeBERT");
+        AppendFlowStep(builder, 5, "Evaluate", "Evaluasi", "TP/TN/FP/FN", "Confusion matrix terpadu");
+        builder.AppendLine("</div></section>");
+    }
+
+    private static void AppendFlowStep(StringBuilder builder, int number, string labelEnglish, string labelIndonesia, string valueEnglish, string valueIndonesia)
+    {
+        builder.AppendLine("<div class=\"flow-step\">");
+        builder.AppendLine($"<span class=\"num\">{number}</span>");
+        builder.AppendLine($"<strong>{Html(labelEnglish)}<span class=\"id-block\">{Html(labelIndonesia)}</span></strong>");
+        builder.AppendLine($"<p class=\"hint\">{Html(valueEnglish)}<span class=\"id-block\">{Html(valueIndonesia)}</span></p>");
+        builder.AppendLine("</div>");
+    }
+
+    private static void AppendRetrievalCoverageChart(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var totalProjects = results.Count;
+        var liveProjects = results.Count(x => string.Equals(x.SecurityReferenceSource, "GitHubGraphQLApi", StringComparison.OrdinalIgnoreCase));
+        var failedProjects = Math.Max(0, totalProjects - liveProjects);
+        var groundTruthRows = results.Sum(x => x.GroundTruthLabels.Count);
+        var vulnerableRows = results.Sum(x => x.GroundTruthLabels.Count(y => y.IsVulnerable));
+        var advisoryCount = results
+            .SelectMany(x => x.GroundTruthLabels)
+            .Select(x => x.AdvisoryId)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        builder.AppendLine("<section class=\"card\"><div class=\"section-title\"><h2>Retrieval Coverage<span class=\"id-block\">Cakupan Retrieval</span></h2><span class=\"hint\">GitHub GraphQL API is the sole source of ground truth.<span class=\"id-block\">GitHub GraphQL API adalah satu-satunya sumber ground truth.</span></span></div>");
+        builder.AppendLine("<div class=\"mini-kpis\">");
+        AppendMiniKpi(builder, "Live projects", "Proyek live", liveProjects.ToString(CultureInfo.InvariantCulture), $"{PercentText(Ratio(liveProjects, totalProjects))} coverage");
+        AppendMiniKpi(builder, "Failed retrieval", "Retrieval gagal", failedProjects.ToString(CultureInfo.InvariantCulture), "excluded from metrics");
+        AppendMiniKpi(builder, "Ground-truth rows", "Baris ground truth", groundTruthRows.ToString(CultureInfo.InvariantCulture), $"{vulnerableRows} vulnerable");
+        AppendMiniKpi(builder, "Unique advisories", "Advisory unik", advisoryCount.ToString(CultureInfo.InvariantCulture), "live GraphQL result");
+        builder.AppendLine("</div>");
+        builder.AppendLine("<div style=\"margin-top:14px\">");
+        builder.AppendLine("<div class=\"hint bar-label\"><span>Project retrieval status / Status retrieval proyek</span><span>" + Html($"{liveProjects}/{totalProjects}") + "</span></div>");
+        builder.AppendLine("<div class=\"stack\">");
+        builder.AppendLine($"<span style=\"width:{CssPercent(Ratio(liveProjects, totalProjects))};background:var(--good)\"></span>");
+        builder.AppendLine($"<span style=\"width:{CssPercent(Ratio(failedProjects, totalProjects))};background:var(--bad)\"></span>");
+        builder.AppendLine("</div>");
+        builder.AppendLine("<div class=\"legend\"><span><i style=\"background:var(--good)\"></i>Live GitHub GraphQL</span><span><i style=\"background:var(--bad)\"></i>Retrieval failed / excluded</span></div>");
+        builder.AppendLine("</div></section>");
+    }
+
+    private static void AppendMiniKpi(StringBuilder builder, string labelEnglish, string labelIndonesia, string value, string hint)
+    {
+        builder.AppendLine("<div class=\"mini-kpi\">");
+        builder.AppendLine($"<span class=\"hint\">{Html(labelEnglish)}<span class=\"id-block\">{Html(labelIndonesia)}</span></span>");
+        builder.AppendLine($"<strong>{Html(value)}</strong>");
+        builder.AppendLine($"<div class=\"hint\">{Html(hint)}</div>");
+        builder.AppendLine("</div>");
     }
 
     private static void AppendScenarioSummaryCards(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
@@ -2999,6 +3088,72 @@ function filter(){
         builder.AppendLine("</div></section>");
     }
 
+    private static void AppendConfusionDonutChart(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        builder.AppendLine("<section><div class=\"section-title\"><h2>Confusion Composition<span class=\"id-block\">Komposisi Confusion Matrix</span></h2><span class=\"hint\">TP/TN/FP/FN proportion per scenario.<span class=\"id-block\">Proporsi TP/TN/FP/FN per skenario.</span></span></div>");
+        builder.AppendLine("<div class=\"chart-grid\">");
+        foreach (var scenario in new[] { AuditScenario.RagLlm, AuditScenario.ZeroShot, AuditScenario.CodeBert })
+        {
+            var metrics = AggregateScenarioMetrics(results, scenario);
+            builder.AppendLine("<div class=\"card donut-card\">");
+            builder.AppendLine($"<div class=\"donut\" style=\"{BuildDonutStyle(metrics)}\"><span>F1<br>{metrics.F1Score:P1}</span></div>");
+            builder.AppendLine("<div>");
+            builder.AppendLine($"<strong>{Html(GetScenarioDisplayName(scenario))}</strong>");
+            builder.AppendLine($"<p class=\"hint\">Total {metrics.Total}<br>TP {metrics.TruePositive} | TN {metrics.TrueNegative}<br>FP {metrics.FalsePositive} | FN {metrics.FalseNegative}</p>");
+            builder.AppendLine("<div class=\"legend\"><span><i style=\"background:var(--tp)\"></i>TP</span><span><i style=\"background:var(--tn)\"></i>TN</span><span><i style=\"background:var(--fp)\"></i>FP</span><span><i style=\"background:var(--fn)\"></i>FN</span></div>");
+            builder.AppendLine("</div></div>");
+        }
+        builder.AppendLine("</div></section>");
+    }
+
+    private static void AppendPredictionOutcomeChart(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        builder.AppendLine("<section class=\"card\"><div class=\"section-title\"><h2>Prediction Outcomes<span class=\"id-block\">Outcome Prediksi</span></h2><span class=\"hint\">Stacked view of correct and incorrect classifications.<span class=\"id-block\">Tampilan bertumpuk klasifikasi benar dan salah.</span></span></div>");
+        builder.AppendLine("<table class=\"small-table\"><thead><tr><th>Scenario / Skenario</th><th>Outcome Bar / Grafik Outcome</th><th>TP</th><th>TN</th><th>FP</th><th>FN</th><th>Total</th></tr></thead><tbody>");
+        foreach (var scenario in new[] { AuditScenario.RagLlm, AuditScenario.ZeroShot, AuditScenario.CodeBert })
+        {
+            var metrics = AggregateScenarioMetrics(results, scenario);
+            builder.AppendLine($"<tr data-scenario=\"{Html(GetScenarioDisplayName(scenario))}\" data-status=\"All\" data-vulnerable=\"false\">");
+            builder.AppendLine($"<td>{Html(GetScenarioDisplayName(scenario))}</td><td><div class=\"stack\">");
+            AppendStackSegment(builder, metrics.TruePositive, metrics.Total, "var(--tp)");
+            AppendStackSegment(builder, metrics.TrueNegative, metrics.Total, "var(--tn)");
+            AppendStackSegment(builder, metrics.FalsePositive, metrics.Total, "var(--fp)");
+            AppendStackSegment(builder, metrics.FalseNegative, metrics.Total, "var(--fn)");
+            builder.AppendLine("</div></td>");
+            builder.AppendLine($"<td>{metrics.TruePositive}</td><td>{metrics.TrueNegative}</td><td>{metrics.FalsePositive}</td><td>{metrics.FalseNegative}</td><td>{metrics.Total}</td>");
+            builder.AppendLine("</tr>");
+        }
+        builder.AppendLine("</tbody></table>");
+        builder.AppendLine("<div class=\"legend\"><span><i style=\"background:var(--tp)\"></i>True Positive</span><span><i style=\"background:var(--tn)\"></i>True Negative</span><span><i style=\"background:var(--fp)\"></i>False Positive</span><span><i style=\"background:var(--fn)\"></i>False Negative</span></div>");
+        builder.AppendLine("</section>");
+    }
+
+    private static string BuildDonutStyle(EvaluationMetrics metrics)
+    {
+        if (metrics.Total <= 0)
+        {
+            return "background:#e5e7eb";
+        }
+
+        var tp = Ratio(metrics.TruePositive, metrics.Total) * 100d;
+        var tn = tp + Ratio(metrics.TrueNegative, metrics.Total) * 100d;
+        var fp = tn + Ratio(metrics.FalsePositive, metrics.Total) * 100d;
+        var fn = 100d;
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"background:conic-gradient(var(--tp) 0 {tp:0.##}%,var(--tn) {tp:0.##}% {tn:0.##}%,var(--fp) {tn:0.##}% {fp:0.##}%,var(--fn) {fp:0.##}% {fn:0.##}%)");
+    }
+
+    private static void AppendStackSegment(StringBuilder builder, int count, int total, string color)
+    {
+        if (count <= 0 || total <= 0)
+        {
+            return;
+        }
+
+        builder.AppendLine($"<span style=\"width:{CssPercent(Ratio(count, total))};background:{Html(color)}\"></span>");
+    }
+
     private static void AppendBarGroup(StringBuilder builder, string label, double rag, double zero, double codeBert)
     {
         builder.AppendLine("<div>");
@@ -3034,7 +3189,14 @@ function filter(){
             builder.AppendLine($"<td>{Html(item.Report.CVE_ID)}</td>");
             builder.AppendLine($"<td>{Html(item.Report.Severity)}</td>");
             builder.AppendLine($"<td>{StatusPill(item.Report.IsGroundedInReference ? "GROUNDED" : "UNGROUNDED")}</td>");
-            builder.AppendLine($"<td class=\"detail\"><details><summary>{Html(TruncateForDisplay(item.Report.MitigationPlanIndonesia, 120))}</summary><p>{Html(item.Report.MitigationPlanIndonesia)}</p><p class=\"hint\">{Html(item.Report.ReasoningTraceIndonesia)}</p></details></td>");
+            var mitigation = item.Report.MitigationPlanIndonesia;
+            var reasoning = item.Report.ReasoningTraceIndonesia;
+            if (IsSyntheticCodeBertScenario(item.Scenario))
+            {
+                mitigation = "Output sintetis CodeBERT terdeteksi. Baris ini hanya dipertahankan untuk traceability dan tidak dipakai sebagai bukti kualitas model.";
+                reasoning = "Jalankan ulang dengan model lokal melalui CODEBERT_MODEL_PATH untuk menghasilkan prediksi CodeBERT real.";
+            }
+            builder.AppendLine($"<td class=\"detail\"><details><summary>{Html(TruncateForDisplay(mitigation, 120))}</summary><p>{Html(mitigation)}</p><p class=\"hint\">{Html(reasoning)}</p></details></td>");
             builder.AppendLine("</tr>");
         }
         builder.AppendLine("</tbody></table>");
@@ -3123,6 +3285,21 @@ function filter(){
             _ => "neutral"
         };
         return $"<span class=\"pill {css}\">{Html(status)}</span>";
+    }
+
+    private static double Ratio(int numerator, int denominator)
+    {
+        return denominator > 0 ? (double)numerator / denominator : 0d;
+    }
+
+    private static string CssPercent(double ratio)
+    {
+        return $"{Math.Clamp(ratio, 0d, 1d) * 100d:0.##}%".Replace(',', '.');
+    }
+
+    private static string PercentText(double ratio)
+    {
+        return ratio.ToString("P1", CultureInfo.InvariantCulture);
     }
 
     private static string Html(string? value)
@@ -3737,7 +3914,7 @@ function filter(){
         public string AugmentationStrategy { get; set; } = string.Empty;
         public string EvaluationStatus { get; set; } = string.Empty;
         public string EvaluationNote { get; set; } = string.Empty;
-        public string MockPredictionWarning { get; set; } = "If PredictionModelName contains 'mock', CodeBERT metrics are for pipeline validation only.";
+        public string InferencePolicy { get; set; } = "CodeBERT metrics are emitted only from real local Python inference. Synthetic predictions are not generated by the shipped script.";
         public Dictionary<string, string> DatasetFieldDescriptions { get; set; } = new();
         public List<ProjectCodeBertJsonReport> Projects { get; set; } = new();
     }
@@ -3756,7 +3933,7 @@ function filter(){
         public string EvaluationStatus { get; set; } = string.Empty;
         public string PredictionModelName { get; set; } = string.Empty;
         public string InferenceMode { get; set; } = string.Empty;
-        public bool IsMockPrediction { get; set; }
+        public bool IsSyntheticPrediction { get; set; }
         public string EvaluationNote { get; set; } = string.Empty;
         public string InputJsonPath { get; set; } = string.Empty;
         public string PredictionJsonPath { get; set; } = string.Empty;

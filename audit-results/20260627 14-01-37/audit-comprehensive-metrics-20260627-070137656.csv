@@ -1,0 +1,10 @@
+﻿ProjectName,ProjectKey,Scenario,Status,PredictionModelName,InferenceMode,MetricNote,Total,TP,TN,FP,FN,Accuracy,Precision,Recall,F1Score,FalsePositiveRatio
+Dummy1,Dummy1-3BD1A055,CodeBERT,SUCCESS,mock-codebert-local-python-bridge,MOCK_PYTHON_BRIDGE,Mock CodeBERT predictions. Use these metrics only to validate the reporting pipeline.,3,0,1,2,0,0.3333333333333333,0,0,0,1
+Dummy1,Dummy1-3BD1A055,RAG-LLM,SUCCESS,gemini-2.5-pro,GEMINI_API,Metrics calculated from model predictions and ground truth labels.,3,0,3,0,0,1,0,0,0,0
+Dummy1,Dummy1-3BD1A055,Zero-Shot,SUCCESS,gemini-2.5-pro,GEMINI_API,Metrics calculated from model predictions and ground truth labels.,3,0,1,2,0,0.3333333333333333,0,0,0,1
+Dummy2,Dummy2-23B2CD34,CodeBERT,SUCCESS,mock-codebert-local-python-bridge,MOCK_PYTHON_BRIDGE,Mock CodeBERT predictions. Use these metrics only to validate the reporting pipeline.,4,1,2,1,0,0.75,0.5,1,0.6666666666666666,0.5
+Dummy2,Dummy2-23B2CD34,RAG-LLM,SUCCESS,gemini-2.5-pro,GEMINI_API,Metrics calculated from model predictions and ground truth labels.,4,1,3,0,0,1,1,1,1,0
+Dummy2,Dummy2-23B2CD34,Zero-Shot,SUCCESS,gemini-2.5-pro,GEMINI_API,Metrics calculated from model predictions and ground truth labels.,4,0,2,1,1,0.5,0,0,0,1
+Dummy3,Dummy3-0B93FA13,CodeBERT,SUCCESS,mock-codebert-local-python-bridge,MOCK_PYTHON_BRIDGE,Mock CodeBERT predictions. Use these metrics only to validate the reporting pipeline.,43,0,16,24,3,0.37209302325581395,0,0,0,1
+Dummy3,Dummy3-0B93FA13,RAG-LLM,SUCCESS,gemini-2.5-pro,GEMINI_API,Metrics calculated from model predictions and ground truth labels.,43,3,35,5,0,0.8837209302325582,0.375,1,0.5454545454545454,0.625
+Dummy3,Dummy3-0B93FA13,Zero-Shot,SUCCESS,gemini-2.5-pro,GEMINI_API,Metrics calculated from model predictions and ground truth labels.,43,2,15,25,1,0.3953488372093023,0.07407407407407407,0.6666666666666666,0.13333333333333333,0.9259259259259259

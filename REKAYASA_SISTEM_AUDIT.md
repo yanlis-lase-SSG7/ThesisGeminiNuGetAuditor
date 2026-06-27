@@ -70,7 +70,7 @@ Pada skenario ini, `IsGroundedInReference` harus bernilai `false` karena tidak a
 
 ### 4.3. Skenario CodeBERT (Deep Learning Baseline)
 
-Skenario CodeBERT digunakan sebagai Python inference bridge untuk memvalidasi pipeline ekspor dataset, eksekusi lokal, pembacaan prediksi, dan perhitungan metrik terpadu. Pada implementasi saat ini, `codebert_inference.py` menghasilkan prediksi mock deterministik lokal sehingga metrik CodeBERT hanya boleh dipakai sebagai validasi pipeline, bukan bukti kualitas model CodeBERT fine-tuned.
+Skenario CodeBERT digunakan sebagai Python inference bridge untuk memvalidasi pipeline ekspor dataset, eksekusi lokal, pembacaan prediksi, dan perhitungan metrik terpadu. Implementasi saat ini bersifat real-only: `codebert_inference.py` tidak menghasilkan prediksi sintetis. Prediksi CodeBERT hanya dibuat jika tersedia model sequence-classification fine-tuned lokal melalui `CODEBERT_MODEL_PATH` atau argumen `--model`.
 
 Dataset memuat:
 
@@ -81,7 +81,7 @@ Dataset memuat:
 - metadata advisory seperti CVE, severity, dan advisory ID;
 - variasi augmentasi.
 
-Skenario ini digunakan untuk menyiapkan jalur integrasi model deep learning di masa depan. Untuk eksperimen final yang mengklaim performa CodeBERT sebagai baseline model, `codebert_inference.py` harus diganti dengan inferensi CodeBERT fine-tuned yang sesungguhnya.
+Jika Python, library `transformers`/`torch`, atau model lokal belum tersedia, skenario CodeBERT ditandai `CODEBERT_FAILED`, dikeluarkan dari confusion matrix, dan tidak menghasilkan metrik model. Dengan demikian, eksperimen final tidak mencampurkan hasil RAG-LLM/Zero-Shot real dengan prediksi CodeBERT palsu.
 
 ## 5. Augmentasi Data dan Strategi Split
 
@@ -154,7 +154,7 @@ Arsitektur RAG-LLM dinilai efektif apabila menunjukkan peningkatan dibanding Zer
 - peningkatan atau stabilitas **Recall**, yang menunjukkan kemampuan menemukan kerentanan aktual;
 - peningkatan **F1-Score**, yang menunjukkan keseimbangan antara Precision dan Recall.
 
-Metrik CodeBERT bridge pada implementasi saat ini digunakan untuk memvalidasi kelengkapan pipeline otomatis lokal. Metrik tersebut tidak dipakai sebagai bukti performa model CodeBERT fine-tuned sebelum script inferensi diganti dengan model yang benar-benar dilatih.
+Metrik CodeBERT hanya dihitung jika Python bridge berhasil menjalankan model CodeBERT lokal yang dikonfigurasi. Jika model tidak tersedia, jalur CodeBERT tetap tercatat sebagai kegagalan terkontrol dan tidak dimasukkan ke metrik Bab IV.
 
 Dengan demikian, keberhasilan sistem tidak hanya diukur dari banyaknya temuan, tetapi dari kemampuan menghasilkan temuan yang akurat dan dapat ditelusuri ke ground truth.
 
@@ -165,11 +165,11 @@ Artefak yang dihasilkan oleh sistem meliputi:
 - file audit JSON untuk setiap skenario LLM;
 - file Excel metrik evaluasi;
 - dataset CodeBERT bridge dalam format JSON dan CSV;
-- prediksi CodeBERT bridge dari script Python lokal;
+- prediksi CodeBERT bridge dari script Python lokal, hanya jika model CodeBERT lokal tersedia;
 - diagnostics console yang mencatat status retrieval live yang digunakan.
 
 Artefak ini mendukung kebutuhan replikasi, audit metodologis, dan pelaporan hasil penelitian.
 
 ## 10. Kesimpulan Rekayasa
 
-`GeminiNuGetAuditor` direkayasa sebagai instrumen penelitian yang menggabungkan parsing dependency .NET, retrieval data advisory real-time dari GitHub GraphQL API, inferensi LLM, CodeBERT Python bridge, dan evaluasi kuantitatif. Struktur ini memungkinkan pengujian empiris terhadap hipotesis bahwa RAG-LLM mampu mengurangi halusinasi dan meningkatkan kualitas deteksi kerentanan dibandingkan Zero-Shot, dengan jalur CodeBERT disiapkan sebagai validasi pipeline dan fondasi integrasi model fine-tuned di masa depan.
+`GeminiNuGetAuditor` direkayasa sebagai instrumen penelitian yang menggabungkan parsing dependency .NET, retrieval data advisory real-time dari GitHub GraphQL API, inferensi LLM, CodeBERT Python bridge lokal, dan evaluasi kuantitatif. Struktur ini memungkinkan pengujian empiris terhadap hipotesis bahwa RAG-LLM mampu mengurangi halusinasi dan meningkatkan kualitas deteksi kerentanan dibandingkan Zero-Shot, dengan jalur CodeBERT tetap otomatis namun hanya menghasilkan metrik ketika inferensi lokal real tersedia.

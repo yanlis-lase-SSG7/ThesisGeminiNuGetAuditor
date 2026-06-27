@@ -12,8 +12,9 @@ Project ini dibuat untuk:
 - menjalankan evaluasi RAG-LLM dengan Gemini dan konteks advisory;
 - menjalankan evaluasi Zero-Shot dengan Gemini tanpa konteks advisory;
 - menyiapkan dataset CodeBERT bridge melalui augmentasi dan split data;
+- menjalankan inferensi CodeBERT lokal melalui `codebert_inference.py` jika `CODEBERT_MODEL_PATH` dikonfigurasi;
 - menghitung metrik TP, TN, FP, FN, Accuracy, Precision, Recall, F1-Score, dan False Positive Ratio;
-- menghasilkan artefak JSON dan Excel untuk analisis tesis.
+- menghasilkan artefak JSON, HTML, CSV, dan Excel untuk analisis tesis.
 
 ## Business Flow Singkat
 
@@ -24,8 +25,9 @@ Project ini dibuat untuk:
 5. Untuk setiap project, aplikasi mengekstrak `PackageReference`.
 6. Aplikasi menjalankan Zero-Shot dan retrieval referensi keamanan secara konkuren.
 7. Setelah konteks keamanan tersedia, aplikasi membentuk ground truth, menjalankan RAG-LLM, dan menyiapkan record CodeBERT.
-8. Hasil prediksi Gemini dibandingkan dengan ground truth untuk menghasilkan metrik evaluasi.
-9. Semua report disimpan di folder run baru di dalam `audit-results`.
+8. Jika model CodeBERT lokal tersedia, aplikasi menjalankan Python bridge dan membaca file prediksi CodeBERT.
+9. Hasil prediksi model dibandingkan dengan ground truth untuk menghasilkan metrik evaluasi.
+10. Semua report disimpan di folder run baru di dalam `audit-results`.
 
 ## Retrieval Ground Truth
 
@@ -37,7 +39,9 @@ Diagnostics retrieval disimpan di console log, JSON report, dan Excel report.
 
 Jika Gemini API gagal total untuk sebuah skenario, aplikasi tidak akan memakai ground truth sebagai pengganti prediksi LLM. Skenario tersebut diberi status `API_FAILED`, `ExcludedFromMetrics = true`, dan tidak dimasukkan ke confusion matrix TP, TN, FP, atau FN.
 
-Dengan kebijakan ini, metrik hanya dihitung dari prediksi LLM yang benar-benar berhasil dikembalikan oleh API.
+Jika Python, library `transformers`/`torch`, atau model CodeBERT lokal belum tersedia, skenario CodeBERT diberi status `CODEBERT_FAILED`, `ExcludedFromMetrics = true`, dan tidak dimasukkan ke confusion matrix. Script bawaan tidak membuat prediksi sintetis.
+
+Dengan kebijakan ini, metrik hanya dihitung dari prediksi model yang benar-benar berhasil dikembalikan oleh jalur inferensi masing-masing.
 
 ## Checkpoint dan Resume
 
@@ -64,7 +68,9 @@ Output utama disimpan di folder run baru di dalam `audit-results`:
 - `audit-results/20261231 14-15-16/audit-rag-llm-<timestamp>.json`
 - `audit-results/20261231 14-15-16/audit-zero-shot-<timestamp>.json`
 - `audit-results/20261231 14-15-16/audit-codebert-<timestamp>.json`
+- `audit-results/20261231 14-15-16/audit-comprehensive-metrics-<timestamp>.csv`
 - `audit-results/20261231 14-15-16/audit-comprehensive-report-<timestamp>.xlsx`
+- `audit-results/20261231 14-15-16/audit-interactive-report-<timestamp>.html`
 - `audit-results/20261231 14-15-16/api-diagnostics-<timestamp>.json`
 - `audit-results/20261231 14-15-16/console-execution-log-<timestamp>.json`
 - `audit-results/20261231 14-15-16/checkpoints/<project-key>.json`
@@ -78,6 +84,7 @@ Environment variable yang umum digunakan:
 ```powershell
 $env:GEMINI_API_KEY = "your-gemini-api-key"
 $env:GITHUB_TOKEN = "your-github-token"
+$env:CODEBERT_MODEL_PATH = "D:\path\to\fine-tuned-codebert-model"
 ```
 
 Jalankan aplikasi tanpa argumen:
@@ -98,7 +105,7 @@ Masukkan folder root yang berisi project `.NET`, misalnya:
 D:\path\to\solution-or-project-folder
 ```
 
-Aplikasi akan mencari semua file `.csproj` di folder tersebut secara rekursif, lalu menjalankan RAG-LLM, Zero-Shot, dan ekspor data CodeBERT secara paralel dengan checkpoint otomatis.
+Aplikasi akan mencari semua file `.csproj` di folder tersebut secara rekursif, lalu menjalankan RAG-LLM, Zero-Shot, dan CodeBERT Python bridge secara paralel dengan checkpoint otomatis. Jika `CODEBERT_MODEL_PATH` tidak diisi, jalur CodeBERT gagal dengan aman dan tidak dihitung sebagai metrik model.
 
 ## Komponen Utama
 
@@ -107,11 +114,12 @@ Aplikasi akan mencari semua file `.csproj` di folder tersebut secara rekursif, l
 - `SecurityReferenceProvider.cs`: retrieval GitHub GraphQL API sebagai satu-satunya sumber ground truth real-time.
 - `GroundTruthProvider.cs`: pembentukan label ground truth dari advisory context.
 - `CodeBertDatasetExporter.cs`: augmentasi dan ekspor dataset CodeBERT.
+- `codebert_inference.py`: bridge inferensi CodeBERT lokal berbasis HuggingFace `transformers`.
 - `ModelEvaluator.cs`: perhitungan confusion matrix dan metrik evaluasi.
 - `VulnerabilityModels.cs`: model data audit, dataset, ground truth, dan evaluasi.
 
 ## Ringkasan Cepat
 
-`GeminiNuGetAuditor` memindai folder berisi banyak `.csproj`, mengekstrak dependency NuGet, mengambil ground truth keamanan, menjalankan RAG-LLM dan Zero-Shot dengan Gemini, menyiapkan dataset CodeBERT, lalu menghasilkan JSON dan Excel report untuk evaluasi penelitian.
+`GeminiNuGetAuditor` memindai folder berisi banyak `.csproj`, mengekstrak dependency NuGet, mengambil ground truth keamanan, menjalankan RAG-LLM dan Zero-Shot dengan Gemini, menjalankan CodeBERT lokal jika model tersedia, lalu menghasilkan JSON, HTML, CSV, dan Excel report untuk evaluasi penelitian.
 
-Last Updated: 26 Juni 2026
+Last Updated: 27 Juni 2026

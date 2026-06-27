@@ -1,0 +1,541 @@
+﻿{
+  "ProjectName": "Dummy1",
+  "ProjectKey": "Dummy1-3BD1A055",
+  "ProjectPath": "D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\Dummy1.csproj",
+  "ModelName": "gemini-2.5-pro",
+  "CheckpointSchemaVersion": "2026-06-26-codebert-python-v3",
+  "CodeBertInputJsonPath": "D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy1-3BD1A055-codebert-input.json",
+  "CodeBertPredictionJsonPath": "D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy1-3BD1A055-codebert-predictions.json",
+  "PackageCount": 3,
+  "Success": true,
+  "ErrorMessage": "",
+  "SecurityReferenceSource": "GitHubGraphQLApi",
+  "StartedAtUtc": "2026-06-27T07:01:44.7221951+00:00",
+  "CompletedAtUtc": "2026-06-27T07:02:11.0379081+00:00",
+  "ElapsedSeconds": 26.3166815,
+  "RetrievalDiagnostics": [
+    "Strict real-time retrieval enabled. GitHub GraphQL API is the sole source of truth for vulnerability advisories.",
+    "GitHub API package \u0027Swashbuckle.AspNetCore\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+    "GitHub API package \u0027Microsoft.EntityFrameworkCore\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+    "GitHub API package \u0027Npgsql.EntityFrameworkCore.PostgreSQL\u0027: HTTP 200 (OK), pages=1, advisories=0.",
+    "GitHub GraphQL API returned no advisory entries for the requested NuGet packages. Returning empty live context."
+  ],
+  "Messages": [
+    "CodeBERT records prepared: 9."
+  ],
+  "Scenarios": [
+    {
+      "Scenario": 1,
+      "Success": true,
+      "Status": "SUCCESS",
+      "ErrorMessage": "",
+      "ExcludedFromMetrics": false,
+      "MetricExclusionReason": "",
+      "VulnerableCount": 2,
+      "AuditJsonPath": "",
+      "StartedAtUtc": "2026-06-27T07:01:45.9228151+00:00",
+      "CompletedAtUtc": "2026-06-27T07:02:10.8648612+00:00",
+      "ElapsedSeconds": 24.9422382,
+      "InputJsonPath": "",
+      "PredictionJsonPath": "",
+      "Response": {
+        "ModelName": "gemini-2.5-pro",
+        "VulnerabilityReports": [
+          {
+            "PackageName": "Swashbuckle.AspNetCore",
+            "CurrentVersion": "6.5.0",
+            "IsVulnerable": true,
+            "CVE_ID": "CVE-2023-28871",
+            "Severity": "High",
+            "SeverityIndonesia": "Tinggi",
+            "MitigationPlan": "Update to a version newer than 6.5.0, such as 6.6.1 or later. If an update is not possible, ensure the vulnerable \u0060oauth2-redirect.html\u0060 file is removed or secured.",
+            "MitigationPlanIndonesia": "Perbarui ke versi yang lebih baru dari 6.5.0, seperti 6.6.1 atau yang lebih baru. Jika pembaruan tidak memungkinkan, pastikan file \u0060oauth2-redirect.html\u0060 yang rentan dihapus atau diamankan.",
+            "IsGroundedInReference": false,
+            "ReasoningTrace": "Based on pre-trained knowledge, Swashbuckle.AspNetCore up to and including version 6.5.0 is vulnerable to a DOM-based Cross-Site Scripting (XSS) vulnerability in its \u0060oauth2-redirect.html\u0060 component. This vulnerability is identified as CVE-2023-28871.",
+            "ReasoningTraceIndonesia": "Berdasarkan pengetahuan yang ada, Swashbuckle.AspNetCore hingga dan termasuk versi 6.5.0 rentan terhadap kerentanan Cross-Site Scripting (XSS) berbasis DOM di komponen \u0060oauth2-redirect.html\u0060-nya. Kerentanan ini diidentifikasi sebagai CVE-2023-28871."
+          },
+          {
+            "PackageName": "Microsoft.EntityFrameworkCore",
+            "CurrentVersion": "8.0.4",
+            "IsVulnerable": false,
+            "CVE_ID": "",
+            "Severity": "Unknown",
+            "SeverityIndonesia": "Tidak diketahui",
+            "MitigationPlan": "",
+            "MitigationPlanIndonesia": "",
+            "IsGroundedInReference": false,
+            "ReasoningTrace": "Based on pre-trained knowledge, there are no widely known vulnerabilities associated with Microsoft.EntityFrameworkCore version 8.0.4. This is a recent patch version from a major vendor, and such versions are generally presumed to be secure in the absence of specific threat intelligence.",
+            "ReasoningTraceIndonesia": "Berdasarkan pengetahuan yang ada, tidak ada kerentanan yang dikenal secara luas yang terkait dengan Microsoft.EntityFrameworkCore versi 8.0.4. Ini adalah versi patch terbaru dari vendor besar, dan versi semacam itu umumnya dianggap aman jika tidak ada intelijen ancaman spesifik."
+          },
+          {
+            "PackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
+            "CurrentVersion": "7.0.11",
+            "IsVulnerable": true,
+            "CVE_ID": "CVE-2024-32655",
+            "Severity": "Moderate",
+            "SeverityIndonesia": "Sedang",
+            "MitigationPlan": "Update to a patched version, such as 7.0.18, 8.0.3, or a later version. If upgrading is not possible, avoid using the \u0060Multiplexing=true\u0060 option in the connection string.",
+            "MitigationPlanIndonesia": "Perbarui ke versi yang telah ditambal, seperti 7.0.18, 8.0.3, atau versi yang lebih baru. Jika pembaruan tidak memungkinkan, hindari menggunakan opsi \u0060Multiplexing=true\u0060 di connection string.",
+            "IsGroundedInReference": false,
+            "ReasoningTrace": "Based on pre-trained knowledge, Npgsql versions prior to 7.0.18 are vulnerable to CVE-2024-32655. This vulnerability involves the transmission of an unencrypted password during the connection startup when specific non-default settings (\u0060Pooling=true\u0060 and \u0060Multiplexing=true\u0060) are used. Version 7.0.11 falls within the affected range.",
+            "ReasoningTraceIndonesia": "Berdasarkan pengetahuan yang ada, Npgsql versi sebelum 7.0.18 rentan terhadap CVE-2024-32655. Kerentanan ini melibatkan transmisi kata sandi yang tidak terenkripsi selama startup koneksi ketika pengaturan non-default tertentu (\u0060Pooling=true\u0060 dan \u0060Multiplexing=true\u0060) digunakan. Versi 7.0.11 termasuk dalam rentang yang terpengaruh."
+          }
+        ]
+      },
+      "Metrics": {
+        "Scenario": "Dummy1-3BD1A055:Zero-Shot",
+        "Total": 3,
+        "TruePositive": 0,
+        "TrueNegative": 1,
+        "FalsePositive": 2,
+        "FalseNegative": 0,
+        "Accuracy": 0.3333333333333333,
+        "Precision": 0,
+        "Recall": 0,
+        "F1Score": 0,
+        "FalsePositiveRatio": 1,
+        "Records": [
+          {
+            "Scenario": "Dummy1-3BD1A055:Zero-Shot",
+            "PackageName": "Swashbuckle.AspNetCore",
+            "CurrentVersion": "6.5.0",
+            "PredictedVulnerable": true,
+            "GroundTruthVulnerable": false,
+            "MatchResult": "False Positive",
+            "CVE_ID": "CVE-2023-28871",
+            "Severity": "High",
+            "IsGroundedInReference": false
+          },
+          {
+            "Scenario": "Dummy1-3BD1A055:Zero-Shot",
+            "PackageName": "Microsoft.EntityFrameworkCore",
+            "CurrentVersion": "8.0.4",
+            "PredictedVulnerable": false,
+            "GroundTruthVulnerable": false,
+            "MatchResult": "True Negative",
+            "CVE_ID": "",
+            "Severity": "Unknown",
+            "IsGroundedInReference": false
+          },
+          {
+            "Scenario": "Dummy1-3BD1A055:Zero-Shot",
+            "PackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
+            "CurrentVersion": "7.0.11",
+            "PredictedVulnerable": true,
+            "GroundTruthVulnerable": false,
+            "MatchResult": "False Positive",
+            "CVE_ID": "CVE-2024-32655",
+            "Severity": "Moderate",
+            "IsGroundedInReference": false
+          }
+        ]
+      }
+    },
+    {
+      "Scenario": 0,
+      "Success": true,
+      "Status": "SUCCESS",
+      "ErrorMessage": "",
+      "ExcludedFromMetrics": false,
+      "MetricExclusionReason": "",
+      "VulnerableCount": 0,
+      "AuditJsonPath": "",
+      "StartedAtUtc": "2026-06-27T07:01:45.9341451+00:00",
+      "CompletedAtUtc": "2026-06-27T07:01:59.3445596+00:00",
+      "ElapsedSeconds": 13.4104144,
+      "InputJsonPath": "",
+      "PredictionJsonPath": "",
+      "Response": {
+        "ModelName": "gemini-2.5-pro",
+        "VulnerabilityReports": [
+          {
+            "PackageName": "Swashbuckle.AspNetCore",
+            "CurrentVersion": "6.5.0",
+            "IsVulnerable": false,
+            "CVE_ID": "",
+            "Severity": "Unknown",
+            "SeverityIndonesia": "Tidak diketahui",
+            "MitigationPlan": "",
+            "MitigationPlanIndonesia": "",
+            "IsGroundedInReference": false,
+            "ReasoningTrace": "The package Swashbuckle.AspNetCore version 6.5.0 was not found in the provided security reference data.",
+            "ReasoningTraceIndonesia": "Paket Swashbuckle.AspNetCore versi 6.5.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          },
+          {
+            "PackageName": "Microsoft.EntityFrameworkCore",
+            "CurrentVersion": "8.0.4",
+            "IsVulnerable": false,
+            "CVE_ID": "",
+            "Severity": "Unknown",
+            "SeverityIndonesia": "Tidak diketahui",
+            "MitigationPlan": "",
+            "MitigationPlanIndonesia": "",
+            "IsGroundedInReference": false,
+            "ReasoningTrace": "The package Microsoft.EntityFrameworkCore version 8.0.4 was not found in the provided security reference data.",
+            "ReasoningTraceIndonesia": "Paket Microsoft.EntityFrameworkCore versi 8.0.4 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          },
+          {
+            "PackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
+            "CurrentVersion": "7.0.11",
+            "IsVulnerable": false,
+            "CVE_ID": "",
+            "Severity": "Unknown",
+            "SeverityIndonesia": "Tidak diketahui",
+            "MitigationPlan": "",
+            "MitigationPlanIndonesia": "",
+            "IsGroundedInReference": false,
+            "ReasoningTrace": "The package Npgsql.EntityFrameworkCore.PostgreSQL version 7.0.11 was not found in the provided security reference data.",
+            "ReasoningTraceIndonesia": "Paket Npgsql.EntityFrameworkCore.PostgreSQL versi 7.0.11 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          }
+        ]
+      },
+      "Metrics": {
+        "Scenario": "Dummy1-3BD1A055:RAG-LLM",
+        "Total": 3,
+        "TruePositive": 0,
+        "TrueNegative": 3,
+        "FalsePositive": 0,
+        "FalseNegative": 0,
+        "Accuracy": 1,
+        "Precision": 0,
+        "Recall": 0,
+        "F1Score": 0,
+        "FalsePositiveRatio": 0,
+        "Records": [
+          {
+            "Scenario": "Dummy1-3BD1A055:RAG-LLM",
+            "PackageName": "Swashbuckle.AspNetCore",
+            "CurrentVersion": "6.5.0",
+            "PredictedVulnerable": false,
+            "GroundTruthVulnerable": false,
+            "MatchResult": "True Negative",
+            "CVE_ID": "",
+            "Severity": "Unknown",
+            "IsGroundedInReference": false
+          },
+          {
+            "Scenario": "Dummy1-3BD1A055:RAG-LLM",
+            "PackageName": "Microsoft.EntityFrameworkCore",
+            "CurrentVersion": "8.0.4",
+            "PredictedVulnerable": false,
+            "GroundTruthVulnerable": false,
+            "MatchResult": "True Negative",
+            "CVE_ID": "",
+            "Severity": "Unknown",
+            "IsGroundedInReference": false
+          },
+          {
+            "Scenario": "Dummy1-3BD1A055:RAG-LLM",
+            "PackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
+            "CurrentVersion": "7.0.11",
+            "PredictedVulnerable": false,
+            "GroundTruthVulnerable": false,
+            "MatchResult": "True Negative",
+            "CVE_ID": "",
+            "Severity": "Unknown",
+            "IsGroundedInReference": false
+          }
+        ]
+      }
+    },
+    {
+      "Scenario": 2,
+      "Success": true,
+      "Status": "SUCCESS",
+      "ErrorMessage": "",
+      "ExcludedFromMetrics": false,
+      "MetricExclusionReason": "",
+      "VulnerableCount": 2,
+      "AuditJsonPath": "",
+      "StartedAtUtc": "2026-06-27T07:02:10.8648747+00:00",
+      "CompletedAtUtc": "2026-06-27T07:02:11.0378512+00:00",
+      "ElapsedSeconds": 0.1729764,
+      "InputJsonPath": "D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy1-3BD1A055-codebert-input.json",
+      "PredictionJsonPath": "D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\audit-results\\20260627 14-01-37\\codebert\\Dummy1-3BD1A055-codebert-predictions.json",
+      "Response": {
+        "ModelName": "mock-codebert-local-python-bridge",
+        "VulnerabilityReports": [
+          {
+            "PackageName": "Swashbuckle.AspNetCore",
+            "CurrentVersion": "6.5.0",
+            "IsVulnerable": true,
+            "CVE_ID": "",
+            "Severity": "",
+            "SeverityIndonesia": "Tidak diketahui",
+            "MitigationPlan": "Mock local CodeBERT bridge prediction. Replace with actual fine-tuned CodeBERT output before using this as model-quality evidence.",
+            "MitigationPlanIndonesia": "Prediksi mock bridge CodeBERT lokal. Ganti dengan output CodeBERT fine-tuned sebelum digunakan sebagai bukti kualitas model.",
+            "IsGroundedInReference": false,
+            "ReasoningTrace": "Deterministic local mock CodeBERT bridge prediction with confidence=0.6094.",
+            "ReasoningTraceIndonesia": "Prediksi deterministik mock bridge CodeBERT lokal dengan confidence=0.6094."
+          },
+          {
+            "PackageName": "Microsoft.EntityFrameworkCore",
+            "CurrentVersion": "8.0.4",
+            "IsVulnerable": false,
+            "CVE_ID": "",
+            "Severity": "Unknown",
+            "SeverityIndonesia": "Tidak diketahui",
+            "MitigationPlan": "Mock local CodeBERT bridge prediction. Replace with actual fine-tuned CodeBERT output before using this as model-quality evidence.",
+            "MitigationPlanIndonesia": "Prediksi mock bridge CodeBERT lokal. Ganti dengan output CodeBERT fine-tuned sebelum digunakan sebagai bukti kualitas model.",
+            "IsGroundedInReference": false,
+            "ReasoningTrace": "Deterministic local mock CodeBERT bridge prediction with confidence=0.1257.",
+            "ReasoningTraceIndonesia": "Prediksi deterministik mock bridge CodeBERT lokal dengan confidence=0.1257."
+          },
+          {
+            "PackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
+            "CurrentVersion": "7.0.11",
+            "IsVulnerable": true,
+            "CVE_ID": "",
+            "Severity": "",
+            "SeverityIndonesia": "Tidak diketahui",
+            "MitigationPlan": "Mock local CodeBERT bridge prediction. Replace with actual fine-tuned CodeBERT output before using this as model-quality evidence.",
+            "MitigationPlanIndonesia": "Prediksi mock bridge CodeBERT lokal. Ganti dengan output CodeBERT fine-tuned sebelum digunakan sebagai bukti kualitas model.",
+            "IsGroundedInReference": false,
+            "ReasoningTrace": "Deterministic local mock CodeBERT bridge prediction with confidence=0.8534.",
+            "ReasoningTraceIndonesia": "Prediksi deterministik mock bridge CodeBERT lokal dengan confidence=0.8534."
+          }
+        ]
+      },
+      "Metrics": {
+        "Scenario": "Dummy1-3BD1A055:CodeBERT",
+        "Total": 3,
+        "TruePositive": 0,
+        "TrueNegative": 1,
+        "FalsePositive": 2,
+        "FalseNegative": 0,
+        "Accuracy": 0.3333333333333333,
+        "Precision": 0,
+        "Recall": 0,
+        "F1Score": 0,
+        "FalsePositiveRatio": 1,
+        "Records": [
+          {
+            "Scenario": "Dummy1-3BD1A055:CodeBERT",
+            "PackageName": "Swashbuckle.AspNetCore",
+            "CurrentVersion": "6.5.0",
+            "PredictedVulnerable": true,
+            "GroundTruthVulnerable": false,
+            "MatchResult": "False Positive",
+            "CVE_ID": "",
+            "Severity": "",
+            "IsGroundedInReference": false
+          },
+          {
+            "Scenario": "Dummy1-3BD1A055:CodeBERT",
+            "PackageName": "Microsoft.EntityFrameworkCore",
+            "CurrentVersion": "8.0.4",
+            "PredictedVulnerable": false,
+            "GroundTruthVulnerable": false,
+            "MatchResult": "True Negative",
+            "CVE_ID": "",
+            "Severity": "Unknown",
+            "IsGroundedInReference": false
+          },
+          {
+            "Scenario": "Dummy1-3BD1A055:CodeBERT",
+            "PackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
+            "CurrentVersion": "7.0.11",
+            "PredictedVulnerable": true,
+            "GroundTruthVulnerable": false,
+            "MatchResult": "False Positive",
+            "CVE_ID": "",
+            "Severity": "",
+            "IsGroundedInReference": false
+          }
+        ]
+      }
+    }
+  ],
+  "ExtractedPackages": [
+    {
+      "PackageName": "Swashbuckle.AspNetCore",
+      "CurrentVersion": "6.5.0"
+    },
+    {
+      "PackageName": "Microsoft.EntityFrameworkCore",
+      "CurrentVersion": "8.0.4"
+    },
+    {
+      "PackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
+      "CurrentVersion": "7.0.11"
+    }
+  ],
+  "GroundTruthLabels": [
+    {
+      "PackageName": "Swashbuckle.AspNetCore",
+      "CurrentVersion": "6.5.0",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "",
+      "AdvisoryId": "",
+      "VulnerableVersionRange": "",
+      "FirstPatchedVersion": "",
+      "ReferenceUrl": "",
+      "IsVersionRangeMatched": false,
+      "VersionRangeEvaluation": "No advisory matched the package version."
+    },
+    {
+      "PackageName": "Microsoft.EntityFrameworkCore",
+      "CurrentVersion": "8.0.4",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "",
+      "AdvisoryId": "",
+      "VulnerableVersionRange": "",
+      "FirstPatchedVersion": "",
+      "ReferenceUrl": "",
+      "IsVersionRangeMatched": false,
+      "VersionRangeEvaluation": "No advisory matched the package version."
+    },
+    {
+      "PackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
+      "CurrentVersion": "7.0.11",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "",
+      "AdvisoryId": "",
+      "VulnerableVersionRange": "",
+      "FirstPatchedVersion": "",
+      "ReferenceUrl": "",
+      "IsVersionRangeMatched": false,
+      "VersionRangeEvaluation": "No advisory matched the package version."
+    }
+  ],
+  "CodeBertRecords": [
+    {
+      "Id": "593FE9F2",
+      "Split": "training",
+      "PackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
+      "CurrentVersion": "7.0.11",
+      "MutatedPackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
+      "MutatedVersion": "7.0.11",
+      "CsprojSnippet": "\u003CItemGroup\u003E\u003CPackageReference Include=\u0022Npgsql.EntityFrameworkCore.PostgreSQL\u0022 Version=\u00227.0.11\u0022 /\u003E\u003C/ItemGroup\u003E",
+      "Label": false,
+      "LabelId": 0,
+      "AugmentationType": "original",
+      "CVE_ID": "",
+      "Severity": "",
+      "AdvisoryId": ""
+    },
+    {
+      "Id": "35D525C6",
+      "Split": "training",
+      "PackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
+      "CurrentVersion": "7.0.11",
+      "MutatedPackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
+      "MutatedVersion": "[7.0.11]",
+      "CsprojSnippet": "\u003CItemGroup\u003E\u003CPackageReference Include=\u0022Npgsql.EntityFrameworkCore.PostgreSQL\u0022\u003E\u003CVersion\u003E[7.0.11]\u003C/Version\u003E\u003C/PackageReference\u003E\u003C/ItemGroup\u003E",
+      "Label": false,
+      "LabelId": 0,
+      "AugmentationType": "semantic_version_normalization",
+      "CVE_ID": "",
+      "Severity": "",
+      "AdvisoryId": ""
+    },
+    {
+      "Id": "1E5A4AF8",
+      "Split": "training",
+      "PackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
+      "CurrentVersion": "7.0.11",
+      "MutatedPackageName": "Npgsql.EntityFrameworkCore.PostgreSQL.SafeDummy",
+      "MutatedVersion": "1.0.0",
+      "CsprojSnippet": "\u003CItemGroup\u003E\u003CPackageReference Include=\u0022Npgsql.EntityFrameworkCore.PostgreSQL.SafeDummy\u0022 Version=\u00221.0.0\u0022 PrivateAssets=\u0022all\u0022 /\u003E\u003C/ItemGroup\u003E",
+      "Label": false,
+      "LabelId": 0,
+      "AugmentationType": "safe_dummy_dependency",
+      "CVE_ID": "",
+      "Severity": "",
+      "AdvisoryId": ""
+    },
+    {
+      "Id": "48F0C602",
+      "Split": "training",
+      "PackageName": "Microsoft.EntityFrameworkCore",
+      "CurrentVersion": "8.0.4",
+      "MutatedPackageName": "Microsoft.EntityFrameworkCore",
+      "MutatedVersion": "8.0.4",
+      "CsprojSnippet": "\u003CItemGroup\u003E\u003CPackageReference Include=\u0022Microsoft.EntityFrameworkCore\u0022 Version=\u00228.0.4\u0022 /\u003E\u003C/ItemGroup\u003E",
+      "Label": false,
+      "LabelId": 0,
+      "AugmentationType": "original",
+      "CVE_ID": "",
+      "Severity": "",
+      "AdvisoryId": ""
+    },
+    {
+      "Id": "20DD5776",
+      "Split": "training",
+      "PackageName": "Microsoft.EntityFrameworkCore",
+      "CurrentVersion": "8.0.4",
+      "MutatedPackageName": "Microsoft.EntityFrameworkCore",
+      "MutatedVersion": "[8.0.4]",
+      "CsprojSnippet": "\u003CItemGroup\u003E\u003CPackageReference Include=\u0022Microsoft.EntityFrameworkCore\u0022\u003E\u003CVersion\u003E[8.0.4]\u003C/Version\u003E\u003C/PackageReference\u003E\u003C/ItemGroup\u003E",
+      "Label": false,
+      "LabelId": 0,
+      "AugmentationType": "semantic_version_normalization",
+      "CVE_ID": "",
+      "Severity": "",
+      "AdvisoryId": ""
+    },
+    {
+      "Id": "3856DEA5",
+      "Split": "training",
+      "PackageName": "Microsoft.EntityFrameworkCore",
+      "CurrentVersion": "8.0.4",
+      "MutatedPackageName": "Microsoft.EntityFrameworkCore.SafeDummy",
+      "MutatedVersion": "1.0.0",
+      "CsprojSnippet": "\u003CItemGroup\u003E\u003CPackageReference Include=\u0022Microsoft.EntityFrameworkCore.SafeDummy\u0022 Version=\u00221.0.0\u0022 PrivateAssets=\u0022all\u0022 /\u003E\u003C/ItemGroup\u003E",
+      "Label": false,
+      "LabelId": 0,
+      "AugmentationType": "safe_dummy_dependency",
+      "CVE_ID": "",
+      "Severity": "",
+      "AdvisoryId": ""
+    },
+    {
+      "Id": "5438FF15",
+      "Split": "validation",
+      "PackageName": "Swashbuckle.AspNetCore",
+      "CurrentVersion": "6.5.0",
+      "MutatedPackageName": "Swashbuckle.AspNetCore",
+      "MutatedVersion": "6.5.0",
+      "CsprojSnippet": "\u003CItemGroup\u003E\u003CPackageReference Include=\u0022Swashbuckle.AspNetCore\u0022 Version=\u00226.5.0\u0022 /\u003E\u003C/ItemGroup\u003E",
+      "Label": false,
+      "LabelId": 0,
+      "AugmentationType": "original",
+      "CVE_ID": "",
+      "Severity": "",
+      "AdvisoryId": ""
+    },
+    {
+      "Id": "3A559F27",
+      "Split": "testing",
+      "PackageName": "Swashbuckle.AspNetCore",
+      "CurrentVersion": "6.5.0",
+      "MutatedPackageName": "Swashbuckle.AspNetCore",
+      "MutatedVersion": "[6.5.0]",
+      "CsprojSnippet": "\u003CItemGroup\u003E\u003CPackageReference Include=\u0022Swashbuckle.AspNetCore\u0022\u003E\u003CVersion\u003E[6.5.0]\u003C/Version\u003E\u003C/PackageReference\u003E\u003C/ItemGroup\u003E",
+      "Label": false,
+      "LabelId": 0,
+      "AugmentationType": "semantic_version_normalization",
+      "CVE_ID": "",
+      "Severity": "",
+      "AdvisoryId": ""
+    },
+    {
+      "Id": "256EF873",
+      "Split": "testing",
+      "PackageName": "Swashbuckle.AspNetCore",
+      "CurrentVersion": "6.5.0",
+      "MutatedPackageName": "Swashbuckle.AspNetCore.SafeDummy",
+      "MutatedVersion": "1.0.0",
+      "CsprojSnippet": "\u003CItemGroup\u003E\u003CPackageReference Include=\u0022Swashbuckle.AspNetCore.SafeDummy\u0022 Version=\u00221.0.0\u0022 PrivateAssets=\u0022all\u0022 /\u003E\u003C/ItemGroup\u003E",
+      "Label": false,
+      "LabelId": 0,
+      "AugmentationType": "safe_dummy_dependency",
+      "CVE_ID": "",
+      "Severity": "",
+      "AdvisoryId": ""
+    }
+  ]
+}

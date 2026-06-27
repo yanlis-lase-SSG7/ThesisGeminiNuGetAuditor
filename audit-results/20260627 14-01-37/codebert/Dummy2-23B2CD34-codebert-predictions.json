@@ -1,0 +1,60 @@
+{
+  "ModelName": "mock-codebert-local-python-bridge",
+  "InferenceMode": "MOCK_PYTHON_BRIDGE",
+  "GeneratedAtUtc": "2026-06-27T07:02:09.408564+00:00",
+  "ProjectKey": "Dummy2-23B2CD34",
+  "VulnerabilityReports": [
+    {
+      "PackageName": "Serilog",
+      "CurrentVersion": "2.10.0",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Mock local CodeBERT bridge prediction. Replace with actual fine-tuned CodeBERT output before using this as model-quality evidence.",
+      "MitigationPlanIndonesia": "Prediksi mock bridge CodeBERT lokal. Ganti dengan output CodeBERT fine-tuned sebelum digunakan sebagai bukti kualitas model.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Deterministic local mock CodeBERT bridge prediction with confidence=0.1606.",
+      "ReasoningTraceIndonesia": "Prediksi deterministik mock bridge CodeBERT lokal dengan confidence=0.1606."
+    },
+    {
+      "PackageName": "FluentValidation.AspNetCore",
+      "CurrentVersion": "11.2.2",
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Mock local CodeBERT bridge prediction. Replace with actual fine-tuned CodeBERT output before using this as model-quality evidence.",
+      "MitigationPlanIndonesia": "Prediksi mock bridge CodeBERT lokal. Ganti dengan output CodeBERT fine-tuned sebelum digunakan sebagai bukti kualitas model.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Deterministic local mock CodeBERT bridge prediction with confidence=0.3244.",
+      "ReasoningTraceIndonesia": "Prediksi deterministik mock bridge CodeBERT lokal dengan confidence=0.3244."
+    },
+    {
+      "PackageName": "AutoMapper",
+      "CurrentVersion": "12.0.1",
+      "IsVulnerable": true,
+      "CVE_ID": "CVE-2026-32933",
+      "Severity": "HIGH",
+      "SeverityIndonesia": "Tinggi",
+      "MitigationPlan": "Mock local CodeBERT bridge prediction. Replace with actual fine-tuned CodeBERT output before using this as model-quality evidence.",
+      "MitigationPlanIndonesia": "Prediksi mock bridge CodeBERT lokal. Ganti dengan output CodeBERT fine-tuned sebelum digunakan sebagai bukti kualitas model.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Deterministic local mock CodeBERT bridge prediction with confidence=0.7327.",
+      "ReasoningTraceIndonesia": "Prediksi deterministik mock bridge CodeBERT lokal dengan confidence=0.7327."
+    },
+    {
+      "PackageName": "Dapper",
+      "CurrentVersion": "2.0.123",
+      "IsVulnerable": true,
+      "CVE_ID": "",
+      "Severity": "",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "Mock local CodeBERT bridge prediction. Replace with actual fine-tuned CodeBERT output before using this as model-quality evidence.",
+      "MitigationPlanIndonesia": "Prediksi mock bridge CodeBERT lokal. Ganti dengan output CodeBERT fine-tuned sebelum digunakan sebagai bukti kualitas model.",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "Deterministic local mock CodeBERT bridge prediction with confidence=0.5315.",
+      "ReasoningTraceIndonesia": "Prediksi deterministik mock bridge CodeBERT lokal dengan confidence=0.5315."
+    }
+  ]
+}
