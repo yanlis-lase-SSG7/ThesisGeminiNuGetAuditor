@@ -70,7 +70,7 @@ Pada skenario ini, `IsGroundedInReference` harus bernilai `false` karena tidak a
 
 ### 4.3. Skenario CodeBERT (Deep Learning Baseline)
 
-Skenario CodeBERT digunakan sebagai Python inference bridge untuk memvalidasi pipeline ekspor dataset, eksekusi lokal, pembacaan prediksi, dan perhitungan metrik terpadu. Implementasi saat ini bersifat real-only: `codebert_inference.py` tidak menghasilkan prediksi sintetis. Prediksi CodeBERT hanya dibuat jika tersedia model sequence-classification fine-tuned lokal melalui `CODEBERT_MODEL_PATH` atau argumen `--model`.
+Skenario CodeBERT digunakan sebagai Python inference bridge untuk memvalidasi pipeline ekspor dataset, eksekusi lokal, pembacaan prediksi, dan perhitungan metrik terpadu. Implementasi saat ini bersifat real-only: `codebert_inference.py` tidak menghasilkan prediksi sintetis. Jika tersedia model sequence-classification fine-tuned lokal melalui `CODEBERT_MODEL_PATH` atau argumen `--model`, sistem memakai model tersebut. Jika tidak, sistem menjalankan baseline lokal `LOCAL_CODEBERT_EMBEDDING_LOGREG`, yaitu encoder CodeBERT untuk ekstraksi embedding dan Logistic Regression yang dilatih dari split dataset lokal.
 
 Dataset memuat:
 
@@ -81,7 +81,7 @@ Dataset memuat:
 - metadata advisory seperti CVE, severity, dan advisory ID;
 - variasi augmentasi.
 
-Jika Python, library `transformers`/`torch`, atau model lokal belum tersedia, skenario CodeBERT ditandai `CODEBERT_FAILED`, dikeluarkan dari confusion matrix, dan tidak menghasilkan metrik model. Dengan demikian, eksperimen final tidak mencampurkan hasil RAG-LLM/Zero-Shot real dengan prediksi CodeBERT palsu.
+Pada run pertama, aplikasi membuat virtual environment lokal `.codebert-venv` dan menginstal dependency dari `requirements-codebert.txt` secara otomatis. Jika Python tidak tersedia atau bootstrap dependency gagal, skenario CodeBERT ditandai `CODEBERT_FAILED`, dikeluarkan dari confusion matrix, dan tidak menghasilkan metrik model. Dengan demikian, eksperimen final tidak mencampurkan hasil RAG-LLM/Zero-Shot real dengan prediksi CodeBERT palsu.
 
 ## 5. Augmentasi Data dan Strategi Split
 
@@ -154,7 +154,7 @@ Arsitektur RAG-LLM dinilai efektif apabila menunjukkan peningkatan dibanding Zer
 - peningkatan atau stabilitas **Recall**, yang menunjukkan kemampuan menemukan kerentanan aktual;
 - peningkatan **F1-Score**, yang menunjukkan keseimbangan antara Precision dan Recall.
 
-Metrik CodeBERT hanya dihitung jika Python bridge berhasil menjalankan model CodeBERT lokal yang dikonfigurasi. Jika model tidak tersedia, jalur CodeBERT tetap tercatat sebagai kegagalan terkontrol dan tidak dimasukkan ke metrik Bab IV.
+Metrik CodeBERT hanya dihitung jika Python bridge berhasil menjalankan inferensi CodeBERT lokal, baik melalui model fine-tuned yang dikonfigurasi maupun baseline embedding CodeBERT otomatis. Jika dependency lokal tidak tersedia, jalur CodeBERT tetap tercatat sebagai kegagalan terkontrol dan tidak dimasukkan ke metrik Bab IV.
 
 Dengan demikian, keberhasilan sistem tidak hanya diukur dari banyaknya temuan, tetapi dari kemampuan menghasilkan temuan yang akurat dan dapat ditelusuri ke ground truth.
 

@@ -17,13 +17,17 @@ Cara Menjalankan GeminiNuGetAuditor
    Jika token tidak tersedia atau request GitHub gagal, aplikasi tidak memakai fallback lokal atau appsettings.
    Project tersebut ditandai RETRIEVAL_FAILED dan dikeluarkan dari perhitungan metrik.
 
-4. Opsional untuk skenario CodeBERT real: siapkan Python lokal, library transformers/torch,
-   dan model CodeBERT fine-tuned lokal.
+4. Opsional jika sudah punya model CodeBERT fine-tuned lokal:
 
-   PowerShell:
    $env:CODEBERT_MODEL_PATH = "D:\path\to\fine-tuned-codebert-model"
 
-   Jika CODEBERT_MODEL_PATH, Python, atau library belum tersedia, aplikasi tidak membuat prediksi sintetis.
+   Dependency CodeBERT tidak perlu di-install manual. Pada run pertama, aplikasi membuat
+   virtual environment lokal .codebert-venv dan menjalankan pip install otomatis dari
+   requirements-codebert.txt.
+
+   Jika CODEBERT_MODEL_PATH tidak diisi, aplikasi memakai baseline real lokal
+   LOCAL_CODEBERT_EMBEDDING_LOGREG berbasis encoder CodeBERT dan Logistic Regression.
+   Jika Python tidak tersedia atau bootstrap dependency gagal, aplikasi tidak membuat prediksi sintetis.
    Skenario CodeBERT ditandai CODEBERT_FAILED dan dikeluarkan dari perhitungan metrik.
 
 5. Jalankan aplikasi tanpa argumen:
@@ -44,7 +48,7 @@ Cara Menjalankan GeminiNuGetAuditor
    - membuat folder hasil baru di dalam audit-results, contoh audit-results\20261231 14-15-16;
    - melewati project yang sudah memiliki checkpoint JSON di folder checkpoints milik run tersebut;
    - memproses banyak project secara paralel;
-   - menjalankan Zero-Shot, retrieval ground truth, RAG-LLM, dan CodeBERT Python bridge jika model lokal tersedia;
+   - menjalankan Zero-Shot, retrieval ground truth, RAG-LLM, dan CodeBERT Python bridge;
    - menyimpan report JSON, HTML, CSV, dan Excel ke folder audit-results.
 
 8. Output utama:
@@ -64,6 +68,6 @@ Catatan:
 - Jalankan aplikasi tanpa argumen CLI.
 - Jika Gemini API gagal untuk sebuah skenario, status skenario menjadi API_FAILED.
 - API_FAILED tidak memakai ground truth sebagai prediksi pengganti dan tidak dihitung ke confusion matrix.
-- Jika CodeBERT gagal karena model lokal belum tersedia, status skenario menjadi CODEBERT_FAILED dan tidak dihitung ke confusion matrix.
+- Jika CodeBERT gagal karena Python tidak tersedia atau bootstrap dependency gagal, status skenario menjadi CODEBERT_FAILED dan tidak dihitung ke confusion matrix.
 - Untuk memproses ulang satu project di folder run yang sama, hapus checkpoint JSON project tersebut dari folder checkpoints.
 - Format folder memakai tanda hubung pada jam-menit-detik karena karakter ":" tidak valid untuk nama folder Windows.

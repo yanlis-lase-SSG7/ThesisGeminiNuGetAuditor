@@ -1,5 +1,5 @@
 ﻿{
-  "GeneratedAtUtc": "2026-06-27T07:05:09.687733+00:00",
+  "GeneratedAtUtc": "2026-06-27T07:24:21.9961216+00:00",
   "RootFolder": "D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples",
   "ModelName": "gemini-2.5-pro",
   "Scenario": 0,
@@ -8,8 +8,8 @@
   "FailedProjectCount": 0,
   "TotalExtractedPackages": 50,
   "TotalVulnerabilityReports": 50,
-  "VulnerableFindingCount": 9,
-  "GroundedFindingCount": 17,
+  "VulnerableFindingCount": 8,
+  "GroundedFindingCount": 16,
   "VulnerabilityReportFieldDescriptions": {
     "PackageName": {
       "Description": "Nama paket NuGet yang dianalisis.",
@@ -111,8 +111,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package Swashbuckle.AspNetCore version 6.5.0 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket Swashbuckle.AspNetCore versi 6.5.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package Swashbuckle.AspNetCore version 6.5.0 was not found in the provided security reference data. Therefore, its vulnerability status cannot be confirmed.",
+      "ReasoningTraceIndonesia": "Paket Swashbuckle.AspNetCore versi 6.5.0 tidak ditemukan dalam data referensi keamanan yang disediakan. Oleh karena itu, status kerentanannya tidak dapat dikonfirmasi."
     },
     {
       "ProjectName": "Dummy1",
@@ -127,8 +127,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package Microsoft.EntityFrameworkCore version 8.0.4 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket Microsoft.EntityFrameworkCore versi 8.0.4 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package Microsoft.EntityFrameworkCore version 8.0.4 was not found in the provided security reference data. Therefore, its vulnerability status cannot be confirmed.",
+      "ReasoningTraceIndonesia": "Paket Microsoft.EntityFrameworkCore versi 8.0.4 tidak ditemukan dalam data referensi keamanan yang disediakan. Oleh karena itu, status kerentanannya tidak dapat dikonfirmasi."
     },
     {
       "ProjectName": "Dummy1",
@@ -143,8 +143,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package Npgsql.EntityFrameworkCore.PostgreSQL version 7.0.11 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket Npgsql.EntityFrameworkCore.PostgreSQL versi 7.0.11 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package Npgsql.EntityFrameworkCore.PostgreSQL version 7.0.11 was not found in the provided security reference data. Therefore, its vulnerability status cannot be confirmed.",
+      "ReasoningTraceIndonesia": "Paket Npgsql.EntityFrameworkCore.PostgreSQL versi 7.0.11 tidak ditemukan dalam data referensi keamanan yang disediakan. Oleh karena itu, status kerentanannya tidak dapat dikonfirmasi."
     },
     {
       "ProjectName": "Dummy2",
@@ -159,8 +159,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
+      "ReasoningTrace": "Package not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
     },
     {
       "ProjectName": "Dummy2",
@@ -172,11 +172,11 @@
       "CVE_ID": "CVE-2026-32933",
       "Severity": "High",
       "SeverityIndonesia": "Tinggi",
-      "MitigationPlan": "Upgrade to version 15.1.1 or later. The vulnerability is patched in version 15.1.1.",
-      "MitigationPlanIndonesia": "Tingkatkan ke versi 15.1.1 atau yang lebih baru. Kerentanan ini telah ditambal di versi 15.1.1.",
+      "MitigationPlan": "Upgrade to version 15.1.1 or later.",
+      "MitigationPlanIndonesia": "Tingkatkan ke versi 15.1.1 atau yang lebih baru.",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The package version 12.0.1 is within the vulnerable range (\u003C 15.1.1) defined by the security advisory GHSA-rvv3-g6hj-g44x. The advisory reports a Denial of Service (DoS) vulnerability due to uncontrolled recursion.",
-      "ReasoningTraceIndonesia": "Versi paket 12.0.1 berada dalam rentang rentan (\u003C 15.1.1) yang ditentukan oleh penasihat keamanan GHSA-rvv3-g6hj-g44x. Penasihat tersebut melaporkan kerentanan Denial of Service (DoS) karena rekursi yang tidak terkendali."
+      "ReasoningTrace": "The current version 12.0.1 is within the vulnerable range \u0027\u003C 15.1.1\u0027 as specified in the reference data (GHSA-rvv3-g6hj-g44x).",
+      "ReasoningTraceIndonesia": "Versi saat ini 12.0.1 berada dalam rentang rentan \u0027\u003C 15.1.1\u0027 seperti yang ditentukan dalam data referensi (GHSA-rvv3-g6hj-g44x)."
     },
     {
       "ProjectName": "Dummy2",
@@ -191,8 +191,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
+      "ReasoningTrace": "Package not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
     },
     {
       "ProjectName": "Dummy2",
@@ -207,8 +207,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
+      "ReasoningTrace": "Package not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
     },
     {
       "ProjectName": "Dummy3",
@@ -220,11 +220,11 @@
       "CVE_ID": "",
       "Severity": "Unknown",
       "SeverityIndonesia": "Tidak diketahui",
-      "MitigationPlan": "",
-      "MitigationPlanIndonesia": "",
+      "MitigationPlan": "The current version 13.0.3 is not vulnerable. The patched version is 13.0.1.",
+      "MitigationPlanIndonesia": "Versi saat ini 13.0.3 tidak rentan. Versi yang telah ditambal adalah 13.0.1.",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The package \u0027Newtonsoft.Json\u0027 version 13.0.3 is not vulnerable. The reference data indicates vulnerabilities for versions \u0027\u003C 13.0.1\u0027. The current version is patched.",
-      "ReasoningTraceIndonesia": "Paket \u0027Newtonsoft.Json\u0027 versi 13.0.3 tidak rentan. Data referensi menunjukkan kerentanan untuk versi \u0027\u003C 13.0.1\u0027. Versi saat ini sudah ditambal."
+      "ReasoningTrace": "The current version 13.0.3 is not within the vulnerable range \u0027\u003C 13.0.1\u0027 as specified by advisory GHSA-5crp-9r3c-p9vr. The package is patched.",
+      "ReasoningTraceIndonesia": "Versi saat ini 13.0.3 tidak berada dalam rentang rentan \u0027\u003C 13.0.1\u0027 seperti yang ditentukan oleh anjuran GHSA-5crp-9r3c-p9vr. Paket ini sudah ditambal."
     },
     {
       "ProjectName": "Dummy3",
@@ -239,8 +239,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package \u0027Serilog\u0027 version 4.0.1 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Serilog\u0027 versi 4.0.1 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package Serilog was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket Serilog tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -255,8 +255,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package \u0027Dapper\u0027 version 2.1.35 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Dapper\u0027 versi 2.1.35 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package Dapper was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket Dapper tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -271,8 +271,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package \u0027AdvancedAgilityPack\u0027 version 1.1.0 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027AdvancedAgilityPack\u0027 versi 1.1.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package AdvancedAgilityPack was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket AdvancedAgilityPack tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -287,8 +287,8 @@
       "MitigationPlan": "Upgrade to version 1.11.4 or later.",
       "MitigationPlanIndonesia": "Tingkatkan ke versi 1.11.4 atau yang lebih baru.",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The package \u0027Azure.Identity\u0027 version 1.10.2 is vulnerable. The reference data (GHSA-m5vv-6r4h-3vj9) indicates a vulnerability for versions \u0027\u003C 1.11.4\u0027. The recommended patched version is 1.11.4.",
-      "ReasoningTraceIndonesia": "Paket \u0027Azure.Identity\u0027 versi 1.10.2 rentan. Data referensi (GHSA-m5vv-6r4h-3vj9) menunjukkan kerentanan untuk versi \u0027\u003C 1.11.4\u0027. Versi yang direkomendasikan untuk ditambal adalah 1.11.4."
+      "ReasoningTrace": "The current version 1.10.2 is within the vulnerable range \u0027\u003C 1.11.4\u0027 according to advisory GHSA-m5vv-6r4h-3vj9.",
+      "ReasoningTraceIndonesia": "Versi saat ini 1.10.2 berada dalam rentang rentan \u0027\u003C 1.11.4\u0027 menurut anjuran GHSA-m5vv-6r4h-3vj9."
     },
     {
       "ProjectName": "Dummy3",
@@ -303,8 +303,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package \u0027Binus.WS.Pattern\u0027 version 1.0.5 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Binus.WS.Pattern\u0027 versi 1.0.5 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package Binus.WS.Pattern was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket Binus.WS.Pattern tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -319,8 +319,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package \u0027Binus.WS.Pattern.AzureStorage\u0027 version 1.0.7 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Binus.WS.Pattern.AzureStorage\u0027 versi 1.0.7 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package Binus.WS.Pattern.AzureStorage was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket Binus.WS.Pattern.AzureStorage tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -335,8 +335,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package \u0027Binus.WS.Pattern.MessageQueue\u0027 version 1.2.0 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Binus.WS.Pattern.MessageQueue\u0027 versi 1.2.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package Binus.WS.Pattern.MessageQueue was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket Binus.WS.Pattern.MessageQueue tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -351,8 +351,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package \u0027BuildBundlerMinifier\u0027 version 3.2.449 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027BuildBundlerMinifier\u0027 versi 3.2.449 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package BuildBundlerMinifier was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket BuildBundlerMinifier tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -367,8 +367,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package \u0027ClosedXML\u0027 version 0.95.4 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027ClosedXML\u0027 versi 0.95.4 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package ClosedXML was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket ClosedXML tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -380,11 +380,11 @@
       "CVE_ID": "",
       "Severity": "Unknown",
       "SeverityIndonesia": "Tidak diketahui",
-      "MitigationPlan": "",
-      "MitigationPlanIndonesia": "",
+      "MitigationPlan": "The current version 2021.2.7 is not vulnerable. The patched version is 2020.4.0.",
+      "MitigationPlanIndonesia": "Versi saat ini 2021.2.7 tidak rentan. Versi yang telah ditambal adalah 2020.4.0.",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The package \u0027FastReport.OpenSource\u0027 version 2021.2.7 is not vulnerable. The reference data indicates a vulnerability for versions \u0027\u003C 2020.4.0\u0027. The current version is patched.",
-      "ReasoningTraceIndonesia": "Paket \u0027FastReport.OpenSource\u0027 versi 2021.2.7 tidak rentan. Data referensi menunjukkan kerentanan untuk versi \u0027\u003C 2020.4.0\u0027. Versi saat ini sudah ditambal."
+      "ReasoningTrace": "The current version 2021.2.7 is not within the vulnerable range \u0027\u003C 2020.4.0\u0027 as specified by advisory GHSA-v726-3vg9-cp34. The package is patched.",
+      "ReasoningTraceIndonesia": "Versi saat ini 2021.2.7 tidak berada dalam rentang rentan \u0027\u003C 2020.4.0\u0027 seperti yang ditentukan oleh anjuran GHSA-v726-3vg9-cp34. Paket ini sudah ditambal."
     },
     {
       "ProjectName": "Dummy3",
@@ -399,8 +399,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package \u0027FastReport.OpenSource.Export.PdfSimple\u0027 version 2021.2.0 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027FastReport.OpenSource.Export.PdfSimple\u0027 versi 2021.2.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package FastReport.OpenSource.Export.PdfSimple was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket FastReport.OpenSource.Export.PdfSimple tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -415,8 +415,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package \u0027FastReport.OpenSource.Web\u0027 version 2021.2.7 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027FastReport.OpenSource.Web\u0027 versi 2021.2.7 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package FastReport.OpenSource.Web was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket FastReport.OpenSource.Web tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -431,8 +431,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package \u0027itext7\u0027 version 7.1.16 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027itext7\u0027 versi 7.1.16 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package itext7 was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket itext7 tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -447,8 +447,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package \u0027Microsoft.ApplicationInsights.AspNetCore\u0027 version 2.14.0 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Microsoft.ApplicationInsights.AspNetCore\u0027 versi 2.14.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "The package Microsoft.ApplicationInsights.AspNetCore was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket Microsoft.ApplicationInsights.AspNetCore tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -463,8 +463,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "Package \u0027Microsoft.AspNet.Mvc\u0027 version 5.2.7 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNet.Mvc\u0027 versi 5.2.7 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "Package not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -479,8 +479,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "Package \u0027Microsoft.AspNetCore.Authentication.OpenIdConnect\u0027 version 3.1.17 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNetCore.Authentication.OpenIdConnect\u0027 versi 3.1.17 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "Package not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -495,8 +495,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "Package \u0027Microsoft.AspNetCore.Http\u0027 version 2.2.2 is not within the vulnerable range \u0027\u003C 2.1.22\u0027 as specified in the reference data (GHSA-hxrm-9w7p-39cc).",
-      "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNetCore.Http\u0027 versi 2.2.2 tidak berada dalam rentang rentan \u0027\u003C 2.1.22\u0027 seperti yang ditentukan dalam data referensi (GHSA-hxrm-9w7p-39cc)."
+      "ReasoningTrace": "The package is present in the reference data, but the current version 2.2.2 is not within the vulnerable range \u0027\u003C 2.1.22\u0027.",
+      "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 2.2.2 tidak berada dalam rentang rentan \u0027\u003C 2.1.22\u0027."
     },
     {
       "ProjectName": "Dummy3",
@@ -511,8 +511,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "Package \u0027Microsoft.AspNetCore.Mvc.Core\u0027 version 2.2.5 is not within any of the vulnerable ranges specified in the reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNetCore.Mvc.Core\u0027 versi 2.2.5 tidak berada dalam rentang rentan mana pun yang ditentukan dalam data referensi."
+      "ReasoningTrace": "The package is present in the reference data, but the current version 2.2.5 is not within any of the specified vulnerable ranges.",
+      "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 2.2.5 tidak berada dalam rentang rentan yang ditentukan."
     },
     {
       "ProjectName": "Dummy3",
@@ -527,8 +527,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "Package \u0027Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation\u0027 version 3.1.6 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation\u0027 versi 3.1.6 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "Package not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -543,8 +543,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "Package \u0027Microsoft.EntityFrameworkCore\u0027 version 3.1.6 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Microsoft.EntityFrameworkCore\u0027 versi 3.1.6 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "Package not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -559,8 +559,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "Package \u0027Microsoft.EntityFrameworkCore.Design\u0027 version 3.1.6 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Microsoft.EntityFrameworkCore.Design\u0027 versi 3.1.6 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "Package not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -575,8 +575,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "Package \u0027Microsoft.EntityFrameworkCore.SqlServer\u0027 version 3.1.6 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Microsoft.EntityFrameworkCore.SqlServer\u0027 versi 3.1.6 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "Package not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -591,8 +591,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "Package \u0027Microsoft.Extensions.Caching.StackExchangeRedis\u0027 version 5.0.1 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Microsoft.Extensions.Caching.StackExchangeRedis\u0027 versi 5.0.1 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "Package not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -607,8 +607,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "Package \u0027Microsoft.Identity.Web\u0027 version 1.15.2 is not within the vulnerable range \u0027\u003E= 3.2.0, \u003C 3.8.2\u0027 as specified in the reference data (GHSA-rpq8-q44m-2rpg).",
-      "ReasoningTraceIndonesia": "Paket \u0027Microsoft.Identity.Web\u0027 versi 1.15.2 tidak berada dalam rentang rentan \u0027\u003E= 3.2.0, \u003C 3.8.2\u0027 seperti yang ditentukan dalam data referensi (GHSA-rpq8-q44m-2rpg)."
+      "ReasoningTrace": "The package is present in the reference data, but the current version 1.15.2 is not within the vulnerable range \u0027\u003E= 3.2.0, \u003C 3.8.2\u0027.",
+      "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 1.15.2 tidak berada dalam rentang rentan \u0027\u003E= 3.2.0, \u003C 3.8.2\u0027."
     },
     {
       "ProjectName": "Dummy3",
@@ -623,8 +623,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "Package \u0027Microsoft.VisualStudio.Web.CodeGeneration.Design\u0027 version 3.1.5 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027Microsoft.VisualStudio.Web.CodeGeneration.Design\u0027 versi 3.1.5 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "Package not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -639,8 +639,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "Package \u0027MimeTypeMapOfficial\u0027 version 1.0.17 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027MimeTypeMapOfficial\u0027 versi 1.0.17 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "Package not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -648,15 +648,15 @@
       "ProjectPath": "D:\\Project S2\\yanlis-lase-SSG7\\ThesisGeminiNuGetAuditor\\samples\\Dummy3.csproj",
       "PackageName": "Nancy",
       "CurrentVersion": "2.0.0",
-      "IsVulnerable": true,
-      "CVE_ID": "CVE-2017-9785",
-      "Severity": "Critical",
-      "SeverityIndonesia": "Kritis",
-      "MitigationPlan": "The advisory indicates there is no patch for the 2.0.0 version. It is recommended to downgrade to version 1.4.4 or move to an alternative library, as Nancy is a deprecated project.",
-      "MitigationPlanIndonesia": "Advisori menunjukkan tidak ada patch untuk versi 2.0.0. Disarankan untuk downgrade ke versi 1.4.4 atau beralih ke pustaka alternatif, karena Nancy adalah proyek yang sudah tidak dikelola.",
-      "IsGroundedInReference": true,
-      "ReasoningTrace": "Package \u0027Nancy\u0027 version 2.0.0 is within the vulnerable range \u0027\u003E= 2.0.0-alpha, \u003C= 2.0.0-clinteastwood\u0027 as specified in the reference data (GHSA-mx3q-j2g2-5qxq), which exposes a Deserialization of Untrusted Data vulnerability.",
-      "ReasoningTraceIndonesia": "Paket \u0027Nancy\u0027 versi 2.0.0 berada dalam rentang rentan \u0027\u003E= 2.0.0-alpha, \u003C= 2.0.0-clinteastwood\u0027 seperti yang ditentukan dalam data referensi (GHSA-mx3q-j2g2-5qxq), yang mengekspos kerentanan Deserialisasi Data Tidak Terpercaya."
+      "IsVulnerable": false,
+      "CVE_ID": "",
+      "Severity": "Unknown",
+      "SeverityIndonesia": "Tidak diketahui",
+      "MitigationPlan": "",
+      "MitigationPlanIndonesia": "",
+      "IsGroundedInReference": false,
+      "ReasoningTrace": "The package is present in the reference data, but the current version 2.0.0 is the patched version and not within the vulnerable range \u0027\u003E= 2.0.0-alpha, \u003C= 2.0.0-clinteastwood\u0027.",
+      "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 2.0.0 adalah versi yang ditambal dan tidak berada dalam rentang rentan \u0027\u003E= 2.0.0-alpha, \u003C= 2.0.0-clinteastwood\u0027."
     },
     {
       "ProjectName": "Dummy3",
@@ -671,8 +671,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "Package \u0027NetCoreAutoLinkDropdown\u0027 version 1.0.2 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027NetCoreAutoLinkDropdown\u0027 versi 1.0.2 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "Package not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -687,8 +687,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "Package \u0027PdfSharpCore\u0027 version 1.2.17 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027PdfSharpCore\u0027 versi 1.2.17 tidak ditemukan dalam data referensi keamanan yang disediakan."
+      "ReasoningTrace": "Package not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
     },
     {
       "ProjectName": "Dummy3",
@@ -703,8 +703,8 @@
       "MitigationPlan": "Upgrade to version 2.1.11 or later.",
       "MitigationPlanIndonesia": "Tingkatkan ke versi 2.1.11 atau yang lebih baru.",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The current version 2.1.10 falls within the vulnerable range \u0027\u003C 2.1.11\u0027 for GHSA-rxmq-m78w-7wmc. The vulnerability is \u0027SixLabors ImageSharp Has Infinite Loop in GIF Decoder When Skipping Malformed Comment Extension Blocks\u0027.",
-      "ReasoningTraceIndonesia": "Versi saat ini 2.1.10 termasuk dalam rentang rentan \u0027\u003C 2.1.11\u0027 untuk GHSA-rxmq-m78w-7wmc. kerentanannya adalah \u0027SixLabors ImageSharp Has Infinite Loop in GIF Decoder When Skipping Malformed Comment Extension Blocks\u0027."
+      "ReasoningTrace": "The current version 2.1.10 is within the vulnerable range \u003C 2.1.11 for CVE-2025-54575, which can lead to an infinite loop in the GIF decoder.",
+      "ReasoningTraceIndonesia": "Versi saat ini 2.1.10 berada dalam rentang rentan \u003C 2.1.11 untuk CVE-2025-54575, yang dapat menyebabkan perulangan tak terbatas di dekoder GIF."
     },
     {
       "ProjectName": "Dummy3",
@@ -719,8 +719,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The package is present in the reference data, but the current version 1.3.2 is not within any vulnerable range. The patched version for known vulnerabilities (GHSA-j3jw-j2j8-2wv9, GHSA-9wx7-jrvc-28mm) is 1.3.2.",
-      "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 1.3.2 tidak berada dalam rentang rentan mana pun. Versi yang ditambal untuk kerentanan yang diketahui (GHSA-j3jw-j2j8-2wv9, GHSA-9wx7-jrvc-28mm) adalah 1.3.2."
+      "ReasoningTrace": "The package starkbank-ecdsa version 1.3.2 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+      "ReasoningTraceIndonesia": "Paket starkbank-ecdsa versi 1.3.2 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
     },
     {
       "ProjectName": "Dummy3",
@@ -735,8 +735,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The package is present in the reference data, but the current version 2.1.7 is not within any vulnerable range. It is the patched version for the vulnerability identified in GHSA-98g6-xh36-x2p7 for its version range.",
-      "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 2.1.7 tidak berada dalam rentang rentan mana pun. Ini adalah versi yang ditambal untuk kerentanan yang diidentifikasi dalam GHSA-98g6-xh36-x2p7 untuk rentang versinya."
+      "ReasoningTrace": "The package Microsoft.Data.SqlClient version 2.1.7 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+      "ReasoningTraceIndonesia": "Paket Microsoft.Data.SqlClient versi 2.1.7 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
     },
     {
       "ProjectName": "Dummy3",
@@ -751,8 +751,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The package is present in the reference data, but the current version 4.8.6 is not within any vulnerable range. It is the patched version for the vulnerability identified in GHSA-98g6-xh36-x2p7.",
-      "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 4.8.6 tidak berada dalam rentang rentan mana pun. Ini adalah versi yang ditambal untuk kerentanan yang diidentifikasi dalam GHSA-98g6-xh36-x2p7."
+      "ReasoningTrace": "The package System.Data.SqlClient version 4.8.6 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+      "ReasoningTraceIndonesia": "Paket System.Data.SqlClient versi 4.8.6 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
     },
     {
       "ProjectName": "Dummy3",
@@ -767,8 +767,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The package is present in the reference data, but the current version 4.7.2 is not within any vulnerable range. It is the patched version for the vulnerability identified in GHSA-rxg9-xrhp-64gj for its version range.",
-      "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 4.7.2 tidak berada dalam rentang rentan mana pun. Ini adalah versi yang ditambal untuk kerentanan yang diidentifikasi dalam GHSA-rxg9-xrhp-64gj untuk rentang versinya."
+      "ReasoningTrace": "The package System.Drawing.Common version 4.7.2 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+      "ReasoningTraceIndonesia": "Paket System.Drawing.Common versi 4.7.2 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
     },
     {
       "ProjectName": "Dummy3",
@@ -783,8 +783,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": false,
-      "ReasoningTrace": "The package \u0027System.Globalization.Calendars\u0027 was not found in the provided security reference data.",
-      "ReasoningTraceIndonesia": "Paket \u0027System.Globalization.Calendars\u0027 tidak ditemukan dalam data referensi keamanan yang diberikan."
+      "ReasoningTrace": "The package System.Globalization.Calendars was not found in the provided security reference data.",
+      "ReasoningTraceIndonesia": "Paket System.Globalization.Calendars tidak ditemukan dalam data referensi keamanan yang disediakan."
     },
     {
       "ProjectName": "Dummy3",
@@ -799,8 +799,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The package is present in the reference data, but the current version 4.7.0 is not within any vulnerable range.",
-      "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 4.7.0 tidak berada dalam rentang rentan mana pun."
+      "ReasoningTrace": "The package System.Private.ServiceModel version 4.7.0 is present in the reference data, but the current version is not within any vulnerable range.",
+      "ReasoningTraceIndonesia": "Paket System.Private.ServiceModel versi 4.7.0 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun."
     },
     {
       "ProjectName": "Dummy3",
@@ -815,8 +815,8 @@
       "MitigationPlan": "Upgrade to version 4.7.1 or later.",
       "MitigationPlanIndonesia": "Tingkatkan ke versi 4.7.1 atau yang lebih baru.",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The current version 4.5.0 falls within the vulnerable range \u0027\u003C= 4.7.0\u0027 for GHSA-vh55-786g-wjwj (CVE-2022-34716), which is a .NET Information Disclosure Vulnerability.",
-      "ReasoningTraceIndonesia": "Versi saat ini 4.5.0 termasuk dalam rentang rentan \u0027\u003C= 4.7.0\u0027 untuk GHSA-vh55-786g-wjwj (CVE-2022-34716), yang merupakan Kerentanan Pengungkapan Informasi .NET."
+      "ReasoningTrace": "The current version 4.5.0 is within the vulnerable range \u003C= 4.7.0 for CVE-2022-34716, a .NET Information Disclosure Vulnerability.",
+      "ReasoningTraceIndonesia": "Versi saat ini 4.5.0 berada dalam rentang rentan \u003C= 4.7.0 untuk CVE-2022-34716, sebuah kerentanan Pengungkapan Informasi .NET."
     },
     {
       "ProjectName": "Dummy3",
@@ -828,11 +828,11 @@
       "CVE_ID": "CVE-2018-0786",
       "Severity": "High",
       "SeverityIndonesia": "Tinggi",
-      "MitigationPlan": "Upgrade to version 4.4.4 or later. Version 4.4.0 is specifically vulnerable to GHSA-jc8g-xhw5-6x46 (patched in 4.4.1) and the range \u003E= 4.4.0, \u003C 4.4.4 is vulnerable to GHSA-p9wx-v264-q34p (patched in 4.4.4).",
-      "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru. Versi 4.4.0 secara khusus rentan terhadap GHSA-jc8g-xhw5-6x46 (ditambal di 4.4.1) dan rentang \u003E= 4.4.0, \u003C 4.4.4 rentan terhadap GHSA-p9wx-v264-q34p (ditambal di 4.4.4).",
+      "MitigationPlan": "Upgrade to version 4.4.4 or later.",
+      "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru.",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The current version pattern \u00274.4.*\u0027 includes version 4.4.0 which is explicitly listed as vulnerable in GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). The entire range up to 4.4.4 is also affected by another vulnerability. The highest severity is High.",
-      "ReasoningTraceIndonesia": "Pola versi saat ini \u00274.4.*\u0027 mencakup versi 4.4.0 yang secara eksplisit terdaftar sebagai rentan dalam GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). Seluruh rentang hingga 4.4.4 juga terpengaruh oleh kerentanan lain. Tingkat keparahan tertinggi adalah Tinggi."
+      "ReasoningTrace": "The current version pattern 4.4.* includes vulnerable versions like 4.4.0, which falls into the vulnerable range = 4.4.0 for CVE-2018-0786, an Improper Certificate Validation vulnerability.",
+      "ReasoningTraceIndonesia": "Pola versi saat ini 4.4.* mencakup versi rentan seperti 4.4.0, yang termasuk dalam rentang rentan = 4.4.0 untuk CVE-2018-0786, sebuah kerentanan Validasi Sertifikat yang Tidak Tepat."
     },
     {
       "ProjectName": "Dummy3",
@@ -844,11 +844,11 @@
       "CVE_ID": "CVE-2018-0786",
       "Severity": "High",
       "SeverityIndonesia": "Tinggi",
-      "MitigationPlan": "Upgrade to version 4.4.4 or later. Version 4.4.0 is specifically vulnerable to GHSA-jc8g-xhw5-6x46 (patched in 4.4.1) and the range \u003E= 4.4.0, \u003C 4.4.4 is vulnerable to GHSA-p9wx-v264-q34p (patched in 4.4.4).",
-      "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru. Versi 4.4.0 secara khusus rentan terhadap GHSA-jc8g-xhw5-6x46 (ditambal di 4.4.1) dan rentang \u003E= 4.4.0, \u003C 4.4.4 rentan terhadap GHSA-p9wx-v264-q34p (ditambal di 4.4.4).",
+      "MitigationPlan": "Upgrade to version 4.4.4 or later.",
+      "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru.",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The current version pattern \u00274.4.*\u0027 includes version 4.4.0 which is explicitly listed as vulnerable in GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). The entire range up to 4.4.4 is also affected by another vulnerability. The highest severity is High.",
-      "ReasoningTraceIndonesia": "Pola versi saat ini \u00274.4.*\u0027 mencakup versi 4.4.0 yang secara eksplisit terdaftar sebagai rentan dalam GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). Seluruh rentang hingga 4.4.4 juga terpengaruh oleh kerentanan lain. Tingkat keparahan tertinggi adalah Tinggi."
+      "ReasoningTrace": "The current version pattern 4.4.* includes vulnerable versions like 4.4.0, which falls into the vulnerable range = 4.4.0 for CVE-2018-0786, an Improper Certificate Validation vulnerability.",
+      "ReasoningTraceIndonesia": "Pola versi saat ini 4.4.* mencakup versi rentan seperti 4.4.0, yang termasuk dalam rentang rentan = 4.4.0 untuk CVE-2018-0786, sebuah kerentanan Validasi Sertifikat yang Tidak Tepat."
     },
     {
       "ProjectName": "Dummy3",
@@ -860,11 +860,11 @@
       "CVE_ID": "CVE-2018-0786",
       "Severity": "High",
       "SeverityIndonesia": "Tinggi",
-      "MitigationPlan": "Upgrade to version 4.4.4 or later. Version 4.4.0 is specifically vulnerable to GHSA-jc8g-xhw5-6x46 (patched in 4.4.1) and the range \u003E= 4.4.0, \u003C 4.4.4 is vulnerable to GHSA-p9wx-v264-q34p (patched in 4.4.4).",
-      "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru. Versi 4.4.0 secara khusus rentan terhadap GHSA-jc8g-xhw5-6x46 (ditambal di 4.4.1) dan rentang \u003E= 4.4.0, \u003C 4.4.4 rentan terhadap GHSA-p9wx-v264-q34p (ditambal di 4.4.4).",
+      "MitigationPlan": "Upgrade to version 4.4.4 or later.",
+      "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru.",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The current version pattern \u00274.4.*\u0027 includes version 4.4.0 which is explicitly listed as vulnerable in GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). The entire range up to 4.4.4 is also affected by another vulnerability. The highest severity is High.",
-      "ReasoningTraceIndonesia": "Pola versi saat ini \u00274.4.*\u0027 mencakup versi 4.4.0 yang secara eksplisit terdaftar sebagai rentan dalam GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). Seluruh rentang hingga 4.4.4 juga terpengaruh oleh kerentanan lain. Tingkat keparahan tertinggi adalah Tinggi."
+      "ReasoningTrace": "The current version pattern 4.4.* includes vulnerable versions like 4.4.0, which falls into the vulnerable range = 4.4.0 for CVE-2018-0786, an Improper Certificate Validation vulnerability.",
+      "ReasoningTraceIndonesia": "Pola versi saat ini 4.4.* mencakup versi rentan seperti 4.4.0, yang termasuk dalam rentang rentan = 4.4.0 untuk CVE-2018-0786, sebuah kerentanan Validasi Sertifikat yang Tidak Tepat."
     },
     {
       "ProjectName": "Dummy3",
@@ -876,11 +876,11 @@
       "CVE_ID": "CVE-2018-0786",
       "Severity": "High",
       "SeverityIndonesia": "Tinggi",
-      "MitigationPlan": "Upgrade to version 4.4.4 or later. Version 4.4.0 is specifically vulnerable to GHSA-jc8g-xhw5-6x46 (patched in 4.4.1) and the range \u003E= 4.4.0, \u003C 4.4.4 is vulnerable to GHSA-p9wx-v264-q34p (patched in 4.4.4).",
-      "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru. Versi 4.4.0 secara khusus rentan terhadap GHSA-jc8g-xhw5-6x46 (ditambal di 4.4.1) dan rentang \u003E= 4.4.0, \u003C 4.4.4 rentan terhadap GHSA-p9wx-v264-q34p (ditambal di 4.4.4).",
+      "MitigationPlan": "Upgrade to version 4.4.4 or later.",
+      "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru.",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The current version pattern \u00274.4.*\u0027 includes version 4.4.0 which is explicitly listed as vulnerable in GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). The entire range up to 4.4.4 is also affected by another vulnerability. The highest severity is High.",
-      "ReasoningTraceIndonesia": "Pola versi saat ini \u00274.4.*\u0027 mencakup versi 4.4.0 yang secara eksplisit terdaftar sebagai rentan dalam GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). Seluruh rentang hingga 4.4.4 juga terpengaruh oleh kerentanan lain. Tingkat keparahan tertinggi adalah Tinggi."
+      "ReasoningTrace": "The current version pattern 4.4.* includes vulnerable versions like 4.4.0, which falls into the vulnerable range = 4.4.0 for CVE-2018-0786, an Improper Certificate Validation vulnerability.",
+      "ReasoningTraceIndonesia": "Pola versi saat ini 4.4.* mencakup versi rentan seperti 4.4.0, yang termasuk dalam rentang rentan = 4.4.0 untuk CVE-2018-0786, sebuah kerentanan Validasi Sertifikat yang Tidak Tepat."
     },
     {
       "ProjectName": "Dummy3",
@@ -895,8 +895,8 @@
       "MitigationPlan": "",
       "MitigationPlanIndonesia": "",
       "IsGroundedInReference": true,
-      "ReasoningTrace": "The package is present in the reference data, but the current version 5.0.1 is not within any vulnerable range. It is the patched version for the vulnerability identified in GHSA-ghhp-997w-qr28 for its version range.",
-      "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 5.0.1 tidak berada dalam rentang rentan mana pun. Ini adalah versi yang ditambal untuk kerentanan yang diidentifikasi dalam GHSA-ghhp-997w-qr28 untuk rentang versinya."
+      "ReasoningTrace": "The package System.Text.Encodings.Web version 5.0.1 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+      "ReasoningTraceIndonesia": "Paket System.Text.Encodings.Web versi 5.0.1 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
     }
   ],
   "Projects": [
@@ -981,13 +981,14 @@
         "MetricExclusionReason": "",
         "VulnerableCount": 0,
         "AuditJsonPath": "",
-        "StartedAtUtc": "2026-06-27T07:01:45.9341451+00:00",
-        "CompletedAtUtc": "2026-06-27T07:01:59.3445596+00:00",
-        "ElapsedSeconds": 13.4104144,
+        "StartedAtUtc": "2026-06-27T07:21:16.9761555+00:00",
+        "CompletedAtUtc": "2026-06-27T07:21:31.0018377+00:00",
+        "ElapsedSeconds": 14.0256828,
         "InputJsonPath": "",
         "PredictionJsonPath": "",
         "Response": {
           "ModelName": "gemini-2.5-pro",
+          "InferenceMode": "",
           "VulnerabilityReports": [
             {
               "PackageName": "Swashbuckle.AspNetCore",
@@ -999,8 +1000,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package Swashbuckle.AspNetCore version 6.5.0 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket Swashbuckle.AspNetCore versi 6.5.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package Swashbuckle.AspNetCore version 6.5.0 was not found in the provided security reference data. Therefore, its vulnerability status cannot be confirmed.",
+              "ReasoningTraceIndonesia": "Paket Swashbuckle.AspNetCore versi 6.5.0 tidak ditemukan dalam data referensi keamanan yang disediakan. Oleh karena itu, status kerentanannya tidak dapat dikonfirmasi."
             },
             {
               "PackageName": "Microsoft.EntityFrameworkCore",
@@ -1012,8 +1013,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package Microsoft.EntityFrameworkCore version 8.0.4 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket Microsoft.EntityFrameworkCore versi 8.0.4 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package Microsoft.EntityFrameworkCore version 8.0.4 was not found in the provided security reference data. Therefore, its vulnerability status cannot be confirmed.",
+              "ReasoningTraceIndonesia": "Paket Microsoft.EntityFrameworkCore versi 8.0.4 tidak ditemukan dalam data referensi keamanan yang disediakan. Oleh karena itu, status kerentanannya tidak dapat dikonfirmasi."
             },
             {
               "PackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
@@ -1025,8 +1026,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package Npgsql.EntityFrameworkCore.PostgreSQL version 7.0.11 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket Npgsql.EntityFrameworkCore.PostgreSQL versi 7.0.11 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package Npgsql.EntityFrameworkCore.PostgreSQL version 7.0.11 was not found in the provided security reference data. Therefore, its vulnerability status cannot be confirmed.",
+              "ReasoningTraceIndonesia": "Paket Npgsql.EntityFrameworkCore.PostgreSQL versi 7.0.11 tidak ditemukan dalam data referensi keamanan yang disediakan. Oleh karena itu, status kerentanannya tidak dapat dikonfirmasi."
             }
           ]
         },
@@ -1090,8 +1091,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package Swashbuckle.AspNetCore version 6.5.0 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket Swashbuckle.AspNetCore versi 6.5.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package Swashbuckle.AspNetCore version 6.5.0 was not found in the provided security reference data. Therefore, its vulnerability status cannot be confirmed.",
+          "ReasoningTraceIndonesia": "Paket Swashbuckle.AspNetCore versi 6.5.0 tidak ditemukan dalam data referensi keamanan yang disediakan. Oleh karena itu, status kerentanannya tidak dapat dikonfirmasi."
         },
         {
           "PackageName": "Microsoft.EntityFrameworkCore",
@@ -1103,8 +1104,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package Microsoft.EntityFrameworkCore version 8.0.4 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket Microsoft.EntityFrameworkCore versi 8.0.4 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package Microsoft.EntityFrameworkCore version 8.0.4 was not found in the provided security reference data. Therefore, its vulnerability status cannot be confirmed.",
+          "ReasoningTraceIndonesia": "Paket Microsoft.EntityFrameworkCore versi 8.0.4 tidak ditemukan dalam data referensi keamanan yang disediakan. Oleh karena itu, status kerentanannya tidak dapat dikonfirmasi."
         },
         {
           "PackageName": "Npgsql.EntityFrameworkCore.PostgreSQL",
@@ -1116,8 +1117,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package Npgsql.EntityFrameworkCore.PostgreSQL version 7.0.11 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket Npgsql.EntityFrameworkCore.PostgreSQL versi 7.0.11 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package Npgsql.EntityFrameworkCore.PostgreSQL version 7.0.11 was not found in the provided security reference data. Therefore, its vulnerability status cannot be confirmed.",
+          "ReasoningTraceIndonesia": "Paket Npgsql.EntityFrameworkCore.PostgreSQL versi 7.0.11 tidak ditemukan dalam data referensi keamanan yang disediakan. Oleh karena itu, status kerentanannya tidak dapat dikonfirmasi."
         }
       ],
       "Metrics": {
@@ -1169,7 +1170,8 @@
         ]
       },
       "Messages": [
-        "CodeBERT records prepared: 9."
+        "CodeBERT records prepared: 9.",
+        "CodeBert marked CODEBERT_FAILED and excluded from metrics. CodeBERT Python process exited with code 1. stderr: CodeBERT bridge failed: No local CodeBERT model was configured. Set CODEBERT_MODEL_PATH or pass --model to a fine-tuned HuggingFace sequence-classification model directory. No synthetic predictions are generated.\r\n"
       ]
     },
     {
@@ -1271,13 +1273,14 @@
         "MetricExclusionReason": "",
         "VulnerableCount": 1,
         "AuditJsonPath": "",
-        "StartedAtUtc": "2026-06-27T07:01:46.280826+00:00",
-        "CompletedAtUtc": "2026-06-27T07:02:02.7561823+00:00",
-        "ElapsedSeconds": 16.4753553,
+        "StartedAtUtc": "2026-06-27T07:21:17.2867588+00:00",
+        "CompletedAtUtc": "2026-06-27T07:21:40.0829628+00:00",
+        "ElapsedSeconds": 22.7962025,
         "InputJsonPath": "",
         "PredictionJsonPath": "",
         "Response": {
           "ModelName": "gemini-2.5-pro",
+          "InferenceMode": "",
           "VulnerabilityReports": [
             {
               "PackageName": "FluentValidation.AspNetCore",
@@ -1289,8 +1292,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
+              "ReasoningTrace": "Package not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
             },
             {
               "PackageName": "AutoMapper",
@@ -1299,11 +1302,11 @@
               "CVE_ID": "CVE-2026-32933",
               "Severity": "High",
               "SeverityIndonesia": "Tinggi",
-              "MitigationPlan": "Upgrade to version 15.1.1 or later. The vulnerability is patched in version 15.1.1.",
-              "MitigationPlanIndonesia": "Tingkatkan ke versi 15.1.1 atau yang lebih baru. Kerentanan ini telah ditambal di versi 15.1.1.",
+              "MitigationPlan": "Upgrade to version 15.1.1 or later.",
+              "MitigationPlanIndonesia": "Tingkatkan ke versi 15.1.1 atau yang lebih baru.",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The package version 12.0.1 is within the vulnerable range (\u003C 15.1.1) defined by the security advisory GHSA-rvv3-g6hj-g44x. The advisory reports a Denial of Service (DoS) vulnerability due to uncontrolled recursion.",
-              "ReasoningTraceIndonesia": "Versi paket 12.0.1 berada dalam rentang rentan (\u003C 15.1.1) yang ditentukan oleh penasihat keamanan GHSA-rvv3-g6hj-g44x. Penasihat tersebut melaporkan kerentanan Denial of Service (DoS) karena rekursi yang tidak terkendali."
+              "ReasoningTrace": "The current version 12.0.1 is within the vulnerable range \u0027\u003C 15.1.1\u0027 as specified in the reference data (GHSA-rvv3-g6hj-g44x).",
+              "ReasoningTraceIndonesia": "Versi saat ini 12.0.1 berada dalam rentang rentan \u0027\u003C 15.1.1\u0027 seperti yang ditentukan dalam data referensi (GHSA-rvv3-g6hj-g44x)."
             },
             {
               "PackageName": "Serilog",
@@ -1315,8 +1318,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
+              "ReasoningTrace": "Package not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
             },
             {
               "PackageName": "Dapper",
@@ -1328,8 +1331,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
+              "ReasoningTrace": "Package not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
             }
           ]
         },
@@ -1404,8 +1407,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
+          "ReasoningTrace": "Package not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
         },
         {
           "PackageName": "AutoMapper",
@@ -1414,11 +1417,11 @@
           "CVE_ID": "CVE-2026-32933",
           "Severity": "High",
           "SeverityIndonesia": "Tinggi",
-          "MitigationPlan": "Upgrade to version 15.1.1 or later. The vulnerability is patched in version 15.1.1.",
-          "MitigationPlanIndonesia": "Tingkatkan ke versi 15.1.1 atau yang lebih baru. Kerentanan ini telah ditambal di versi 15.1.1.",
+          "MitigationPlan": "Upgrade to version 15.1.1 or later.",
+          "MitigationPlanIndonesia": "Tingkatkan ke versi 15.1.1 atau yang lebih baru.",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The package version 12.0.1 is within the vulnerable range (\u003C 15.1.1) defined by the security advisory GHSA-rvv3-g6hj-g44x. The advisory reports a Denial of Service (DoS) vulnerability due to uncontrolled recursion.",
-          "ReasoningTraceIndonesia": "Versi paket 12.0.1 berada dalam rentang rentan (\u003C 15.1.1) yang ditentukan oleh penasihat keamanan GHSA-rvv3-g6hj-g44x. Penasihat tersebut melaporkan kerentanan Denial of Service (DoS) karena rekursi yang tidak terkendali."
+          "ReasoningTrace": "The current version 12.0.1 is within the vulnerable range \u0027\u003C 15.1.1\u0027 as specified in the reference data (GHSA-rvv3-g6hj-g44x).",
+          "ReasoningTraceIndonesia": "Versi saat ini 12.0.1 berada dalam rentang rentan \u0027\u003C 15.1.1\u0027 seperti yang ditentukan dalam data referensi (GHSA-rvv3-g6hj-g44x)."
         },
         {
           "PackageName": "Serilog",
@@ -1430,8 +1433,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
+          "ReasoningTrace": "Package not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
         },
         {
           "PackageName": "Dapper",
@@ -1443,8 +1446,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
+          "ReasoningTrace": "Package not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang disediakan."
         }
       ],
       "Metrics": {
@@ -1507,7 +1510,8 @@
         ]
       },
       "Messages": [
-        "CodeBERT records prepared: 12."
+        "CodeBERT records prepared: 12.",
+        "CodeBert marked CODEBERT_FAILED and excluded from metrics. CodeBERT Python process exited with code 1. stderr: CodeBERT bridge failed: No local CodeBERT model was configured. Set CODEBERT_MODEL_PATH or pass --model to a fine-tuned HuggingFace sequence-classification model directory. No synthetic predictions are generated.\r\n"
       ]
     },
     {
@@ -2309,15 +2313,16 @@
         "ErrorMessage": "",
         "ExcludedFromMetrics": false,
         "MetricExclusionReason": "",
-        "VulnerableCount": 8,
+        "VulnerableCount": 7,
         "AuditJsonPath": "",
-        "StartedAtUtc": "2026-06-27T07:02:01.368394+00:00",
-        "CompletedAtUtc": "2026-06-27T07:05:09.0217243+00:00",
-        "ElapsedSeconds": 187.653312,
+        "StartedAtUtc": "2026-06-27T07:21:32.3896217+00:00",
+        "CompletedAtUtc": "2026-06-27T07:24:19.4476854+00:00",
+        "ElapsedSeconds": 167.0580472,
         "InputJsonPath": "",
         "PredictionJsonPath": "",
         "Response": {
           "ModelName": "gemini-2.5-pro",
+          "InferenceMode": "",
           "VulnerabilityReports": [
             {
               "PackageName": "Newtonsoft.Json",
@@ -2326,11 +2331,11 @@
               "CVE_ID": "",
               "Severity": "Unknown",
               "SeverityIndonesia": "Tidak diketahui",
-              "MitigationPlan": "",
-              "MitigationPlanIndonesia": "",
+              "MitigationPlan": "The current version 13.0.3 is not vulnerable. The patched version is 13.0.1.",
+              "MitigationPlanIndonesia": "Versi saat ini 13.0.3 tidak rentan. Versi yang telah ditambal adalah 13.0.1.",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The package \u0027Newtonsoft.Json\u0027 version 13.0.3 is not vulnerable. The reference data indicates vulnerabilities for versions \u0027\u003C 13.0.1\u0027. The current version is patched.",
-              "ReasoningTraceIndonesia": "Paket \u0027Newtonsoft.Json\u0027 versi 13.0.3 tidak rentan. Data referensi menunjukkan kerentanan untuk versi \u0027\u003C 13.0.1\u0027. Versi saat ini sudah ditambal."
+              "ReasoningTrace": "The current version 13.0.3 is not within the vulnerable range \u0027\u003C 13.0.1\u0027 as specified by advisory GHSA-5crp-9r3c-p9vr. The package is patched.",
+              "ReasoningTraceIndonesia": "Versi saat ini 13.0.3 tidak berada dalam rentang rentan \u0027\u003C 13.0.1\u0027 seperti yang ditentukan oleh anjuran GHSA-5crp-9r3c-p9vr. Paket ini sudah ditambal."
             },
             {
               "PackageName": "Serilog",
@@ -2342,8 +2347,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package \u0027Serilog\u0027 version 4.0.1 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Serilog\u0027 versi 4.0.1 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package Serilog was not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket Serilog tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "Dapper",
@@ -2355,8 +2360,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package \u0027Dapper\u0027 version 2.1.35 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Dapper\u0027 versi 2.1.35 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package Dapper was not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket Dapper tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "AdvancedAgilityPack",
@@ -2368,8 +2373,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package \u0027AdvancedAgilityPack\u0027 version 1.1.0 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027AdvancedAgilityPack\u0027 versi 1.1.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package AdvancedAgilityPack was not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket AdvancedAgilityPack tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "Azure.Identity",
@@ -2381,8 +2386,8 @@
               "MitigationPlan": "Upgrade to version 1.11.4 or later.",
               "MitigationPlanIndonesia": "Tingkatkan ke versi 1.11.4 atau yang lebih baru.",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The package \u0027Azure.Identity\u0027 version 1.10.2 is vulnerable. The reference data (GHSA-m5vv-6r4h-3vj9) indicates a vulnerability for versions \u0027\u003C 1.11.4\u0027. The recommended patched version is 1.11.4.",
-              "ReasoningTraceIndonesia": "Paket \u0027Azure.Identity\u0027 versi 1.10.2 rentan. Data referensi (GHSA-m5vv-6r4h-3vj9) menunjukkan kerentanan untuk versi \u0027\u003C 1.11.4\u0027. Versi yang direkomendasikan untuk ditambal adalah 1.11.4."
+              "ReasoningTrace": "The current version 1.10.2 is within the vulnerable range \u0027\u003C 1.11.4\u0027 according to advisory GHSA-m5vv-6r4h-3vj9.",
+              "ReasoningTraceIndonesia": "Versi saat ini 1.10.2 berada dalam rentang rentan \u0027\u003C 1.11.4\u0027 menurut anjuran GHSA-m5vv-6r4h-3vj9."
             },
             {
               "PackageName": "Binus.WS.Pattern",
@@ -2394,8 +2399,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package \u0027Binus.WS.Pattern\u0027 version 1.0.5 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Binus.WS.Pattern\u0027 versi 1.0.5 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package Binus.WS.Pattern was not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket Binus.WS.Pattern tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "Binus.WS.Pattern.AzureStorage",
@@ -2407,8 +2412,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package \u0027Binus.WS.Pattern.AzureStorage\u0027 version 1.0.7 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Binus.WS.Pattern.AzureStorage\u0027 versi 1.0.7 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package Binus.WS.Pattern.AzureStorage was not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket Binus.WS.Pattern.AzureStorage tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "Binus.WS.Pattern.MessageQueue",
@@ -2420,8 +2425,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package \u0027Binus.WS.Pattern.MessageQueue\u0027 version 1.2.0 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Binus.WS.Pattern.MessageQueue\u0027 versi 1.2.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package Binus.WS.Pattern.MessageQueue was not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket Binus.WS.Pattern.MessageQueue tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "BuildBundlerMinifier",
@@ -2433,8 +2438,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package \u0027BuildBundlerMinifier\u0027 version 3.2.449 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027BuildBundlerMinifier\u0027 versi 3.2.449 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package BuildBundlerMinifier was not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket BuildBundlerMinifier tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "ClosedXML",
@@ -2446,8 +2451,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package \u0027ClosedXML\u0027 version 0.95.4 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027ClosedXML\u0027 versi 0.95.4 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package ClosedXML was not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket ClosedXML tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "FastReport.OpenSource",
@@ -2456,11 +2461,11 @@
               "CVE_ID": "",
               "Severity": "Unknown",
               "SeverityIndonesia": "Tidak diketahui",
-              "MitigationPlan": "",
-              "MitigationPlanIndonesia": "",
+              "MitigationPlan": "The current version 2021.2.7 is not vulnerable. The patched version is 2020.4.0.",
+              "MitigationPlanIndonesia": "Versi saat ini 2021.2.7 tidak rentan. Versi yang telah ditambal adalah 2020.4.0.",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The package \u0027FastReport.OpenSource\u0027 version 2021.2.7 is not vulnerable. The reference data indicates a vulnerability for versions \u0027\u003C 2020.4.0\u0027. The current version is patched.",
-              "ReasoningTraceIndonesia": "Paket \u0027FastReport.OpenSource\u0027 versi 2021.2.7 tidak rentan. Data referensi menunjukkan kerentanan untuk versi \u0027\u003C 2020.4.0\u0027. Versi saat ini sudah ditambal."
+              "ReasoningTrace": "The current version 2021.2.7 is not within the vulnerable range \u0027\u003C 2020.4.0\u0027 as specified by advisory GHSA-v726-3vg9-cp34. The package is patched.",
+              "ReasoningTraceIndonesia": "Versi saat ini 2021.2.7 tidak berada dalam rentang rentan \u0027\u003C 2020.4.0\u0027 seperti yang ditentukan oleh anjuran GHSA-v726-3vg9-cp34. Paket ini sudah ditambal."
             },
             {
               "PackageName": "FastReport.OpenSource.Export.PdfSimple",
@@ -2472,8 +2477,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package \u0027FastReport.OpenSource.Export.PdfSimple\u0027 version 2021.2.0 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027FastReport.OpenSource.Export.PdfSimple\u0027 versi 2021.2.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package FastReport.OpenSource.Export.PdfSimple was not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket FastReport.OpenSource.Export.PdfSimple tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "FastReport.OpenSource.Web",
@@ -2485,8 +2490,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package \u0027FastReport.OpenSource.Web\u0027 version 2021.2.7 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027FastReport.OpenSource.Web\u0027 versi 2021.2.7 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package FastReport.OpenSource.Web was not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket FastReport.OpenSource.Web tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "itext7",
@@ -2498,8 +2503,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package \u0027itext7\u0027 version 7.1.16 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027itext7\u0027 versi 7.1.16 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package itext7 was not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket itext7 tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "Microsoft.ApplicationInsights.AspNetCore",
@@ -2511,8 +2516,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package \u0027Microsoft.ApplicationInsights.AspNetCore\u0027 version 2.14.0 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Microsoft.ApplicationInsights.AspNetCore\u0027 versi 2.14.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "The package Microsoft.ApplicationInsights.AspNetCore was not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket Microsoft.ApplicationInsights.AspNetCore tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "Microsoft.AspNet.Mvc",
@@ -2524,8 +2529,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "Package \u0027Microsoft.AspNet.Mvc\u0027 version 5.2.7 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNet.Mvc\u0027 versi 5.2.7 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "Package not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "Microsoft.AspNetCore.Authentication.OpenIdConnect",
@@ -2537,8 +2542,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "Package \u0027Microsoft.AspNetCore.Authentication.OpenIdConnect\u0027 version 3.1.17 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNetCore.Authentication.OpenIdConnect\u0027 versi 3.1.17 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "Package not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "Microsoft.AspNetCore.Http",
@@ -2550,8 +2555,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "Package \u0027Microsoft.AspNetCore.Http\u0027 version 2.2.2 is not within the vulnerable range \u0027\u003C 2.1.22\u0027 as specified in the reference data (GHSA-hxrm-9w7p-39cc).",
-              "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNetCore.Http\u0027 versi 2.2.2 tidak berada dalam rentang rentan \u0027\u003C 2.1.22\u0027 seperti yang ditentukan dalam data referensi (GHSA-hxrm-9w7p-39cc)."
+              "ReasoningTrace": "The package is present in the reference data, but the current version 2.2.2 is not within the vulnerable range \u0027\u003C 2.1.22\u0027.",
+              "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 2.2.2 tidak berada dalam rentang rentan \u0027\u003C 2.1.22\u0027."
             },
             {
               "PackageName": "Microsoft.AspNetCore.Mvc.Core",
@@ -2563,8 +2568,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "Package \u0027Microsoft.AspNetCore.Mvc.Core\u0027 version 2.2.5 is not within any of the vulnerable ranges specified in the reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNetCore.Mvc.Core\u0027 versi 2.2.5 tidak berada dalam rentang rentan mana pun yang ditentukan dalam data referensi."
+              "ReasoningTrace": "The package is present in the reference data, but the current version 2.2.5 is not within any of the specified vulnerable ranges.",
+              "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 2.2.5 tidak berada dalam rentang rentan yang ditentukan."
             },
             {
               "PackageName": "Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation",
@@ -2576,8 +2581,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "Package \u0027Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation\u0027 version 3.1.6 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation\u0027 versi 3.1.6 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "Package not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "Microsoft.EntityFrameworkCore",
@@ -2589,8 +2594,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "Package \u0027Microsoft.EntityFrameworkCore\u0027 version 3.1.6 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Microsoft.EntityFrameworkCore\u0027 versi 3.1.6 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "Package not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "Microsoft.EntityFrameworkCore.Design",
@@ -2602,8 +2607,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "Package \u0027Microsoft.EntityFrameworkCore.Design\u0027 version 3.1.6 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Microsoft.EntityFrameworkCore.Design\u0027 versi 3.1.6 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "Package not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "Microsoft.EntityFrameworkCore.SqlServer",
@@ -2615,8 +2620,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "Package \u0027Microsoft.EntityFrameworkCore.SqlServer\u0027 version 3.1.6 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Microsoft.EntityFrameworkCore.SqlServer\u0027 versi 3.1.6 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "Package not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "Microsoft.Extensions.Caching.StackExchangeRedis",
@@ -2628,8 +2633,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "Package \u0027Microsoft.Extensions.Caching.StackExchangeRedis\u0027 version 5.0.1 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Microsoft.Extensions.Caching.StackExchangeRedis\u0027 versi 5.0.1 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "Package not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "Microsoft.Identity.Web",
@@ -2641,8 +2646,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "Package \u0027Microsoft.Identity.Web\u0027 version 1.15.2 is not within the vulnerable range \u0027\u003E= 3.2.0, \u003C 3.8.2\u0027 as specified in the reference data (GHSA-rpq8-q44m-2rpg).",
-              "ReasoningTraceIndonesia": "Paket \u0027Microsoft.Identity.Web\u0027 versi 1.15.2 tidak berada dalam rentang rentan \u0027\u003E= 3.2.0, \u003C 3.8.2\u0027 seperti yang ditentukan dalam data referensi (GHSA-rpq8-q44m-2rpg)."
+              "ReasoningTrace": "The package is present in the reference data, but the current version 1.15.2 is not within the vulnerable range \u0027\u003E= 3.2.0, \u003C 3.8.2\u0027.",
+              "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 1.15.2 tidak berada dalam rentang rentan \u0027\u003E= 3.2.0, \u003C 3.8.2\u0027."
             },
             {
               "PackageName": "Microsoft.VisualStudio.Web.CodeGeneration.Design",
@@ -2654,8 +2659,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "Package \u0027Microsoft.VisualStudio.Web.CodeGeneration.Design\u0027 version 3.1.5 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027Microsoft.VisualStudio.Web.CodeGeneration.Design\u0027 versi 3.1.5 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "Package not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "MimeTypeMapOfficial",
@@ -2667,21 +2672,21 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "Package \u0027MimeTypeMapOfficial\u0027 version 1.0.17 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027MimeTypeMapOfficial\u0027 versi 1.0.17 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "Package not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "Nancy",
               "CurrentVersion": "2.0.0",
-              "IsVulnerable": true,
-              "CVE_ID": "CVE-2017-9785",
-              "Severity": "Critical",
-              "SeverityIndonesia": "Kritis",
-              "MitigationPlan": "The advisory indicates there is no patch for the 2.0.0 version. It is recommended to downgrade to version 1.4.4 or move to an alternative library, as Nancy is a deprecated project.",
-              "MitigationPlanIndonesia": "Advisori menunjukkan tidak ada patch untuk versi 2.0.0. Disarankan untuk downgrade ke versi 1.4.4 atau beralih ke pustaka alternatif, karena Nancy adalah proyek yang sudah tidak dikelola.",
-              "IsGroundedInReference": true,
-              "ReasoningTrace": "Package \u0027Nancy\u0027 version 2.0.0 is within the vulnerable range \u0027\u003E= 2.0.0-alpha, \u003C= 2.0.0-clinteastwood\u0027 as specified in the reference data (GHSA-mx3q-j2g2-5qxq), which exposes a Deserialization of Untrusted Data vulnerability.",
-              "ReasoningTraceIndonesia": "Paket \u0027Nancy\u0027 versi 2.0.0 berada dalam rentang rentan \u0027\u003E= 2.0.0-alpha, \u003C= 2.0.0-clinteastwood\u0027 seperti yang ditentukan dalam data referensi (GHSA-mx3q-j2g2-5qxq), yang mengekspos kerentanan Deserialisasi Data Tidak Terpercaya."
+              "IsVulnerable": false,
+              "CVE_ID": "",
+              "Severity": "Unknown",
+              "SeverityIndonesia": "Tidak diketahui",
+              "MitigationPlan": "",
+              "MitigationPlanIndonesia": "",
+              "IsGroundedInReference": false,
+              "ReasoningTrace": "The package is present in the reference data, but the current version 2.0.0 is the patched version and not within the vulnerable range \u0027\u003E= 2.0.0-alpha, \u003C= 2.0.0-clinteastwood\u0027.",
+              "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 2.0.0 adalah versi yang ditambal dan tidak berada dalam rentang rentan \u0027\u003E= 2.0.0-alpha, \u003C= 2.0.0-clinteastwood\u0027."
             },
             {
               "PackageName": "NetCoreAutoLinkDropdown",
@@ -2693,8 +2698,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "Package \u0027NetCoreAutoLinkDropdown\u0027 version 1.0.2 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027NetCoreAutoLinkDropdown\u0027 versi 1.0.2 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "Package not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "PdfSharpCore",
@@ -2706,8 +2711,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "Package \u0027PdfSharpCore\u0027 version 1.2.17 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027PdfSharpCore\u0027 versi 1.2.17 tidak ditemukan dalam data referensi keamanan yang disediakan."
+              "ReasoningTrace": "Package not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
             },
             {
               "PackageName": "SixLabors.ImageSharp",
@@ -2719,8 +2724,8 @@
               "MitigationPlan": "Upgrade to version 2.1.11 or later.",
               "MitigationPlanIndonesia": "Tingkatkan ke versi 2.1.11 atau yang lebih baru.",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The current version 2.1.10 falls within the vulnerable range \u0027\u003C 2.1.11\u0027 for GHSA-rxmq-m78w-7wmc. The vulnerability is \u0027SixLabors ImageSharp Has Infinite Loop in GIF Decoder When Skipping Malformed Comment Extension Blocks\u0027.",
-              "ReasoningTraceIndonesia": "Versi saat ini 2.1.10 termasuk dalam rentang rentan \u0027\u003C 2.1.11\u0027 untuk GHSA-rxmq-m78w-7wmc. kerentanannya adalah \u0027SixLabors ImageSharp Has Infinite Loop in GIF Decoder When Skipping Malformed Comment Extension Blocks\u0027."
+              "ReasoningTrace": "The current version 2.1.10 is within the vulnerable range \u003C 2.1.11 for CVE-2025-54575, which can lead to an infinite loop in the GIF decoder.",
+              "ReasoningTraceIndonesia": "Versi saat ini 2.1.10 berada dalam rentang rentan \u003C 2.1.11 untuk CVE-2025-54575, yang dapat menyebabkan perulangan tak terbatas di dekoder GIF."
             },
             {
               "PackageName": "starkbank-ecdsa",
@@ -2732,8 +2737,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The package is present in the reference data, but the current version 1.3.2 is not within any vulnerable range. The patched version for known vulnerabilities (GHSA-j3jw-j2j8-2wv9, GHSA-9wx7-jrvc-28mm) is 1.3.2.",
-              "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 1.3.2 tidak berada dalam rentang rentan mana pun. Versi yang ditambal untuk kerentanan yang diketahui (GHSA-j3jw-j2j8-2wv9, GHSA-9wx7-jrvc-28mm) adalah 1.3.2."
+              "ReasoningTrace": "The package starkbank-ecdsa version 1.3.2 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+              "ReasoningTraceIndonesia": "Paket starkbank-ecdsa versi 1.3.2 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
             },
             {
               "PackageName": "Microsoft.Data.SqlClient",
@@ -2745,8 +2750,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The package is present in the reference data, but the current version 2.1.7 is not within any vulnerable range. It is the patched version for the vulnerability identified in GHSA-98g6-xh36-x2p7 for its version range.",
-              "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 2.1.7 tidak berada dalam rentang rentan mana pun. Ini adalah versi yang ditambal untuk kerentanan yang diidentifikasi dalam GHSA-98g6-xh36-x2p7 untuk rentang versinya."
+              "ReasoningTrace": "The package Microsoft.Data.SqlClient version 2.1.7 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+              "ReasoningTraceIndonesia": "Paket Microsoft.Data.SqlClient versi 2.1.7 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
             },
             {
               "PackageName": "System.Data.SqlClient",
@@ -2758,8 +2763,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The package is present in the reference data, but the current version 4.8.6 is not within any vulnerable range. It is the patched version for the vulnerability identified in GHSA-98g6-xh36-x2p7.",
-              "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 4.8.6 tidak berada dalam rentang rentan mana pun. Ini adalah versi yang ditambal untuk kerentanan yang diidentifikasi dalam GHSA-98g6-xh36-x2p7."
+              "ReasoningTrace": "The package System.Data.SqlClient version 4.8.6 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+              "ReasoningTraceIndonesia": "Paket System.Data.SqlClient versi 4.8.6 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
             },
             {
               "PackageName": "System.Drawing.Common",
@@ -2771,8 +2776,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The package is present in the reference data, but the current version 4.7.2 is not within any vulnerable range. It is the patched version for the vulnerability identified in GHSA-rxg9-xrhp-64gj for its version range.",
-              "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 4.7.2 tidak berada dalam rentang rentan mana pun. Ini adalah versi yang ditambal untuk kerentanan yang diidentifikasi dalam GHSA-rxg9-xrhp-64gj untuk rentang versinya."
+              "ReasoningTrace": "The package System.Drawing.Common version 4.7.2 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+              "ReasoningTraceIndonesia": "Paket System.Drawing.Common versi 4.7.2 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
             },
             {
               "PackageName": "System.Globalization.Calendars",
@@ -2784,8 +2789,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": false,
-              "ReasoningTrace": "The package \u0027System.Globalization.Calendars\u0027 was not found in the provided security reference data.",
-              "ReasoningTraceIndonesia": "Paket \u0027System.Globalization.Calendars\u0027 tidak ditemukan dalam data referensi keamanan yang diberikan."
+              "ReasoningTrace": "The package System.Globalization.Calendars was not found in the provided security reference data.",
+              "ReasoningTraceIndonesia": "Paket System.Globalization.Calendars tidak ditemukan dalam data referensi keamanan yang disediakan."
             },
             {
               "PackageName": "System.Private.ServiceModel",
@@ -2797,8 +2802,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The package is present in the reference data, but the current version 4.7.0 is not within any vulnerable range.",
-              "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 4.7.0 tidak berada dalam rentang rentan mana pun."
+              "ReasoningTrace": "The package System.Private.ServiceModel version 4.7.0 is present in the reference data, but the current version is not within any vulnerable range.",
+              "ReasoningTraceIndonesia": "Paket System.Private.ServiceModel versi 4.7.0 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun."
             },
             {
               "PackageName": "System.Security.Cryptography.Xml",
@@ -2810,8 +2815,8 @@
               "MitigationPlan": "Upgrade to version 4.7.1 or later.",
               "MitigationPlanIndonesia": "Tingkatkan ke versi 4.7.1 atau yang lebih baru.",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The current version 4.5.0 falls within the vulnerable range \u0027\u003C= 4.7.0\u0027 for GHSA-vh55-786g-wjwj (CVE-2022-34716), which is a .NET Information Disclosure Vulnerability.",
-              "ReasoningTraceIndonesia": "Versi saat ini 4.5.0 termasuk dalam rentang rentan \u0027\u003C= 4.7.0\u0027 untuk GHSA-vh55-786g-wjwj (CVE-2022-34716), yang merupakan Kerentanan Pengungkapan Informasi .NET."
+              "ReasoningTrace": "The current version 4.5.0 is within the vulnerable range \u003C= 4.7.0 for CVE-2022-34716, a .NET Information Disclosure Vulnerability.",
+              "ReasoningTraceIndonesia": "Versi saat ini 4.5.0 berada dalam rentang rentan \u003C= 4.7.0 untuk CVE-2022-34716, sebuah kerentanan Pengungkapan Informasi .NET."
             },
             {
               "PackageName": "System.ServiceModel.Duplex",
@@ -2820,11 +2825,11 @@
               "CVE_ID": "CVE-2018-0786",
               "Severity": "High",
               "SeverityIndonesia": "Tinggi",
-              "MitigationPlan": "Upgrade to version 4.4.4 or later. Version 4.4.0 is specifically vulnerable to GHSA-jc8g-xhw5-6x46 (patched in 4.4.1) and the range \u003E= 4.4.0, \u003C 4.4.4 is vulnerable to GHSA-p9wx-v264-q34p (patched in 4.4.4).",
-              "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru. Versi 4.4.0 secara khusus rentan terhadap GHSA-jc8g-xhw5-6x46 (ditambal di 4.4.1) dan rentang \u003E= 4.4.0, \u003C 4.4.4 rentan terhadap GHSA-p9wx-v264-q34p (ditambal di 4.4.4).",
+              "MitigationPlan": "Upgrade to version 4.4.4 or later.",
+              "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru.",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The current version pattern \u00274.4.*\u0027 includes version 4.4.0 which is explicitly listed as vulnerable in GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). The entire range up to 4.4.4 is also affected by another vulnerability. The highest severity is High.",
-              "ReasoningTraceIndonesia": "Pola versi saat ini \u00274.4.*\u0027 mencakup versi 4.4.0 yang secara eksplisit terdaftar sebagai rentan dalam GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). Seluruh rentang hingga 4.4.4 juga terpengaruh oleh kerentanan lain. Tingkat keparahan tertinggi adalah Tinggi."
+              "ReasoningTrace": "The current version pattern 4.4.* includes vulnerable versions like 4.4.0, which falls into the vulnerable range = 4.4.0 for CVE-2018-0786, an Improper Certificate Validation vulnerability.",
+              "ReasoningTraceIndonesia": "Pola versi saat ini 4.4.* mencakup versi rentan seperti 4.4.0, yang termasuk dalam rentang rentan = 4.4.0 untuk CVE-2018-0786, sebuah kerentanan Validasi Sertifikat yang Tidak Tepat."
             },
             {
               "PackageName": "System.ServiceModel.Http",
@@ -2833,11 +2838,11 @@
               "CVE_ID": "CVE-2018-0786",
               "Severity": "High",
               "SeverityIndonesia": "Tinggi",
-              "MitigationPlan": "Upgrade to version 4.4.4 or later. Version 4.4.0 is specifically vulnerable to GHSA-jc8g-xhw5-6x46 (patched in 4.4.1) and the range \u003E= 4.4.0, \u003C 4.4.4 is vulnerable to GHSA-p9wx-v264-q34p (patched in 4.4.4).",
-              "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru. Versi 4.4.0 secara khusus rentan terhadap GHSA-jc8g-xhw5-6x46 (ditambal di 4.4.1) dan rentang \u003E= 4.4.0, \u003C 4.4.4 rentan terhadap GHSA-p9wx-v264-q34p (ditambal di 4.4.4).",
+              "MitigationPlan": "Upgrade to version 4.4.4 or later.",
+              "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru.",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The current version pattern \u00274.4.*\u0027 includes version 4.4.0 which is explicitly listed as vulnerable in GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). The entire range up to 4.4.4 is also affected by another vulnerability. The highest severity is High.",
-              "ReasoningTraceIndonesia": "Pola versi saat ini \u00274.4.*\u0027 mencakup versi 4.4.0 yang secara eksplisit terdaftar sebagai rentan dalam GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). Seluruh rentang hingga 4.4.4 juga terpengaruh oleh kerentanan lain. Tingkat keparahan tertinggi adalah Tinggi."
+              "ReasoningTrace": "The current version pattern 4.4.* includes vulnerable versions like 4.4.0, which falls into the vulnerable range = 4.4.0 for CVE-2018-0786, an Improper Certificate Validation vulnerability.",
+              "ReasoningTraceIndonesia": "Pola versi saat ini 4.4.* mencakup versi rentan seperti 4.4.0, yang termasuk dalam rentang rentan = 4.4.0 untuk CVE-2018-0786, sebuah kerentanan Validasi Sertifikat yang Tidak Tepat."
             },
             {
               "PackageName": "System.ServiceModel.NetTcp",
@@ -2846,11 +2851,11 @@
               "CVE_ID": "CVE-2018-0786",
               "Severity": "High",
               "SeverityIndonesia": "Tinggi",
-              "MitigationPlan": "Upgrade to version 4.4.4 or later. Version 4.4.0 is specifically vulnerable to GHSA-jc8g-xhw5-6x46 (patched in 4.4.1) and the range \u003E= 4.4.0, \u003C 4.4.4 is vulnerable to GHSA-p9wx-v264-q34p (patched in 4.4.4).",
-              "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru. Versi 4.4.0 secara khusus rentan terhadap GHSA-jc8g-xhw5-6x46 (ditambal di 4.4.1) dan rentang \u003E= 4.4.0, \u003C 4.4.4 rentan terhadap GHSA-p9wx-v264-q34p (ditambal di 4.4.4).",
+              "MitigationPlan": "Upgrade to version 4.4.4 or later.",
+              "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru.",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The current version pattern \u00274.4.*\u0027 includes version 4.4.0 which is explicitly listed as vulnerable in GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). The entire range up to 4.4.4 is also affected by another vulnerability. The highest severity is High.",
-              "ReasoningTraceIndonesia": "Pola versi saat ini \u00274.4.*\u0027 mencakup versi 4.4.0 yang secara eksplisit terdaftar sebagai rentan dalam GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). Seluruh rentang hingga 4.4.4 juga terpengaruh oleh kerentanan lain. Tingkat keparahan tertinggi adalah Tinggi."
+              "ReasoningTrace": "The current version pattern 4.4.* includes vulnerable versions like 4.4.0, which falls into the vulnerable range = 4.4.0 for CVE-2018-0786, an Improper Certificate Validation vulnerability.",
+              "ReasoningTraceIndonesia": "Pola versi saat ini 4.4.* mencakup versi rentan seperti 4.4.0, yang termasuk dalam rentang rentan = 4.4.0 untuk CVE-2018-0786, sebuah kerentanan Validasi Sertifikat yang Tidak Tepat."
             },
             {
               "PackageName": "System.ServiceModel.Security",
@@ -2859,11 +2864,11 @@
               "CVE_ID": "CVE-2018-0786",
               "Severity": "High",
               "SeverityIndonesia": "Tinggi",
-              "MitigationPlan": "Upgrade to version 4.4.4 or later. Version 4.4.0 is specifically vulnerable to GHSA-jc8g-xhw5-6x46 (patched in 4.4.1) and the range \u003E= 4.4.0, \u003C 4.4.4 is vulnerable to GHSA-p9wx-v264-q34p (patched in 4.4.4).",
-              "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru. Versi 4.4.0 secara khusus rentan terhadap GHSA-jc8g-xhw5-6x46 (ditambal di 4.4.1) dan rentang \u003E= 4.4.0, \u003C 4.4.4 rentan terhadap GHSA-p9wx-v264-q34p (ditambal di 4.4.4).",
+              "MitigationPlan": "Upgrade to version 4.4.4 or later.",
+              "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru.",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The current version pattern \u00274.4.*\u0027 includes version 4.4.0 which is explicitly listed as vulnerable in GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). The entire range up to 4.4.4 is also affected by another vulnerability. The highest severity is High.",
-              "ReasoningTraceIndonesia": "Pola versi saat ini \u00274.4.*\u0027 mencakup versi 4.4.0 yang secara eksplisit terdaftar sebagai rentan dalam GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). Seluruh rentang hingga 4.4.4 juga terpengaruh oleh kerentanan lain. Tingkat keparahan tertinggi adalah Tinggi."
+              "ReasoningTrace": "The current version pattern 4.4.* includes vulnerable versions like 4.4.0, which falls into the vulnerable range = 4.4.0 for CVE-2018-0786, an Improper Certificate Validation vulnerability.",
+              "ReasoningTraceIndonesia": "Pola versi saat ini 4.4.* mencakup versi rentan seperti 4.4.0, yang termasuk dalam rentang rentan = 4.4.0 untuk CVE-2018-0786, sebuah kerentanan Validasi Sertifikat yang Tidak Tepat."
             },
             {
               "PackageName": "System.Text.Encodings.Web",
@@ -2875,8 +2880,8 @@
               "MitigationPlan": "",
               "MitigationPlanIndonesia": "",
               "IsGroundedInReference": true,
-              "ReasoningTrace": "The package is present in the reference data, but the current version 5.0.1 is not within any vulnerable range. It is the patched version for the vulnerability identified in GHSA-ghhp-997w-qr28 for its version range.",
-              "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 5.0.1 tidak berada dalam rentang rentan mana pun. Ini adalah versi yang ditambal untuk kerentanan yang diidentifikasi dalam GHSA-ghhp-997w-qr28 untuk rentang versinya."
+              "ReasoningTrace": "The package System.Text.Encodings.Web version 5.0.1 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+              "ReasoningTraceIndonesia": "Paket System.Text.Encodings.Web versi 5.0.1 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
             }
           ]
         },
@@ -2884,14 +2889,14 @@
           "Scenario": "Dummy3-0B93FA13:RAG-LLM",
           "Total": 43,
           "TruePositive": 3,
-          "TrueNegative": 35,
-          "FalsePositive": 5,
+          "TrueNegative": 36,
+          "FalsePositive": 4,
           "FalseNegative": 0,
-          "Accuracy": 0.8837209302325582,
-          "Precision": 0.375,
+          "Accuracy": 0.9069767441860465,
+          "Precision": 0.42857142857142855,
           "Recall": 1,
-          "F1Score": 0.5454545454545454,
-          "FalsePositiveRatio": 0.625,
+          "F1Score": 0.6,
+          "FalsePositiveRatio": 0.5714285714285714,
           "Records": [
             {
               "Scenario": "Dummy3-0B93FA13:RAG-LLM",
@@ -3194,12 +3199,12 @@
               "Scenario": "Dummy3-0B93FA13:RAG-LLM",
               "PackageName": "Nancy",
               "CurrentVersion": "2.0.0",
-              "PredictedVulnerable": true,
+              "PredictedVulnerable": false,
               "GroundTruthVulnerable": false,
-              "MatchResult": "False Positive",
-              "CVE_ID": "CVE-2017-9785",
-              "Severity": "Critical",
-              "IsGroundedInReference": true
+              "MatchResult": "True Negative",
+              "CVE_ID": "",
+              "Severity": "Unknown",
+              "IsGroundedInReference": false
             },
             {
               "Scenario": "Dummy3-0B93FA13:RAG-LLM",
@@ -3377,11 +3382,11 @@
           "CVE_ID": "",
           "Severity": "Unknown",
           "SeverityIndonesia": "Tidak diketahui",
-          "MitigationPlan": "",
-          "MitigationPlanIndonesia": "",
+          "MitigationPlan": "The current version 13.0.3 is not vulnerable. The patched version is 13.0.1.",
+          "MitigationPlanIndonesia": "Versi saat ini 13.0.3 tidak rentan. Versi yang telah ditambal adalah 13.0.1.",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The package \u0027Newtonsoft.Json\u0027 version 13.0.3 is not vulnerable. The reference data indicates vulnerabilities for versions \u0027\u003C 13.0.1\u0027. The current version is patched.",
-          "ReasoningTraceIndonesia": "Paket \u0027Newtonsoft.Json\u0027 versi 13.0.3 tidak rentan. Data referensi menunjukkan kerentanan untuk versi \u0027\u003C 13.0.1\u0027. Versi saat ini sudah ditambal."
+          "ReasoningTrace": "The current version 13.0.3 is not within the vulnerable range \u0027\u003C 13.0.1\u0027 as specified by advisory GHSA-5crp-9r3c-p9vr. The package is patched.",
+          "ReasoningTraceIndonesia": "Versi saat ini 13.0.3 tidak berada dalam rentang rentan \u0027\u003C 13.0.1\u0027 seperti yang ditentukan oleh anjuran GHSA-5crp-9r3c-p9vr. Paket ini sudah ditambal."
         },
         {
           "PackageName": "Serilog",
@@ -3393,8 +3398,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package \u0027Serilog\u0027 version 4.0.1 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Serilog\u0027 versi 4.0.1 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package Serilog was not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket Serilog tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "Dapper",
@@ -3406,8 +3411,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package \u0027Dapper\u0027 version 2.1.35 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Dapper\u0027 versi 2.1.35 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package Dapper was not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket Dapper tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "AdvancedAgilityPack",
@@ -3419,8 +3424,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package \u0027AdvancedAgilityPack\u0027 version 1.1.0 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027AdvancedAgilityPack\u0027 versi 1.1.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package AdvancedAgilityPack was not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket AdvancedAgilityPack tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "Azure.Identity",
@@ -3432,8 +3437,8 @@
           "MitigationPlan": "Upgrade to version 1.11.4 or later.",
           "MitigationPlanIndonesia": "Tingkatkan ke versi 1.11.4 atau yang lebih baru.",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The package \u0027Azure.Identity\u0027 version 1.10.2 is vulnerable. The reference data (GHSA-m5vv-6r4h-3vj9) indicates a vulnerability for versions \u0027\u003C 1.11.4\u0027. The recommended patched version is 1.11.4.",
-          "ReasoningTraceIndonesia": "Paket \u0027Azure.Identity\u0027 versi 1.10.2 rentan. Data referensi (GHSA-m5vv-6r4h-3vj9) menunjukkan kerentanan untuk versi \u0027\u003C 1.11.4\u0027. Versi yang direkomendasikan untuk ditambal adalah 1.11.4."
+          "ReasoningTrace": "The current version 1.10.2 is within the vulnerable range \u0027\u003C 1.11.4\u0027 according to advisory GHSA-m5vv-6r4h-3vj9.",
+          "ReasoningTraceIndonesia": "Versi saat ini 1.10.2 berada dalam rentang rentan \u0027\u003C 1.11.4\u0027 menurut anjuran GHSA-m5vv-6r4h-3vj9."
         },
         {
           "PackageName": "Binus.WS.Pattern",
@@ -3445,8 +3450,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package \u0027Binus.WS.Pattern\u0027 version 1.0.5 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Binus.WS.Pattern\u0027 versi 1.0.5 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package Binus.WS.Pattern was not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket Binus.WS.Pattern tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "Binus.WS.Pattern.AzureStorage",
@@ -3458,8 +3463,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package \u0027Binus.WS.Pattern.AzureStorage\u0027 version 1.0.7 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Binus.WS.Pattern.AzureStorage\u0027 versi 1.0.7 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package Binus.WS.Pattern.AzureStorage was not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket Binus.WS.Pattern.AzureStorage tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "Binus.WS.Pattern.MessageQueue",
@@ -3471,8 +3476,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package \u0027Binus.WS.Pattern.MessageQueue\u0027 version 1.2.0 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Binus.WS.Pattern.MessageQueue\u0027 versi 1.2.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package Binus.WS.Pattern.MessageQueue was not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket Binus.WS.Pattern.MessageQueue tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "BuildBundlerMinifier",
@@ -3484,8 +3489,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package \u0027BuildBundlerMinifier\u0027 version 3.2.449 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027BuildBundlerMinifier\u0027 versi 3.2.449 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package BuildBundlerMinifier was not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket BuildBundlerMinifier tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "ClosedXML",
@@ -3497,8 +3502,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package \u0027ClosedXML\u0027 version 0.95.4 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027ClosedXML\u0027 versi 0.95.4 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package ClosedXML was not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket ClosedXML tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "FastReport.OpenSource",
@@ -3507,11 +3512,11 @@
           "CVE_ID": "",
           "Severity": "Unknown",
           "SeverityIndonesia": "Tidak diketahui",
-          "MitigationPlan": "",
-          "MitigationPlanIndonesia": "",
+          "MitigationPlan": "The current version 2021.2.7 is not vulnerable. The patched version is 2020.4.0.",
+          "MitigationPlanIndonesia": "Versi saat ini 2021.2.7 tidak rentan. Versi yang telah ditambal adalah 2020.4.0.",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The package \u0027FastReport.OpenSource\u0027 version 2021.2.7 is not vulnerable. The reference data indicates a vulnerability for versions \u0027\u003C 2020.4.0\u0027. The current version is patched.",
-          "ReasoningTraceIndonesia": "Paket \u0027FastReport.OpenSource\u0027 versi 2021.2.7 tidak rentan. Data referensi menunjukkan kerentanan untuk versi \u0027\u003C 2020.4.0\u0027. Versi saat ini sudah ditambal."
+          "ReasoningTrace": "The current version 2021.2.7 is not within the vulnerable range \u0027\u003C 2020.4.0\u0027 as specified by advisory GHSA-v726-3vg9-cp34. The package is patched.",
+          "ReasoningTraceIndonesia": "Versi saat ini 2021.2.7 tidak berada dalam rentang rentan \u0027\u003C 2020.4.0\u0027 seperti yang ditentukan oleh anjuran GHSA-v726-3vg9-cp34. Paket ini sudah ditambal."
         },
         {
           "PackageName": "FastReport.OpenSource.Export.PdfSimple",
@@ -3523,8 +3528,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package \u0027FastReport.OpenSource.Export.PdfSimple\u0027 version 2021.2.0 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027FastReport.OpenSource.Export.PdfSimple\u0027 versi 2021.2.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package FastReport.OpenSource.Export.PdfSimple was not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket FastReport.OpenSource.Export.PdfSimple tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "FastReport.OpenSource.Web",
@@ -3536,8 +3541,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package \u0027FastReport.OpenSource.Web\u0027 version 2021.2.7 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027FastReport.OpenSource.Web\u0027 versi 2021.2.7 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package FastReport.OpenSource.Web was not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket FastReport.OpenSource.Web tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "itext7",
@@ -3549,8 +3554,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package \u0027itext7\u0027 version 7.1.16 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027itext7\u0027 versi 7.1.16 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package itext7 was not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket itext7 tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "Microsoft.ApplicationInsights.AspNetCore",
@@ -3562,8 +3567,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package \u0027Microsoft.ApplicationInsights.AspNetCore\u0027 version 2.14.0 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Microsoft.ApplicationInsights.AspNetCore\u0027 versi 2.14.0 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "The package Microsoft.ApplicationInsights.AspNetCore was not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket Microsoft.ApplicationInsights.AspNetCore tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "Microsoft.AspNet.Mvc",
@@ -3575,8 +3580,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "Package \u0027Microsoft.AspNet.Mvc\u0027 version 5.2.7 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNet.Mvc\u0027 versi 5.2.7 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "Package not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "Microsoft.AspNetCore.Authentication.OpenIdConnect",
@@ -3588,8 +3593,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "Package \u0027Microsoft.AspNetCore.Authentication.OpenIdConnect\u0027 version 3.1.17 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNetCore.Authentication.OpenIdConnect\u0027 versi 3.1.17 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "Package not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "Microsoft.AspNetCore.Http",
@@ -3601,8 +3606,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "Package \u0027Microsoft.AspNetCore.Http\u0027 version 2.2.2 is not within the vulnerable range \u0027\u003C 2.1.22\u0027 as specified in the reference data (GHSA-hxrm-9w7p-39cc).",
-          "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNetCore.Http\u0027 versi 2.2.2 tidak berada dalam rentang rentan \u0027\u003C 2.1.22\u0027 seperti yang ditentukan dalam data referensi (GHSA-hxrm-9w7p-39cc)."
+          "ReasoningTrace": "The package is present in the reference data, but the current version 2.2.2 is not within the vulnerable range \u0027\u003C 2.1.22\u0027.",
+          "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 2.2.2 tidak berada dalam rentang rentan \u0027\u003C 2.1.22\u0027."
         },
         {
           "PackageName": "Microsoft.AspNetCore.Mvc.Core",
@@ -3614,8 +3619,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "Package \u0027Microsoft.AspNetCore.Mvc.Core\u0027 version 2.2.5 is not within any of the vulnerable ranges specified in the reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNetCore.Mvc.Core\u0027 versi 2.2.5 tidak berada dalam rentang rentan mana pun yang ditentukan dalam data referensi."
+          "ReasoningTrace": "The package is present in the reference data, but the current version 2.2.5 is not within any of the specified vulnerable ranges.",
+          "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 2.2.5 tidak berada dalam rentang rentan yang ditentukan."
         },
         {
           "PackageName": "Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation",
@@ -3627,8 +3632,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "Package \u0027Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation\u0027 version 3.1.6 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation\u0027 versi 3.1.6 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "Package not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "Microsoft.EntityFrameworkCore",
@@ -3640,8 +3645,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "Package \u0027Microsoft.EntityFrameworkCore\u0027 version 3.1.6 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Microsoft.EntityFrameworkCore\u0027 versi 3.1.6 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "Package not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "Microsoft.EntityFrameworkCore.Design",
@@ -3653,8 +3658,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "Package \u0027Microsoft.EntityFrameworkCore.Design\u0027 version 3.1.6 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Microsoft.EntityFrameworkCore.Design\u0027 versi 3.1.6 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "Package not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "Microsoft.EntityFrameworkCore.SqlServer",
@@ -3666,8 +3671,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "Package \u0027Microsoft.EntityFrameworkCore.SqlServer\u0027 version 3.1.6 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Microsoft.EntityFrameworkCore.SqlServer\u0027 versi 3.1.6 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "Package not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "Microsoft.Extensions.Caching.StackExchangeRedis",
@@ -3679,8 +3684,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "Package \u0027Microsoft.Extensions.Caching.StackExchangeRedis\u0027 version 5.0.1 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Microsoft.Extensions.Caching.StackExchangeRedis\u0027 versi 5.0.1 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "Package not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "Microsoft.Identity.Web",
@@ -3692,8 +3697,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "Package \u0027Microsoft.Identity.Web\u0027 version 1.15.2 is not within the vulnerable range \u0027\u003E= 3.2.0, \u003C 3.8.2\u0027 as specified in the reference data (GHSA-rpq8-q44m-2rpg).",
-          "ReasoningTraceIndonesia": "Paket \u0027Microsoft.Identity.Web\u0027 versi 1.15.2 tidak berada dalam rentang rentan \u0027\u003E= 3.2.0, \u003C 3.8.2\u0027 seperti yang ditentukan dalam data referensi (GHSA-rpq8-q44m-2rpg)."
+          "ReasoningTrace": "The package is present in the reference data, but the current version 1.15.2 is not within the vulnerable range \u0027\u003E= 3.2.0, \u003C 3.8.2\u0027.",
+          "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 1.15.2 tidak berada dalam rentang rentan \u0027\u003E= 3.2.0, \u003C 3.8.2\u0027."
         },
         {
           "PackageName": "Microsoft.VisualStudio.Web.CodeGeneration.Design",
@@ -3705,8 +3710,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "Package \u0027Microsoft.VisualStudio.Web.CodeGeneration.Design\u0027 version 3.1.5 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027Microsoft.VisualStudio.Web.CodeGeneration.Design\u0027 versi 3.1.5 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "Package not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "MimeTypeMapOfficial",
@@ -3718,21 +3723,21 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "Package \u0027MimeTypeMapOfficial\u0027 version 1.0.17 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027MimeTypeMapOfficial\u0027 versi 1.0.17 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "Package not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "Nancy",
           "CurrentVersion": "2.0.0",
-          "IsVulnerable": true,
-          "CVE_ID": "CVE-2017-9785",
-          "Severity": "Critical",
-          "SeverityIndonesia": "Kritis",
-          "MitigationPlan": "The advisory indicates there is no patch for the 2.0.0 version. It is recommended to downgrade to version 1.4.4 or move to an alternative library, as Nancy is a deprecated project.",
-          "MitigationPlanIndonesia": "Advisori menunjukkan tidak ada patch untuk versi 2.0.0. Disarankan untuk downgrade ke versi 1.4.4 atau beralih ke pustaka alternatif, karena Nancy adalah proyek yang sudah tidak dikelola.",
-          "IsGroundedInReference": true,
-          "ReasoningTrace": "Package \u0027Nancy\u0027 version 2.0.0 is within the vulnerable range \u0027\u003E= 2.0.0-alpha, \u003C= 2.0.0-clinteastwood\u0027 as specified in the reference data (GHSA-mx3q-j2g2-5qxq), which exposes a Deserialization of Untrusted Data vulnerability.",
-          "ReasoningTraceIndonesia": "Paket \u0027Nancy\u0027 versi 2.0.0 berada dalam rentang rentan \u0027\u003E= 2.0.0-alpha, \u003C= 2.0.0-clinteastwood\u0027 seperti yang ditentukan dalam data referensi (GHSA-mx3q-j2g2-5qxq), yang mengekspos kerentanan Deserialisasi Data Tidak Terpercaya."
+          "IsVulnerable": false,
+          "CVE_ID": "",
+          "Severity": "Unknown",
+          "SeverityIndonesia": "Tidak diketahui",
+          "MitigationPlan": "",
+          "MitigationPlanIndonesia": "",
+          "IsGroundedInReference": false,
+          "ReasoningTrace": "The package is present in the reference data, but the current version 2.0.0 is the patched version and not within the vulnerable range \u0027\u003E= 2.0.0-alpha, \u003C= 2.0.0-clinteastwood\u0027.",
+          "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 2.0.0 adalah versi yang ditambal dan tidak berada dalam rentang rentan \u0027\u003E= 2.0.0-alpha, \u003C= 2.0.0-clinteastwood\u0027."
         },
         {
           "PackageName": "NetCoreAutoLinkDropdown",
@@ -3744,8 +3749,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "Package \u0027NetCoreAutoLinkDropdown\u0027 version 1.0.2 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027NetCoreAutoLinkDropdown\u0027 versi 1.0.2 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "Package not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "PdfSharpCore",
@@ -3757,8 +3762,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "Package \u0027PdfSharpCore\u0027 version 1.2.17 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027PdfSharpCore\u0027 versi 1.2.17 tidak ditemukan dalam data referensi keamanan yang disediakan."
+          "ReasoningTrace": "Package not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket tidak ditemukan dalam data referensi keamanan yang diberikan."
         },
         {
           "PackageName": "SixLabors.ImageSharp",
@@ -3770,8 +3775,8 @@
           "MitigationPlan": "Upgrade to version 2.1.11 or later.",
           "MitigationPlanIndonesia": "Tingkatkan ke versi 2.1.11 atau yang lebih baru.",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The current version 2.1.10 falls within the vulnerable range \u0027\u003C 2.1.11\u0027 for GHSA-rxmq-m78w-7wmc. The vulnerability is \u0027SixLabors ImageSharp Has Infinite Loop in GIF Decoder When Skipping Malformed Comment Extension Blocks\u0027.",
-          "ReasoningTraceIndonesia": "Versi saat ini 2.1.10 termasuk dalam rentang rentan \u0027\u003C 2.1.11\u0027 untuk GHSA-rxmq-m78w-7wmc. kerentanannya adalah \u0027SixLabors ImageSharp Has Infinite Loop in GIF Decoder When Skipping Malformed Comment Extension Blocks\u0027."
+          "ReasoningTrace": "The current version 2.1.10 is within the vulnerable range \u003C 2.1.11 for CVE-2025-54575, which can lead to an infinite loop in the GIF decoder.",
+          "ReasoningTraceIndonesia": "Versi saat ini 2.1.10 berada dalam rentang rentan \u003C 2.1.11 untuk CVE-2025-54575, yang dapat menyebabkan perulangan tak terbatas di dekoder GIF."
         },
         {
           "PackageName": "starkbank-ecdsa",
@@ -3783,8 +3788,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The package is present in the reference data, but the current version 1.3.2 is not within any vulnerable range. The patched version for known vulnerabilities (GHSA-j3jw-j2j8-2wv9, GHSA-9wx7-jrvc-28mm) is 1.3.2.",
-          "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 1.3.2 tidak berada dalam rentang rentan mana pun. Versi yang ditambal untuk kerentanan yang diketahui (GHSA-j3jw-j2j8-2wv9, GHSA-9wx7-jrvc-28mm) adalah 1.3.2."
+          "ReasoningTrace": "The package starkbank-ecdsa version 1.3.2 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+          "ReasoningTraceIndonesia": "Paket starkbank-ecdsa versi 1.3.2 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
         },
         {
           "PackageName": "Microsoft.Data.SqlClient",
@@ -3796,8 +3801,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The package is present in the reference data, but the current version 2.1.7 is not within any vulnerable range. It is the patched version for the vulnerability identified in GHSA-98g6-xh36-x2p7 for its version range.",
-          "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 2.1.7 tidak berada dalam rentang rentan mana pun. Ini adalah versi yang ditambal untuk kerentanan yang diidentifikasi dalam GHSA-98g6-xh36-x2p7 untuk rentang versinya."
+          "ReasoningTrace": "The package Microsoft.Data.SqlClient version 2.1.7 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+          "ReasoningTraceIndonesia": "Paket Microsoft.Data.SqlClient versi 2.1.7 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
         },
         {
           "PackageName": "System.Data.SqlClient",
@@ -3809,8 +3814,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The package is present in the reference data, but the current version 4.8.6 is not within any vulnerable range. It is the patched version for the vulnerability identified in GHSA-98g6-xh36-x2p7.",
-          "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 4.8.6 tidak berada dalam rentang rentan mana pun. Ini adalah versi yang ditambal untuk kerentanan yang diidentifikasi dalam GHSA-98g6-xh36-x2p7."
+          "ReasoningTrace": "The package System.Data.SqlClient version 4.8.6 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+          "ReasoningTraceIndonesia": "Paket System.Data.SqlClient versi 4.8.6 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
         },
         {
           "PackageName": "System.Drawing.Common",
@@ -3822,8 +3827,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The package is present in the reference data, but the current version 4.7.2 is not within any vulnerable range. It is the patched version for the vulnerability identified in GHSA-rxg9-xrhp-64gj for its version range.",
-          "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 4.7.2 tidak berada dalam rentang rentan mana pun. Ini adalah versi yang ditambal untuk kerentanan yang diidentifikasi dalam GHSA-rxg9-xrhp-64gj untuk rentang versinya."
+          "ReasoningTrace": "The package System.Drawing.Common version 4.7.2 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+          "ReasoningTraceIndonesia": "Paket System.Drawing.Common versi 4.7.2 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
         },
         {
           "PackageName": "System.Globalization.Calendars",
@@ -3835,8 +3840,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": false,
-          "ReasoningTrace": "The package \u0027System.Globalization.Calendars\u0027 was not found in the provided security reference data.",
-          "ReasoningTraceIndonesia": "Paket \u0027System.Globalization.Calendars\u0027 tidak ditemukan dalam data referensi keamanan yang diberikan."
+          "ReasoningTrace": "The package System.Globalization.Calendars was not found in the provided security reference data.",
+          "ReasoningTraceIndonesia": "Paket System.Globalization.Calendars tidak ditemukan dalam data referensi keamanan yang disediakan."
         },
         {
           "PackageName": "System.Private.ServiceModel",
@@ -3848,8 +3853,8 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The package is present in the reference data, but the current version 4.7.0 is not within any vulnerable range.",
-          "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 4.7.0 tidak berada dalam rentang rentan mana pun."
+          "ReasoningTrace": "The package System.Private.ServiceModel version 4.7.0 is present in the reference data, but the current version is not within any vulnerable range.",
+          "ReasoningTraceIndonesia": "Paket System.Private.ServiceModel versi 4.7.0 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun."
         },
         {
           "PackageName": "System.Security.Cryptography.Xml",
@@ -3861,8 +3866,8 @@
           "MitigationPlan": "Upgrade to version 4.7.1 or later.",
           "MitigationPlanIndonesia": "Tingkatkan ke versi 4.7.1 atau yang lebih baru.",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The current version 4.5.0 falls within the vulnerable range \u0027\u003C= 4.7.0\u0027 for GHSA-vh55-786g-wjwj (CVE-2022-34716), which is a .NET Information Disclosure Vulnerability.",
-          "ReasoningTraceIndonesia": "Versi saat ini 4.5.0 termasuk dalam rentang rentan \u0027\u003C= 4.7.0\u0027 untuk GHSA-vh55-786g-wjwj (CVE-2022-34716), yang merupakan Kerentanan Pengungkapan Informasi .NET."
+          "ReasoningTrace": "The current version 4.5.0 is within the vulnerable range \u003C= 4.7.0 for CVE-2022-34716, a .NET Information Disclosure Vulnerability.",
+          "ReasoningTraceIndonesia": "Versi saat ini 4.5.0 berada dalam rentang rentan \u003C= 4.7.0 untuk CVE-2022-34716, sebuah kerentanan Pengungkapan Informasi .NET."
         },
         {
           "PackageName": "System.ServiceModel.Duplex",
@@ -3871,11 +3876,11 @@
           "CVE_ID": "CVE-2018-0786",
           "Severity": "High",
           "SeverityIndonesia": "Tinggi",
-          "MitigationPlan": "Upgrade to version 4.4.4 or later. Version 4.4.0 is specifically vulnerable to GHSA-jc8g-xhw5-6x46 (patched in 4.4.1) and the range \u003E= 4.4.0, \u003C 4.4.4 is vulnerable to GHSA-p9wx-v264-q34p (patched in 4.4.4).",
-          "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru. Versi 4.4.0 secara khusus rentan terhadap GHSA-jc8g-xhw5-6x46 (ditambal di 4.4.1) dan rentang \u003E= 4.4.0, \u003C 4.4.4 rentan terhadap GHSA-p9wx-v264-q34p (ditambal di 4.4.4).",
+          "MitigationPlan": "Upgrade to version 4.4.4 or later.",
+          "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru.",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The current version pattern \u00274.4.*\u0027 includes version 4.4.0 which is explicitly listed as vulnerable in GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). The entire range up to 4.4.4 is also affected by another vulnerability. The highest severity is High.",
-          "ReasoningTraceIndonesia": "Pola versi saat ini \u00274.4.*\u0027 mencakup versi 4.4.0 yang secara eksplisit terdaftar sebagai rentan dalam GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). Seluruh rentang hingga 4.4.4 juga terpengaruh oleh kerentanan lain. Tingkat keparahan tertinggi adalah Tinggi."
+          "ReasoningTrace": "The current version pattern 4.4.* includes vulnerable versions like 4.4.0, which falls into the vulnerable range = 4.4.0 for CVE-2018-0786, an Improper Certificate Validation vulnerability.",
+          "ReasoningTraceIndonesia": "Pola versi saat ini 4.4.* mencakup versi rentan seperti 4.4.0, yang termasuk dalam rentang rentan = 4.4.0 untuk CVE-2018-0786, sebuah kerentanan Validasi Sertifikat yang Tidak Tepat."
         },
         {
           "PackageName": "System.ServiceModel.Http",
@@ -3884,11 +3889,11 @@
           "CVE_ID": "CVE-2018-0786",
           "Severity": "High",
           "SeverityIndonesia": "Tinggi",
-          "MitigationPlan": "Upgrade to version 4.4.4 or later. Version 4.4.0 is specifically vulnerable to GHSA-jc8g-xhw5-6x46 (patched in 4.4.1) and the range \u003E= 4.4.0, \u003C 4.4.4 is vulnerable to GHSA-p9wx-v264-q34p (patched in 4.4.4).",
-          "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru. Versi 4.4.0 secara khusus rentan terhadap GHSA-jc8g-xhw5-6x46 (ditambal di 4.4.1) dan rentang \u003E= 4.4.0, \u003C 4.4.4 rentan terhadap GHSA-p9wx-v264-q34p (ditambal di 4.4.4).",
+          "MitigationPlan": "Upgrade to version 4.4.4 or later.",
+          "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru.",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The current version pattern \u00274.4.*\u0027 includes version 4.4.0 which is explicitly listed as vulnerable in GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). The entire range up to 4.4.4 is also affected by another vulnerability. The highest severity is High.",
-          "ReasoningTraceIndonesia": "Pola versi saat ini \u00274.4.*\u0027 mencakup versi 4.4.0 yang secara eksplisit terdaftar sebagai rentan dalam GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). Seluruh rentang hingga 4.4.4 juga terpengaruh oleh kerentanan lain. Tingkat keparahan tertinggi adalah Tinggi."
+          "ReasoningTrace": "The current version pattern 4.4.* includes vulnerable versions like 4.4.0, which falls into the vulnerable range = 4.4.0 for CVE-2018-0786, an Improper Certificate Validation vulnerability.",
+          "ReasoningTraceIndonesia": "Pola versi saat ini 4.4.* mencakup versi rentan seperti 4.4.0, yang termasuk dalam rentang rentan = 4.4.0 untuk CVE-2018-0786, sebuah kerentanan Validasi Sertifikat yang Tidak Tepat."
         },
         {
           "PackageName": "System.ServiceModel.NetTcp",
@@ -3897,11 +3902,11 @@
           "CVE_ID": "CVE-2018-0786",
           "Severity": "High",
           "SeverityIndonesia": "Tinggi",
-          "MitigationPlan": "Upgrade to version 4.4.4 or later. Version 4.4.0 is specifically vulnerable to GHSA-jc8g-xhw5-6x46 (patched in 4.4.1) and the range \u003E= 4.4.0, \u003C 4.4.4 is vulnerable to GHSA-p9wx-v264-q34p (patched in 4.4.4).",
-          "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru. Versi 4.4.0 secara khusus rentan terhadap GHSA-jc8g-xhw5-6x46 (ditambal di 4.4.1) dan rentang \u003E= 4.4.0, \u003C 4.4.4 rentan terhadap GHSA-p9wx-v264-q34p (ditambal di 4.4.4).",
+          "MitigationPlan": "Upgrade to version 4.4.4 or later.",
+          "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru.",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The current version pattern \u00274.4.*\u0027 includes version 4.4.0 which is explicitly listed as vulnerable in GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). The entire range up to 4.4.4 is also affected by another vulnerability. The highest severity is High.",
-          "ReasoningTraceIndonesia": "Pola versi saat ini \u00274.4.*\u0027 mencakup versi 4.4.0 yang secara eksplisit terdaftar sebagai rentan dalam GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). Seluruh rentang hingga 4.4.4 juga terpengaruh oleh kerentanan lain. Tingkat keparahan tertinggi adalah Tinggi."
+          "ReasoningTrace": "The current version pattern 4.4.* includes vulnerable versions like 4.4.0, which falls into the vulnerable range = 4.4.0 for CVE-2018-0786, an Improper Certificate Validation vulnerability.",
+          "ReasoningTraceIndonesia": "Pola versi saat ini 4.4.* mencakup versi rentan seperti 4.4.0, yang termasuk dalam rentang rentan = 4.4.0 untuk CVE-2018-0786, sebuah kerentanan Validasi Sertifikat yang Tidak Tepat."
         },
         {
           "PackageName": "System.ServiceModel.Security",
@@ -3910,11 +3915,11 @@
           "CVE_ID": "CVE-2018-0786",
           "Severity": "High",
           "SeverityIndonesia": "Tinggi",
-          "MitigationPlan": "Upgrade to version 4.4.4 or later. Version 4.4.0 is specifically vulnerable to GHSA-jc8g-xhw5-6x46 (patched in 4.4.1) and the range \u003E= 4.4.0, \u003C 4.4.4 is vulnerable to GHSA-p9wx-v264-q34p (patched in 4.4.4).",
-          "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru. Versi 4.4.0 secara khusus rentan terhadap GHSA-jc8g-xhw5-6x46 (ditambal di 4.4.1) dan rentang \u003E= 4.4.0, \u003C 4.4.4 rentan terhadap GHSA-p9wx-v264-q34p (ditambal di 4.4.4).",
+          "MitigationPlan": "Upgrade to version 4.4.4 or later.",
+          "MitigationPlanIndonesia": "Tingkatkan ke versi 4.4.4 atau yang lebih baru.",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The current version pattern \u00274.4.*\u0027 includes version 4.4.0 which is explicitly listed as vulnerable in GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). The entire range up to 4.4.4 is also affected by another vulnerability. The highest severity is High.",
-          "ReasoningTraceIndonesia": "Pola versi saat ini \u00274.4.*\u0027 mencakup versi 4.4.0 yang secara eksplisit terdaftar sebagai rentan dalam GHSA-jc8g-xhw5-6x46 (CVE-2018-0786). Seluruh rentang hingga 4.4.4 juga terpengaruh oleh kerentanan lain. Tingkat keparahan tertinggi adalah Tinggi."
+          "ReasoningTrace": "The current version pattern 4.4.* includes vulnerable versions like 4.4.0, which falls into the vulnerable range = 4.4.0 for CVE-2018-0786, an Improper Certificate Validation vulnerability.",
+          "ReasoningTraceIndonesia": "Pola versi saat ini 4.4.* mencakup versi rentan seperti 4.4.0, yang termasuk dalam rentang rentan = 4.4.0 untuk CVE-2018-0786, sebuah kerentanan Validasi Sertifikat yang Tidak Tepat."
         },
         {
           "PackageName": "System.Text.Encodings.Web",
@@ -3926,22 +3931,22 @@
           "MitigationPlan": "",
           "MitigationPlanIndonesia": "",
           "IsGroundedInReference": true,
-          "ReasoningTrace": "The package is present in the reference data, but the current version 5.0.1 is not within any vulnerable range. It is the patched version for the vulnerability identified in GHSA-ghhp-997w-qr28 for its version range.",
-          "ReasoningTraceIndonesia": "Paket ada di data referensi, tetapi versi saat ini 5.0.1 tidak berada dalam rentang rentan mana pun. Ini adalah versi yang ditambal untuk kerentanan yang diidentifikasi dalam GHSA-ghhp-997w-qr28 untuk rentang versinya."
+          "ReasoningTrace": "The package System.Text.Encodings.Web version 5.0.1 is present in the reference data, but the current version is not within any vulnerable range. It is a patched version.",
+          "ReasoningTraceIndonesia": "Paket System.Text.Encodings.Web versi 5.0.1 ada di data referensi, tetapi versi saat ini tidak berada dalam rentang rentan mana pun. Ini adalah versi yang telah ditambal."
         }
       ],
       "Metrics": {
         "Scenario": "Dummy3-0B93FA13:RAG-LLM",
         "Total": 43,
         "TruePositive": 3,
-        "TrueNegative": 35,
-        "FalsePositive": 5,
+        "TrueNegative": 36,
+        "FalsePositive": 4,
         "FalseNegative": 0,
-        "Accuracy": 0.8837209302325582,
-        "Precision": 0.375,
+        "Accuracy": 0.9069767441860465,
+        "Precision": 0.42857142857142855,
         "Recall": 1,
-        "F1Score": 0.5454545454545454,
-        "FalsePositiveRatio": 0.625,
+        "F1Score": 0.6,
+        "FalsePositiveRatio": 0.5714285714285714,
         "Records": [
           {
             "Scenario": "Dummy3-0B93FA13:RAG-LLM",
@@ -4244,12 +4249,12 @@
             "Scenario": "Dummy3-0B93FA13:RAG-LLM",
             "PackageName": "Nancy",
             "CurrentVersion": "2.0.0",
-            "PredictedVulnerable": true,
+            "PredictedVulnerable": false,
             "GroundTruthVulnerable": false,
-            "MatchResult": "False Positive",
-            "CVE_ID": "CVE-2017-9785",
-            "Severity": "Critical",
-            "IsGroundedInReference": true
+            "MatchResult": "True Negative",
+            "CVE_ID": "",
+            "Severity": "Unknown",
+            "IsGroundedInReference": false
           },
           {
             "Scenario": "Dummy3-0B93FA13:RAG-LLM",
@@ -4419,7 +4424,8 @@
         ]
       },
       "Messages": [
-        "CodeBERT records prepared: 129."
+        "CodeBERT records prepared: 129.",
+        "CodeBert marked CODEBERT_FAILED and excluded from metrics. CodeBERT Python process exited with code 1. stderr: CodeBERT bridge failed: No local CodeBERT model was configured. Set CODEBERT_MODEL_PATH or pass --model to a fine-tuned HuggingFace sequence-classification model directory. No synthetic predictions are generated.\r\n"
       ]
     }
   ]

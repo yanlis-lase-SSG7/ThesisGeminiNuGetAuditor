@@ -18,12 +18,16 @@ public class Program
     private const string CodeBertPythonEnvironmentVariableName = "CODEBERT_PYTHON";
     private const string CodeBertModelEnvironmentVariableName = "CODEBERT_MODEL_PATH";
     private const string CodeBertInferenceScriptName = "codebert_inference.py";
-    private const string CheckpointSchemaVersion = "2026-06-27-codebert-real-local-v4";
+    private const string CodeBertRequirementsFileName = "requirements-codebert.txt";
+    private const string CodeBertVirtualEnvironmentDirectoryName = ".codebert-venv";
+    private const string CodeBertDependencyMarkerFileName = ".dependencies-ready";
+    private const string CheckpointSchemaVersion = "2026-06-27-codebert-auto-bootstrap-v5";
     private const int ProjectMaxDegreeOfParallelism = 4;
     private const int GeminiGlobalConcurrencyLimit = 4;
 
     private static readonly object ConsoleLock = new();
     private static readonly SemaphoreSlim GeminiRequestGate = new(GeminiGlobalConcurrencyLimit, GeminiGlobalConcurrencyLimit);
+    private static readonly SemaphoreSlim CodeBertEnvironmentGate = new(1, 1);
     private static readonly ConcurrentBag<GeminiApiDiagnostic> GeminiApiDiagnostics = new();
     private static readonly ConcurrentQueue<ConsoleLogEntry> ConsoleLogEntries = new();
     private static long ConsoleLogSequence;
@@ -188,8 +192,10 @@ public class Program
 
             totalStopwatch.Stop();
             WriteLine("Batch audit completed.");
-            WriteLine($"Succeeded projects: {results.Count(IsProjectFullySuccessfulForResume)}.");
-            WriteLine($"Incomplete/API_FAILED projects: {results.Count(x => !IsProjectFullySuccessfulForResume(x))}.");
+            WriteLine($"All-scenario completed projects: {results.Count(IsProjectFullySuccessfulForResume)}.");
+            WriteLine($"Incomplete/API_FAILED/CODEBERT_FAILED projects: {results.Count(x => !IsProjectFullySuccessfulForResume(x))}.");
+            WriteLine($"CodeBERT completed projects: {results.Count(IsCodeBertScenarioSuccessful)}.");
+            WriteLine($"CodeBERT excluded projects: {results.Count(IsCodeBertScenarioSafelyExcluded)}.");
             WriteLine($"Total elapsed time: {FormatElapsed(totalStopwatch.Elapsed)}.");
             WriteLine($"RAG-LLM JSON report: {artifactSet.RagJsonPath}");
             WriteLine($"Zero-Shot JSON report: {artifactSet.ZeroShotJsonPath}");
@@ -712,11 +718,7 @@ public class Program
         string outputPath,
         CancellationToken cancellationToken)
     {
-        var pythonExecutable = Environment.GetEnvironmentVariable(CodeBertPythonEnvironmentVariableName);
-        if (string.IsNullOrWhiteSpace(pythonExecutable))
-        {
-            pythonExecutable = "python";
-        }
+        var pythonExecutable = await EnsureCodeBertPythonEnvironmentAsync(cancellationToken);
 
         var scriptPath = Path.Combine(GetApplicationRootDirectory(), CodeBertInferenceScriptName);
         if (!File.Exists(scriptPath))
@@ -770,8 +772,8 @@ public class Program
         };
 
         var modelLog = string.IsNullOrWhiteSpace(codeBertModelPath)
-            ? $"no {CodeBertModelEnvironmentVariableName} configured"
-            : $"model \"{codeBertModelPath}\"";
+            ? "no fine-tuned model configured; using automatic local CodeBERT embedding classifier"
+            : $"fine-tuned model \"{codeBertModelPath}\"";
         WriteLine($"[CodeBERT] Executing local Python inference: {pythonExecutable} {CodeBertInferenceScriptName} --input \"{inputPath}\" --output \"{outputPath}\" ({modelLog})");
 
         try
@@ -818,6 +820,190 @@ public class Program
         }
 
         WriteLine($"[CodeBERT] Python inference completed successfully. Prediction file: {outputPath}");
+    }
+
+    private static async Task<string> EnsureCodeBertPythonEnvironmentAsync(CancellationToken cancellationToken)
+    {
+        await CodeBertEnvironmentGate.WaitAsync(cancellationToken);
+        try
+        {
+            var applicationRoot = GetApplicationRootDirectory();
+            var venvDirectory = Path.Combine(applicationRoot, CodeBertVirtualEnvironmentDirectoryName);
+            var venvPython = Path.Combine(venvDirectory, "Scripts", "python.exe");
+            var requirementsPath = Path.Combine(applicationRoot, CodeBertRequirementsFileName);
+            var markerPath = Path.Combine(venvDirectory, CodeBertDependencyMarkerFileName);
+
+            if (!File.Exists(requirementsPath))
+            {
+                throw new FileNotFoundException("CodeBERT requirements file was not found.", requirementsPath);
+            }
+
+            if (!File.Exists(venvPython))
+            {
+                Directory.CreateDirectory(venvDirectory);
+                WriteLine($"[CodeBERT Setup] Creating local Python virtual environment: {venvDirectory}");
+                await CreateCodeBertVirtualEnvironmentAsync(venvDirectory, cancellationToken);
+            }
+
+            if (!File.Exists(markerPath) || File.GetLastWriteTimeUtc(markerPath) < File.GetLastWriteTimeUtc(requirementsPath))
+            {
+                WriteLine("[CodeBERT Setup] Installing/updating local CodeBERT Python dependencies. This may take several minutes on the first run.");
+                await RunCodeBertSetupCommandAsync(
+                    venvPython,
+                    new[] { "-m", "pip", "install", "--upgrade", "pip" },
+                    "upgrade pip",
+                    cancellationToken);
+                await RunCodeBertSetupCommandAsync(
+                    venvPython,
+                    new[] { "-m", "pip", "install", "-r", requirementsPath },
+                    "install CodeBERT requirements",
+                    cancellationToken);
+                File.WriteAllText(markerPath, DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture), Encoding.UTF8);
+            }
+            else
+            {
+                WriteLine("[CodeBERT Setup] Local CodeBERT Python environment is ready.");
+            }
+
+            return venvPython;
+        }
+        finally
+        {
+            CodeBertEnvironmentGate.Release();
+        }
+    }
+
+    private static async Task CreateCodeBertVirtualEnvironmentAsync(string venvDirectory, CancellationToken cancellationToken)
+    {
+        var configuredPython = Environment.GetEnvironmentVariable(CodeBertPythonEnvironmentVariableName);
+        var candidates = string.IsNullOrWhiteSpace(configuredPython)
+            ? new[]
+            {
+                (FileName: "python", Arguments: new[] { "-m", "venv", venvDirectory }),
+                (FileName: "py", Arguments: new[] { "-3", "-m", "venv", venvDirectory })
+            }
+            : new[]
+            {
+                (FileName: configuredPython, Arguments: new[] { "-m", "venv", venvDirectory })
+            };
+
+        var errors = new List<string>();
+        foreach (var candidate in candidates)
+        {
+            var result = await TryRunCodeBertSetupCommandAsync(
+                candidate.FileName,
+                candidate.Arguments,
+                $"create venv with {candidate.FileName}",
+                cancellationToken);
+
+            if (result.Success)
+            {
+                return;
+            }
+
+            errors.Add(result.Error);
+        }
+
+        throw new InvalidOperationException(
+            $"Unable to create the CodeBERT Python virtual environment automatically. Install Python 3 locally or set {CodeBertPythonEnvironmentVariableName} to a valid python.exe. Details: {string.Join(" | ", errors)}");
+    }
+
+    private static async Task RunCodeBertSetupCommandAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string description,
+        CancellationToken cancellationToken)
+    {
+        var result = await TryRunCodeBertSetupCommandAsync(fileName, arguments, description, cancellationToken);
+        if (!result.Success)
+        {
+            throw new InvalidOperationException(result.Error);
+        }
+    }
+
+    private static async Task<(bool Success, string Error)> TryRunCodeBertSetupCommandAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string description,
+        CancellationToken cancellationToken)
+    {
+        var stderrBuilder = new StringBuilder();
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = fileName,
+            WorkingDirectory = GetApplicationRootDirectory(),
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = new Process
+        {
+            StartInfo = startInfo,
+            EnableRaisingEvents = true
+        };
+
+        process.OutputDataReceived += (_, args) =>
+        {
+            if (!string.IsNullOrWhiteSpace(args.Data))
+            {
+                WriteLine($"[CodeBERT Setup] {args.Data}");
+            }
+        };
+
+        process.ErrorDataReceived += (_, args) =>
+        {
+            if (!string.IsNullOrWhiteSpace(args.Data))
+            {
+                stderrBuilder.AppendLine(args.Data);
+                WriteLine($"[CodeBERT Setup] {args.Data}");
+            }
+        };
+
+        WriteLine($"[CodeBERT Setup] {description}: {fileName} {string.Join(' ', arguments.Select(QuoteArgumentForLog))}");
+
+        try
+        {
+            if (!process.Start())
+            {
+                return (false, $"Failed to start CodeBERT setup command: {description}.");
+            }
+        }
+        catch (Win32Exception ex)
+        {
+            return (false, $"Failed to start '{fileName}' for CodeBERT setup command '{description}': {ex.Message}");
+        }
+
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        try
+        {
+            await Task.Run(process.WaitForExit, cancellationToken);
+            process.WaitForExit();
+        }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+
+            throw;
+        }
+
+        if (process.ExitCode == 0)
+        {
+            return (true, string.Empty);
+        }
+
+        return (false, $"CodeBERT setup command '{description}' failed with exit code {process.ExitCode}. stderr: {TruncateForDisplay(stderrBuilder.ToString(), 1000)}");
     }
 
     private static async Task<GeminiResponse?> AnalyzeWithGeminiWithBatching(
@@ -1781,10 +1967,28 @@ Security reference data:
 
         return result.ErrorMessage.Length == 0 &&
                result.PackageCount >= 0 &&
-               result.CodeBertRecords.Count > 0 &&
+               string.Equals(result.SecurityReferenceSource, "GitHubGraphQLApi", StringComparison.OrdinalIgnoreCase) &&
                rag is { Success: true, Response: not null } &&
                zeroShot is { Success: true, Response: not null } &&
-               codeBert is { Success: true, Response: not null };
+               codeBert is { Success: true, Response: not null, Metrics: not null };
+    }
+
+    private static bool IsCodeBertScenarioSuccessful(ProjectAuditResult result)
+    {
+        var codeBert = result.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.CodeBert);
+        return codeBert is { Success: true, Response: not null, Metrics: not null };
+    }
+
+    private static bool IsCodeBertScenarioSafelyExcluded(ProjectAuditResult result)
+    {
+        var codeBert = result.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.CodeBert);
+        return codeBert is
+        {
+            Scenario: AuditScenario.CodeBert,
+            Success: false,
+            Status: "CODEBERT_FAILED",
+            ExcludedFromMetrics: true
+        };
     }
 
     private static ScenarioJsonReport BuildScenarioJsonReport(
@@ -1934,7 +2138,7 @@ Security reference data:
             EvaluationStatus = projectReports.All(x => string.Equals(x.EvaluationStatus, "SUCCESS", StringComparison.OrdinalIgnoreCase))
                 ? "SUCCESS"
                 : "PARTIAL_OR_FAILED",
-            EvaluationNote = "CodeBERT metrics are produced only when codebert_inference.py completes real local inference and writes prediction JSON. If the local model or Python libraries are unavailable, CodeBERT is marked CODEBERT_FAILED and excluded from metrics.",
+            EvaluationNote = "CodeBERT metrics are produced when codebert_inference.py completes real local inference and writes prediction JSON. The app bootstraps a local .codebert-venv automatically; CODEBERT_MODEL_PATH is optional for a fine-tuned classifier.",
             DatasetFieldDescriptions = GetCodeBertDatasetFieldDescriptions(),
             Projects = projectReports
         };
@@ -1984,9 +2188,14 @@ Security reference data:
 
         if (scenario.Scenario == AuditScenario.CodeBert)
         {
-            return string.IsNullOrWhiteSpace(scenario.Response?.InferenceMode)
-                ? "PYTHON_BRIDGE"
-                : scenario.Response.InferenceMode;
+            if (!string.IsNullOrWhiteSpace(scenario.Response?.InferenceMode))
+            {
+                return scenario.Response.InferenceMode;
+            }
+
+            return string.Equals(scenario.Status, "CODEBERT_FAILED", StringComparison.OrdinalIgnoreCase)
+                ? "CODEBERT_FAILED"
+                : "PYTHON_BRIDGE";
         }
 
         return "GEMINI_API";
@@ -2079,8 +2288,10 @@ Security reference data:
             ("MaxDegreeOfParallelism", ProjectMaxDegreeOfParallelism.ToString()),
             ("GlobalGeminiRequestConcurrency", GeminiGlobalConcurrencyLimit.ToString()),
             ("ProjectCount", results.Count.ToString()),
-            ("FullySuccessfulProjects", results.Count(IsProjectFullySuccessfulForResume).ToString()),
-            ("IncompleteOrApiFailedProjects", results.Count(x => !IsProjectFullySuccessfulForResume(x)).ToString()),
+            ("AllScenarioSuccessfulProjects", results.Count(IsProjectFullySuccessfulForResume).ToString()),
+            ("IncompleteApiOrCodeBertFailedProjects", results.Count(x => !IsProjectFullySuccessfulForResume(x)).ToString()),
+            ("CodeBertSuccessfulProjects", results.Count(IsCodeBertScenarioSuccessful).ToString()),
+            ("CodeBertExcludedProjects", results.Count(IsCodeBertScenarioSafelyExcluded).ToString()),
             ("RagLlmProjectResults", results.Count(x => x.Scenarios.Any(s => s.Scenario == AuditScenario.RagLlm && s.Success)).ToString()),
             ("ZeroShotProjectResults", results.Count(x => x.Scenarios.Any(s => s.Scenario == AuditScenario.ZeroShot && s.Success)).ToString()),
             ("CodeBertProjectResults", results.Count(x => x.Scenarios.Any(s => s.Scenario == AuditScenario.CodeBert && s.Success)).ToString()),
@@ -2088,7 +2299,7 @@ Security reference data:
             ("MetricExclusionPolicy", "Scenario with API_FAILED, RETRIEVAL_FAILED, or missing prediction is excluded from confusion matrix; no Ground Truth fallback is used."),
             ("GroundTruthPolicy", "A package is labeled vulnerable only when its current version satisfies the advisory vulnerable version range."),
             ("CodeBertRecords", results.Sum(x => x.CodeBertRecords.Count).ToString()),
-            ("CodeBertEvaluationPolicy", "CodeBERT prediction metrics require local Python inference with a fine-tuned model configured through CODEBERT_MODEL_PATH. Missing model or libraries mark CodeBERT as CODEBERT_FAILED and exclude it from metrics."),
+            ("CodeBertEvaluationPolicy", "CodeBERT prediction metrics require local Python inference. The app creates .codebert-venv and installs requirements automatically. CODEBERT_MODEL_PATH is optional for a fine-tuned classifier; otherwise the script uses LOCAL_CODEBERT_EMBEDDING_LOGREG."),
             ("MetricRows", metrics.Count.ToString())
         };
 
@@ -2203,7 +2414,7 @@ Security reference data:
             ("Purpose", "Workbook ini merangkum audit dependency NuGet dari file .csproj. Tiga jalur yang dihasilkan adalah RAG-LLM, Zero-Shot, dan CodeBERT dataset export."),
             ("RAG-LLM", "LLM menerima package list plus security reference hasil retrieval. Gunakan sheet Scenario Metrics dan Finding Detail untuk membaca prediksi dan evaluasinya."),
             ("Zero-Shot", "LLM hanya menerima package list tanpa konteks advisory. Bandingkan dengan RAG-LLM untuk melihat efek retrieval."),
-            ("CodeBERT", "Dataset CodeBERT diekspor, lalu codebert_inference.py menjalankan inferensi lokal dengan model fine-tuned dari CODEBERT_MODEL_PATH. Jika model atau library Python belum tersedia, skenario ditandai CODEBERT_FAILED dan tidak masuk metrik."),
+            ("CodeBERT", "Dataset CodeBERT diekspor, lalu codebert_inference.py menjalankan inferensi lokal. Aplikasi membuat .codebert-venv dan menginstal requirements otomatis. Jika CODEBERT_MODEL_PATH tidak diisi, script memakai baseline embedding CodeBERT otomatis."),
             ("Ground Truth Version Range", "Package hanya dianggap vulnerable jika CurrentVersion masuk VulnerableVersionRange. Ini mencegah package patched tetap dihitung sebagai vulnerable hanya karena namanya punya advisory."),
             ("Run Summary", "Ringkasan eksekusi: model, jumlah project, jumlah sukses/gagal, concurrency, dan jumlah record."),
             ("Method Comparison", "Tabel cepat untuk melihat status tiga metode per project: RAG-LLM, Zero-Shot, dan CodeBERT."),
@@ -2772,7 +2983,7 @@ details{background:#f8fbff;border:1px solid var(--line);border-radius:8px;paddin
         builder.AppendLine("</header><main>");
 
         builder.AppendLine("<section class=\"grid\">");
-        AppendMetricCard(builder, "Projects", "Proyek", results.Count.ToString(CultureInfo.InvariantCulture), $"{results.Count(IsProjectFullySuccessfulForResume)} complete", $"{results.Count(IsProjectFullySuccessfulForResume)} selesai");
+        AppendMetricCard(builder, "Projects", "Proyek", results.Count.ToString(CultureInfo.InvariantCulture), $"{results.Count(IsProjectFullySuccessfulForResume)} all-scenario complete", $"{results.Count(IsProjectFullySuccessfulForResume)} semua skenario selesai");
         AppendMetricCard(builder, "Packages", "Paket", results.Sum(x => x.PackageCount).ToString(CultureInfo.InvariantCulture), $"{vulnerableTruthCount} vulnerable by ground truth", $"{vulnerableTruthCount} rentan menurut ground truth");
         AppendMetricCard(builder, "RAG Findings", "Temuan RAG", ragResults.Sum(x => x.Scenario.Response?.VulnerabilityReports.Count(r => r.IsVulnerable) ?? 0).ToString(CultureInfo.InvariantCulture), "grounded Gemini scenario", "skenario Gemini dengan konteks");
         AppendMetricCard(builder, "Zero-Shot Findings", "Temuan Zero-Shot", zeroShotResults.Sum(x => x.Scenario.Response?.VulnerabilityReports.Count(r => r.IsVulnerable) ?? 0).ToString(CultureInfo.InvariantCulture), "no retrieval context", "tanpa konteks retrieval");
@@ -2879,7 +3090,7 @@ function filter(){
         builder.AppendLine("<div><strong>Best F1<span class=\"id-block\">F1 Terbaik</span></strong>");
         builder.AppendLine($"<p>{Html(GetScenarioDisplayName(best.Scenario))}: {best.Metrics.F1Score:P1}. Accuracy <span class=\"id\">Akurasi</span> {best.Metrics.Accuracy:P1}, Recall {best.Metrics.Recall:P1}.</p></div>");
         builder.AppendLine("<div><strong>Execution Health<span class=\"id-block\">Kesehatan Eksekusi</span></strong>");
-        builder.AppendLine($"<p>{results.Count(IsProjectFullySuccessfulForResume)} / {results.Count} project complete. API failed scenarios: {apiFailed}.<span class=\"id-block\">{results.Count(IsProjectFullySuccessfulForResume)} / {results.Count} proyek selesai. Skenario API gagal: {apiFailed}.</span></p></div>");
+        builder.AppendLine($"<p>{results.Count(IsProjectFullySuccessfulForResume)} / {results.Count} project all-scenario runs complete. API failed scenarios: {apiFailed}.<span class=\"id-block\">{results.Count(IsProjectFullySuccessfulForResume)} / {results.Count} run semua skenario selesai. Skenario API gagal: {apiFailed}.</span></p></div>");
         builder.AppendLine("<div><strong>CodeBERT Status<span class=\"id-block\">Status CodeBERT</span></strong>");
         builder.AppendLine(codeBertSucceeded > 0
             ? $"<p>{codeBertSucceeded} CodeBERT local inference result(s) were evaluated; {codeBertFailed} failed or excluded.<span class=\"id-block\">{codeBertSucceeded} hasil inferensi CodeBERT lokal dievaluasi; {codeBertFailed} gagal atau dikeluarkan.</span></p>"
@@ -3204,7 +3415,7 @@ function filter(){
             if (IsSyntheticCodeBertScenario(item.Scenario))
             {
                 mitigation = "Output sintetis CodeBERT terdeteksi. Baris ini hanya dipertahankan untuk traceability dan tidak dipakai sebagai bukti kualitas model.";
-                reasoning = "Jalankan ulang dengan model lokal melalui CODEBERT_MODEL_PATH untuk menghasilkan prediksi CodeBERT real.";
+                reasoning = "Jalankan ulang dengan dependency Python CodeBERT yang lengkap, atau gunakan CODEBERT_MODEL_PATH untuk model fine-tuned lokal.";
             }
             builder.AppendLine($"<td class=\"detail\"><details><summary>{Html(TruncateForDisplay(mitigation, 120))}</summary><p>{Html(mitigation)}</p><p class=\"hint\">{Html(reasoning)}</p></details></td>");
             builder.AppendLine("</tr>");
@@ -3614,6 +3825,13 @@ function filter(){
     private static string FormatElapsed(TimeSpan elapsed)
     {
         return $"{elapsed.TotalSeconds:F2}s";
+    }
+
+    private static string QuoteArgumentForLog(string argument)
+    {
+        return argument.Contains(' ', StringComparison.Ordinal) || argument.Contains('\t', StringComparison.Ordinal)
+            ? $"\"{argument}\""
+            : argument;
     }
 
     private static string TruncateForDisplay(string value, int maxLength = 300)
