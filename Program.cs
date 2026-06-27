@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
@@ -702,34 +703,76 @@ public class Program
         startInfo.ArgumentList.Add("--output");
         startInfo.ArgumentList.Add(outputPath);
 
-        using var process = new Process { StartInfo = startInfo };
-        WriteLine($"[CodeBERT] Executing Python inference: {pythonExecutable} {CodeBertInferenceScriptName}");
-
-        if (!process.Start())
+        var stderrBuilder = new StringBuilder();
+        using var process = new Process
         {
-            throw new InvalidOperationException("Failed to start CodeBERT Python process.");
+            StartInfo = startInfo,
+            EnableRaisingEvents = true
+        };
+
+        process.OutputDataReceived += (_, args) =>
+        {
+            if (!string.IsNullOrWhiteSpace(args.Data))
+            {
+                WriteLine($"[CodeBERT] {args.Data}");
+            }
+        };
+
+        process.ErrorDataReceived += (_, args) =>
+        {
+            if (!string.IsNullOrWhiteSpace(args.Data))
+            {
+                stderrBuilder.AppendLine(args.Data);
+                WriteError($"[CodeBERT] {args.Data}");
+            }
+        };
+
+        WriteLine($"[CodeBERT] Executing local Python inference: {pythonExecutable} {CodeBertInferenceScriptName} --input \"{inputPath}\" --output \"{outputPath}\"");
+
+        try
+        {
+            if (!process.Start())
+            {
+                throw new InvalidOperationException("Failed to start CodeBERT Python process.");
+            }
+        }
+        catch (Win32Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"Python executable '{pythonExecutable}' was not found or could not be started. Install Python locally or set the {CodeBertPythonEnvironmentVariableName} environment variable to a valid executable path.",
+                ex);
         }
 
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
 
-        if (!string.IsNullOrWhiteSpace(stdout))
+        try
         {
-            WriteLine($"[CodeBERT] stdout: {TruncateForDisplay(stdout, 1000)}");
+            await Task.Run(process.WaitForExit, cancellationToken);
+            process.WaitForExit();
+        }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+
+            throw;
         }
 
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException($"CodeBERT Python process exited with code {process.ExitCode}. stderr: {TruncateForDisplay(stderr, 1000)}");
+            throw new InvalidOperationException(
+                $"CodeBERT Python process exited with code {process.ExitCode}. stderr: {TruncateForDisplay(stderrBuilder.ToString(), 1000)}");
         }
 
         if (!File.Exists(outputPath))
         {
             throw new FileNotFoundException("CodeBERT Python process completed but prediction file was not created.", outputPath);
         }
+
+        WriteLine($"[CodeBERT] Python inference completed successfully. Prediction file: {outputPath}");
     }
 
     private static async Task<GeminiResponse?> AnalyzeWithGeminiWithBatching(
@@ -2685,7 +2728,7 @@ details{background:#f8fbff;border:1px solid var(--line);border-radius:8px;paddin
 <div><strong>RAG-LLM</strong><p>Gemini receives package references plus retrieved security context.<span class="id-block">Gemini menerima daftar package plus konteks keamanan hasil retrieval.</span></p></div>
 <div><strong>Zero-Shot</strong><p>Gemini receives only package references.<span class="id-block">Gemini hanya menerima daftar package tanpa konteks advisory.</span></p></div>
 <div><strong>CodeBERT</strong><p>The app exports labeled rows, executes codebert_inference.py, and evaluates predictions with the same confusion matrix. If model is mock-codebert, metrics validate the pipeline only.<span class="id-block">Aplikasi mengekspor dataset berlabel, menjalankan codebert_inference.py, lalu mengevaluasi prediksi dengan confusion matrix yang sama. Jika model mock-codebert, metrik hanya validasi pipeline.</span></p></div>
-<div><strong>Ground Truth<span class="id-block">Label Acuan</span></strong><p>Labels come exclusively from live GitHub GraphQL advisory retrieval and version-range evaluation.<span class="id-block">Label berasal dari referensi GitHub GraphQL/advisory lokal/fallback dan menjadi dasar TP/TN/FP/FN.</span></p></div>
+<div><strong>Ground Truth<span class="id-block">Label Acuan</span></strong><p>Labels come exclusively from live GitHub GraphQL advisory retrieval and version-range evaluation.<span class="id-block">Label berasal secara eksklusif dari retrieval advisory GitHub GraphQL real-time dan evaluasi rentang versi sebagai dasar TP/TN/FP/FN.</span></p></div>
 </div>
 </section>
 """);

@@ -21,23 +21,78 @@ public static class ModelEvaluator
         }
 
         var json = File.ReadAllText(predictionJsonPath);
-        var response = JsonSerializer.Deserialize<GeminiResponse>(json, JsonOptions);
-
-        if (response?.VulnerabilityReports is not { Count: > 0 })
-        {
-            var reports = JsonSerializer.Deserialize<List<VulnerabilityReport>>(json, JsonOptions);
-            response = new GeminiResponse
-            {
-                VulnerabilityReports = reports ?? new List<VulnerabilityReport>()
-            };
-        }
+        var response = TryReadPredictionResponse(json);
 
         if (response.VulnerabilityReports.Count == 0)
         {
             throw new InvalidOperationException("CodeBERT prediction JSON does not contain any VulnerabilityReports.");
         }
 
+        if (string.IsNullOrWhiteSpace(response.ModelName))
+        {
+            response.ModelName = "codebert-python-bridge";
+        }
+
         return response;
+    }
+
+    private static GeminiResponse TryReadPredictionResponse(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                return new GeminiResponse
+                {
+                    VulnerabilityReports = JsonSerializer.Deserialize<List<VulnerabilityReport>>(json, JsonOptions) ?? new List<VulnerabilityReport>()
+                };
+            }
+
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return new GeminiResponse();
+            }
+
+            var response = JsonSerializer.Deserialize<GeminiResponse>(json, JsonOptions);
+            if (response?.VulnerabilityReports is { Count: > 0 })
+            {
+                return response;
+            }
+
+            foreach (var propertyName in new[] { "VulnerabilityReports", "Predictions", "predictions" })
+            {
+                if (document.RootElement.TryGetProperty(propertyName, out var property) &&
+                    property.ValueKind == JsonValueKind.Array)
+                {
+                    return new GeminiResponse
+                    {
+                        ModelName = ReadJsonString(document.RootElement, "ModelName", "modelName"),
+                        VulnerabilityReports = JsonSerializer.Deserialize<List<VulnerabilityReport>>(property.GetRawText(), JsonOptions) ?? new List<VulnerabilityReport>()
+                    };
+                }
+            }
+
+            return response ?? new GeminiResponse();
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"CodeBERT prediction JSON is invalid: {ex.Message}", ex);
+        }
+    }
+
+    private static string ReadJsonString(JsonElement element, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            if (element.TryGetProperty(propertyName, out var property) &&
+                property.ValueKind == JsonValueKind.String)
+            {
+                return property.GetString() ?? string.Empty;
+            }
+        }
+
+        return string.Empty;
     }
 
     public static EvaluationMetrics Calculate(
