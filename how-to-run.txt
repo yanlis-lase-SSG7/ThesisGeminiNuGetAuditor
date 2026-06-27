@@ -17,15 +17,11 @@ Cara Menjalankan GeminiNuGetAuditor
    Jika token tidak tersedia atau request GitHub gagal, aplikasi tidak memakai fallback lokal atau appsettings.
    Project tersebut ditandai RETRIEVAL_FAILED dan dikeluarkan dari perhitungan metrik.
 
-4. Opsional jika sudah punya model CodeBERT fine-tuned lokal:
-
-   $env:CODEBERT_MODEL_PATH = "D:\path\to\fine-tuned-codebert-model"
-
-   Dependency CodeBERT tidak perlu di-install manual. Pada run pertama, aplikasi membuat
+4. Dependency CodeBERT tidak perlu di-install manual. Pada run pertama, aplikasi membuat
    virtual environment lokal .codebert-venv dan menjalankan pip install otomatis dari
    requirements-codebert.txt.
 
-   Jika CODEBERT_MODEL_PATH tidak diisi, aplikasi memakai baseline real lokal
+   Aplikasi memakai baseline real lokal
    LOCAL_CODEBERT_EMBEDDING_LOGREG berbasis encoder CodeBERT dan Logistic Regression.
    Jika Python tidak tersedia atau bootstrap dependency gagal, aplikasi tidak membuat prediksi sintetis.
    Skenario CodeBERT ditandai CODEBERT_FAILED dan dikeluarkan dari perhitungan metrik.

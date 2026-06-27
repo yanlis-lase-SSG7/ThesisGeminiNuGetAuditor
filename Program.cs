@@ -28,6 +28,7 @@ public class Program
     private static readonly object ConsoleLock = new();
     private static readonly SemaphoreSlim GeminiRequestGate = new(GeminiGlobalConcurrencyLimit, GeminiGlobalConcurrencyLimit);
     private static readonly SemaphoreSlim CodeBertEnvironmentGate = new(1, 1);
+    private static readonly SemaphoreSlim CodeBertInferenceGate = new(1, 1);
     private static readonly ConcurrentBag<GeminiApiDiagnostic> GeminiApiDiagnostics = new();
     private static readonly ConcurrentQueue<ConsoleLogEntry> ConsoleLogEntries = new();
     private static long ConsoleLogSequence;
@@ -718,8 +719,23 @@ public class Program
         string outputPath,
         CancellationToken cancellationToken)
     {
-        var pythonExecutable = await EnsureCodeBertPythonEnvironmentAsync(cancellationToken);
+        await CodeBertInferenceGate.WaitAsync(cancellationToken);
+        try
+        {
+            await ExecuteCodeBertPythonCoreAsync(inputPath, outputPath, cancellationToken);
+        }
+        finally
+        {
+            CodeBertInferenceGate.Release();
+        }
+    }
 
+    private static async Task ExecuteCodeBertPythonCoreAsync(
+        string inputPath,
+        string outputPath,
+        CancellationToken cancellationToken)
+    {
+        var pythonExecutable = await EnsureCodeBertPythonEnvironmentAsync(cancellationToken);
         var scriptPath = Path.Combine(GetApplicationRootDirectory(), CodeBertInferenceScriptName);
         if (!File.Exists(scriptPath))
         {

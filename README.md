@@ -84,7 +84,6 @@ Environment variable yang umum digunakan:
 ```powershell
 $env:GEMINI_API_KEY = "your-gemini-api-key"
 $env:GITHUB_TOKEN = "your-github-token"
-$env:CODEBERT_MODEL_PATH = "D:\path\to\fine-tuned-codebert-model" # opsional
 ```
 
 Jalankan aplikasi tanpa argumen:

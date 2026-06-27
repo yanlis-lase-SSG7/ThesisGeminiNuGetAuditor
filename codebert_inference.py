@@ -166,9 +166,21 @@ def predict_with_embedding_classifier(payload: dict, encoder_model: str, batch_s
         raise RuntimeError("No original CodeBERT records were found for inference.")
 
     if not has_two_classes(train_records):
+        labels = {int(bool(item.get("Label", False))) for item in train_records}
+        if labels == {0}:
+            print(
+                "Training labels contain only non-vulnerable records. "
+                "Using a constant non-vulnerable CodeBERT baseline for this project.",
+                flush=True,
+            )
+            return [
+                build_prediction(record, False, 1.0, "single-class-non-vulnerable-baseline")
+                for record in prediction_records
+            ]
+
         raise RuntimeError(
-            "CodeBERT local training requires at least one vulnerable and one non-vulnerable labeled record. "
-            "The current project dataset does not contain both classes."
+            "CodeBERT local training requires at least one labeled record. "
+            "The current project dataset is empty or invalid."
         )
 
     print(f"Loading CodeBERT encoder: {encoder_model}", flush=True)
