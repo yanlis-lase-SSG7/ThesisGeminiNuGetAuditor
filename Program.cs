@@ -2725,6 +2725,7 @@ Security reference data:
         var vulnerableTruthCount = results.Sum(x => x.GroundTruthLabels.Count(g => g.IsVulnerable));
         var falsePositiveCount = allMetricRecords.Count(x => x.Record.MatchResult == "False Positive");
         var falseNegativeCount = allMetricRecords.Count(x => x.Record.MatchResult == "False Negative");
+        var logoDataUri = ResolveReportLogoDataUri();
 
         var builder = new StringBuilder();
         builder.AppendLine("<!doctype html>");
@@ -2735,6 +2736,7 @@ Security reference data:
 :root{--bg:#f5f7fb;--panel:#ffffff;--ink:#172033;--muted:#657089;--line:#dbe3ef;--brand:#1d4ed8;--brand2:#0f766e;--bert:#7c3aed;--good:#065f46;--good-bg:#d1fae5;--good-dark:#bbf7d0;--warn:#92400e;--bad:#991b1b;--tp:#047857;--tn:#2563eb;--fp:#ea580c;--fn:#dc2626}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:Segoe UI,Roboto,Arial,sans-serif;line-height:1.45}
 header{background:linear-gradient(135deg,#0f172a,#1d4ed8 58%,#0f766e);color:white;padding:34px 42px}
+.brand-lockup{display:flex;align-items:center;gap:18px;margin-bottom:18px}.brand-logo{width:132px;max-width:38vw;background:white;border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,.45);box-shadow:0 10px 28px rgba(2,6,23,.22)}.brand-title{min-width:0}.brand-title h1{margin:0 0 8px;font-size:30px;letter-spacing:0}.brand-title p{margin:0;color:#dbeafe;max-width:1100px}
 header h1{margin:0 0 8px;font-size:30px;letter-spacing:0} header p{margin:0;color:#dbeafe;max-width:1100px}header .id,header .id-block{color:var(--good-dark)!important}.hero-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.hero-meta span{border:1px solid rgba(255,255,255,.34);background:rgba(255,255,255,.14);border-radius:999px;padding:6px 10px;font-size:12px;color:#f8fafc}
 main{padding:24px 42px 48px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
 .metric .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.metric .value{font-size:28px;font-weight:700;margin-top:4px}.metric .sub{color:var(--muted);font-size:12px;margin-top:4px}
@@ -2748,13 +2750,21 @@ table{width:100%;border-collapse:collapse;background:var(--panel);border:1px sol
 .flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.flow-step{border:1px solid var(--line);border-radius:8px;padding:12px;background:#f8fbff;position:relative}.flow-step strong{display:block}.flow-step .num{display:inline-flex;width:24px;height:24px;align-items:center;justify-content:center;border-radius:999px;background:var(--brand);color:white;font-weight:700;margin-bottom:8px}.flow-step:not(:last-child)::after{content:"";position:absolute;right:-10px;top:50%;width:10px;border-top:2px solid #93c5fd}
 .chart-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.donut-card{display:flex;gap:14px;align-items:center}.donut{width:112px;height:112px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto}.donut span{width:72px;height:72px;border-radius:50%;background:white;display:grid;place-items:center;text-align:center;font-size:12px;font-weight:700}.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.legend span{font-size:12px;color:var(--muted)}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}.stack{height:16px;background:#e5e7eb;border-radius:999px;overflow:hidden;display:flex}.stack span{display:block;height:16px}.mini-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.mini-kpi{border:1px solid var(--line);border-radius:8px;padding:12px;background:#f8fbff}.mini-kpi strong{font-size:20px}.small-table td,.small-table th{font-size:12px}.codebert-note{border:1px solid #c4b5fd;background:#f5f3ff;color:#4c1d95;border-radius:8px;padding:10px;margin-top:10px}
 details{background:#f8fbff;border:1px solid var(--line);border-radius:8px;padding:10px}summary{cursor:pointer;font-weight:600}
-@media(max-width:1100px){main,header{padding-left:18px;padding-right:18px}.grid,.two,.three,.flow,.chart-grid,.mini-kpis{grid-template-columns:1fr}.toolbar input,.toolbar select{min-width:100%;width:100%}.flow-step:not(:last-child)::after{display:none}}
+@media(max-width:1100px){main,header{padding-left:18px;padding-right:18px}.brand-lockup{align-items:flex-start;gap:12px}.brand-logo{width:104px}.grid,.two,.three,.flow,.chart-grid,.mini-kpis{grid-template-columns:1fr}.toolbar input,.toolbar select{min-width:100%;width:100%}.flow-step:not(:last-child)::after{display:none}}
+@media(max-width:640px){.brand-lockup{display:block}.brand-logo{width:112px;margin-bottom:14px}.brand-title h1{font-size:24px}}
 </style>
 """);
         builder.AppendLine("</head><body>");
         builder.AppendLine("<header>");
+        builder.AppendLine("<div class=\"brand-lockup\">");
+        if (!string.IsNullOrWhiteSpace(logoDataUri))
+        {
+            builder.AppendLine($"<img class=\"brand-logo\" src=\"{Html(logoDataUri)}\" alt=\"BINUS University Graduate Program logo\">");
+        }
+        builder.AppendLine("<div class=\"brand-title\">");
         builder.AppendLine("<h1>GeminiNuGetAuditor Interactive Audit Report</h1>");
         builder.AppendLine("<p class=\"id-block\" style=\"color:#dbeafe\">Laporan Audit Interaktif GeminiNuGetAuditor</p>");
+        builder.AppendLine("</div></div>");
         builder.AppendLine($"<p>Audit root <span class=\"id\">Folder audit</span>: {Html(rootFolder)} &nbsp; | &nbsp; Model <span class=\"id\">Model</span>: <strong>{Html(modelName)}</strong> &nbsp; | &nbsp; Generated <span class=\"id\">Dibuat</span>: {Html(DateTimeOffset.UtcNow.ToString("O"))}</p>");
         builder.AppendLine("<div class=\"hero-meta\">");
         builder.AppendLine($"<span>{results.Count} project(s) <span class=\"id\">proyek</span></span><span>{results.Sum(x => x.PackageCount)} package(s) <span class=\"id\">paket</span></span><span>{vulnerableTruthCount} ground-truth vulnerable <span class=\"id\">rentan menurut ground truth</span></span><span>{results.SelectMany(x => x.Scenarios).Count(x => x.Status == "API_FAILED")} API failed scenario(s) <span class=\"id\">skenario API gagal</span></span>");
@@ -3300,6 +3310,18 @@ function filter(){
     private static string PercentText(double ratio)
     {
         return ratio.ToString("P1", CultureInfo.InvariantCulture);
+    }
+
+    private static string ResolveReportLogoDataUri()
+    {
+        var logoPath = Path.Combine(GetApplicationRootDirectory(), "asset", "Binus Graduate Program.png");
+        if (!File.Exists(logoPath))
+        {
+            return string.Empty;
+        }
+
+        var bytes = File.ReadAllBytes(logoPath);
+        return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
     }
 
     private static string Html(string? value)
