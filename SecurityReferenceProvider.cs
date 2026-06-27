@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -11,6 +12,8 @@ public static class SecurityReferenceProvider
     private const int GitHubRequestTimeoutSeconds = 30;
     private const int GitHubMaxAttempts = 3;
     private const int GitHubMaxPagesPerPackage = 10;
+
+    private static readonly ConcurrentDictionary<string, Lazy<Task<GitHubPackageQueryResult>>> PackageQueryCache = new(StringComparer.OrdinalIgnoreCase);
 
     private static readonly JsonDocumentOptions InputJsonOptions = new()
     {
@@ -160,16 +163,22 @@ public static class SecurityReferenceProvider
 
             foreach (var packageName in packageSet)
             {
-                var packageResult = await QueryNuGetAdvisoriesFromGitHubWithRetryAsync(
+                var cacheKey = packageName.Trim();
+                var cacheEntry = PackageQueryCache.GetOrAdd(cacheKey, _ => new Lazy<Task<GitHubPackageQueryResult>>(
+                    () => QueryNuGetAdvisoriesFromGitHubWithRetryAsync(
                     httpClient,
                     settings.GitHubGraphQlUrl,
                     settings.GitHubGraphQlNuGetQuery,
-                    packageName,
-                    cancellationToken);
+                        cacheKey,
+                        cancellationToken),
+                    LazyThreadSafetyMode.ExecutionAndPublication));
+
+                var packageResult = await cacheEntry.Value;
+                const string cacheStatus = "GitHubGraphQLApi/process-cache";
 
                 diagnostics.Add(packageResult.StatusCode.HasValue
-                    ? $"GitHub API package '{packageName}': HTTP {(int)packageResult.StatusCode.Value} ({packageResult.StatusCode.Value}), pages={packageResult.PageCount}, advisories={packageResult.Records.Count}."
-                    : $"GitHub API package '{packageName}': request failed ({packageResult.ErrorMessage}).");
+                    ? $"GitHub API package '{packageName}': HTTP {(int)packageResult.StatusCode.Value} ({packageResult.StatusCode.Value}), pages={packageResult.PageCount}, advisories={packageResult.Records.Count}, source={cacheStatus}."
+                    : $"GitHub API package '{packageName}': request failed ({packageResult.ErrorMessage}), source={cacheStatus}.");
 
                 if (!packageResult.Success)
                 {
