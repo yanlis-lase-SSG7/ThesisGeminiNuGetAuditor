@@ -2685,7 +2685,7 @@ details{background:#f8fbff;border:1px solid var(--line);border-radius:8px;paddin
 <div><strong>RAG-LLM</strong><p>Gemini receives package references plus retrieved security context.<span class="id-block">Gemini menerima daftar package plus konteks keamanan hasil retrieval.</span></p></div>
 <div><strong>Zero-Shot</strong><p>Gemini receives only package references.<span class="id-block">Gemini hanya menerima daftar package tanpa konteks advisory.</span></p></div>
 <div><strong>CodeBERT</strong><p>The app exports labeled rows, executes codebert_inference.py, and evaluates predictions with the same confusion matrix. If model is mock-codebert, metrics validate the pipeline only.<span class="id-block">Aplikasi mengekspor dataset berlabel, menjalankan codebert_inference.py, lalu mengevaluasi prediksi dengan confusion matrix yang sama. Jika model mock-codebert, metrik hanya validasi pipeline.</span></p></div>
-<div><strong>Ground Truth<span class="id-block">Label Acuan</span></strong><p>Labels come from GitHub GraphQL/local advisory/fallback references and drive TP/TN/FP/FN.<span class="id-block">Label berasal dari referensi GitHub GraphQL/advisory lokal/fallback dan menjadi dasar TP/TN/FP/FN.</span></p></div>
+<div><strong>Ground Truth<span class="id-block">Label Acuan</span></strong><p>Labels come exclusively from live GitHub GraphQL advisory retrieval and version-range evaluation.<span class="id-block">Label berasal dari referensi GitHub GraphQL/advisory lokal/fallback dan menjadi dasar TP/TN/FP/FN.</span></p></div>
 </div>
 </section>
 """);
