@@ -8,10 +8,10 @@ Project ini dibuat untuk:
 
 - mengekstraksi daftar package NuGet dan versi dari file `.csproj`;
 - memindai folder secara rekursif untuk menemukan banyak file `.csproj`;
-- mengambil data ground truth kerentanan dari GitHub Advisory Database atau fallback lokal;
+- mengambil data ground truth kerentanan secara eksklusif dari GitHub GraphQL API real-time;
 - menjalankan evaluasi RAG-LLM dengan Gemini dan konteks advisory;
 - menjalankan evaluasi Zero-Shot dengan Gemini tanpa konteks advisory;
-- menyiapkan dataset baseline CodeBERT melalui augmentasi dan split data;
+- menyiapkan dataset CodeBERT bridge melalui augmentasi dan split data;
 - menghitung metrik TP, TN, FP, FN, Accuracy, Precision, Recall, F1-Score, dan False Positive Ratio;
 - menghasilkan artefak JSON dan Excel untuk analisis tesis.
 
@@ -29,7 +29,7 @@ Project ini dibuat untuk:
 
 ## Retrieval Ground Truth
 
-`SecurityReferenceProvider.cs` secara eksklusif menggunakan **GitHub GraphQL API sebagai sumber tunggal secara real-time** untuk mengambil advisory kerentanan NuGet. Sistem tidak menggunakan local advisory database, fallback `appsettings.json`, dummy data, atau sumber statis lain sebagai pengganti ground truth.
+`SecurityReferenceProvider.cs` secara eksklusif menggunakan **GitHub GraphQL API sebagai sumber tunggal secara real-time** untuk mengambil advisory kerentanan NuGet. Retrieval dilakukan secara paginated agar advisory live tidak terpotong pada halaman pertama. Sistem tidak menggunakan local advisory database, fallback `appsettings.json`, dummy data, atau sumber statis lain sebagai pengganti ground truth.
 
 Diagnostics retrieval disimpan di console log, JSON report, dan Excel report.
 

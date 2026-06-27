@@ -10,6 +10,7 @@ public static class SecurityReferenceProvider
     private const string GitHubTokenEnvironmentVariableName = "GITHUB_TOKEN";
     private const int GitHubRequestTimeoutSeconds = 30;
     private const int GitHubMaxAttempts = 3;
+    private const int GitHubMaxPagesPerPackage = 10;
 
     private static readonly JsonDocumentOptions InputJsonOptions = new()
     {
@@ -167,7 +168,7 @@ public static class SecurityReferenceProvider
                     cancellationToken);
 
                 diagnostics.Add(packageResult.StatusCode.HasValue
-                    ? $"GitHub API package '{packageName}': HTTP {(int)packageResult.StatusCode.Value} ({packageResult.StatusCode.Value}), advisories={packageResult.Records.Count}."
+                    ? $"GitHub API package '{packageName}': HTTP {(int)packageResult.StatusCode.Value} ({packageResult.StatusCode.Value}), pages={packageResult.PageCount}, advisories={packageResult.Records.Count}."
                     : $"GitHub API package '{packageName}': request failed ({packageResult.ErrorMessage}).");
 
                 if (!packageResult.Success)
@@ -279,96 +280,121 @@ public static class SecurityReferenceProvider
         string packageName,
         CancellationToken cancellationToken)
     {
-        var payload = new
-        {
-            query = gitHubGraphQlNuGetQuery,
-            variables = new
-            {
-                package = packageName
-            }
-        };
-
-        using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-
         try
         {
-            using var response = await httpClient.PostAsync(gitHubGraphQlUrl, content, cancellationToken);
-            var statusCode = response.StatusCode;
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return new GitHubPackageQueryResult
-                {
-                    Success = false,
-                    StatusCode = statusCode,
-                    Records = new List<SecurityAdvisoryRecord>(),
-                    ErrorMessage = $"GitHub GraphQL returned non-success HTTP status {(int)statusCode} ({statusCode})."
-                };
-            }
-
-            using var document = JsonDocument.Parse(json, InputJsonOptions);
-
-            if (document.RootElement.TryGetProperty("errors", out var errors) &&
-                errors.ValueKind == JsonValueKind.Array &&
-                errors.GetArrayLength() > 0)
-            {
-                return new GitHubPackageQueryResult
-                {
-                    Success = false,
-                    StatusCode = statusCode,
-                    Records = new List<SecurityAdvisoryRecord>(),
-                    ErrorMessage = $"GitHub GraphQL returned errors: {TruncateForDiagnostics(errors.GetRawText())}"
-                };
-            }
-
-            if (!document.RootElement.TryGetProperty("data", out var data) ||
-                !data.TryGetProperty("securityVulnerabilities", out var vulnerabilities) ||
-                !vulnerabilities.TryGetProperty("nodes", out var nodes) ||
-                nodes.ValueKind != JsonValueKind.Array)
-            {
-                return new GitHubPackageQueryResult
-                {
-                    Success = false,
-                    StatusCode = statusCode,
-                    Records = new List<SecurityAdvisoryRecord>(),
-                    ErrorMessage = "GitHub GraphQL response schema does not contain data.securityVulnerabilities.nodes."
-                };
-            }
-
             var records = new List<SecurityAdvisoryRecord>();
+            string? afterCursor = null;
+            HttpStatusCode? lastStatusCode = null;
 
-            foreach (var node in nodes.EnumerateArray())
+            for (var page = 1; page <= GitHubMaxPagesPerPackage; page++)
             {
-                if (node.ValueKind != JsonValueKind.Object)
+                var payload = new
                 {
-                    continue;
+                    query = gitHubGraphQlNuGetQuery,
+                    variables = new
+                    {
+                        package = packageName,
+                        after = afterCursor
+                    }
+                };
+
+                using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                using var response = await httpClient.PostAsync(gitHubGraphQlUrl, content, cancellationToken);
+                var statusCode = response.StatusCode;
+                lastStatusCode = statusCode;
+                var json = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return new GitHubPackageQueryResult
+                    {
+                        Success = false,
+                        StatusCode = statusCode,
+                        Records = new List<SecurityAdvisoryRecord>(),
+                        PageCount = page,
+                        ErrorMessage = $"GitHub GraphQL returned non-success HTTP status {(int)statusCode} ({statusCode})."
+                    };
                 }
 
-                var advisory = node.TryGetProperty("advisory", out var advisoryElement) ? advisoryElement : default;
-                var identifiers = advisory.ValueKind == JsonValueKind.Object && advisory.TryGetProperty("identifiers", out var identifierArray)
-                    ? identifierArray
-                    : default;
+                using var document = JsonDocument.Parse(json, InputJsonOptions);
 
-                records.Add(new SecurityAdvisoryRecord
+                if (document.RootElement.TryGetProperty("errors", out var errors) &&
+                    errors.ValueKind == JsonValueKind.Array &&
+                    errors.GetArrayLength() > 0)
                 {
-                    PackageName = packageName,
-                    VulnerableVersionRange = ReadString(node, "vulnerableVersionRange"),
-                    Severity = ReadString(node, "severity"),
-                    GHSA = advisory.ValueKind == JsonValueKind.Object ? ReadString(advisory, "ghsaId") : string.Empty,
-                    CVE = ExtractIdentifierValue(identifiers, "CVE"),
-                    Summary = advisory.ValueKind == JsonValueKind.Object ? ReadString(advisory, "summary") : string.Empty,
-                    ReferenceUrl = advisory.ValueKind == JsonValueKind.Object ? ReadString(advisory, "permalink") : string.Empty,
-                    FirstPatchedVersion = ReadFirstPatchedVersion(node)
-                });
+                    return new GitHubPackageQueryResult
+                    {
+                        Success = false,
+                        StatusCode = statusCode,
+                        Records = new List<SecurityAdvisoryRecord>(),
+                        PageCount = page,
+                        ErrorMessage = $"GitHub GraphQL returned errors: {TruncateForDiagnostics(errors.GetRawText())}"
+                    };
+                }
+
+                if (!document.RootElement.TryGetProperty("data", out var data) ||
+                    !data.TryGetProperty("securityVulnerabilities", out var vulnerabilities) ||
+                    !vulnerabilities.TryGetProperty("nodes", out var nodes) ||
+                    nodes.ValueKind != JsonValueKind.Array)
+                {
+                    return new GitHubPackageQueryResult
+                    {
+                        Success = false,
+                        StatusCode = statusCode,
+                        Records = new List<SecurityAdvisoryRecord>(),
+                        PageCount = page,
+                        ErrorMessage = "GitHub GraphQL response schema does not contain data.securityVulnerabilities.nodes."
+                    };
+                }
+
+                records.AddRange(ReadSecurityAdvisoryRecords(nodes, packageName));
+                var pageInfo = ReadPageInfo(vulnerabilities);
+                if (!pageInfo.IsPresent)
+                {
+                    return new GitHubPackageQueryResult
+                    {
+                        Success = false,
+                        StatusCode = statusCode,
+                        Records = records,
+                        PageCount = page,
+                        ErrorMessage = "GitHub GraphQL response schema does not contain data.securityVulnerabilities.pageInfo."
+                    };
+                }
+
+                if (!pageInfo.HasNextPage)
+                {
+                    return new GitHubPackageQueryResult
+                    {
+                        Success = true,
+                        StatusCode = statusCode,
+                        Records = records,
+                        PageCount = page,
+                        ErrorMessage = string.Empty
+                    };
+                }
+
+                if (string.IsNullOrWhiteSpace(pageInfo.EndCursor))
+                {
+                    return new GitHubPackageQueryResult
+                    {
+                        Success = false,
+                        StatusCode = statusCode,
+                        Records = records,
+                        PageCount = page,
+                        ErrorMessage = "GitHub GraphQL response indicates another advisory page but does not provide pageInfo.endCursor."
+                    };
+                }
+
+                afterCursor = pageInfo.EndCursor;
             }
 
             return new GitHubPackageQueryResult
             {
-                Success = true,
-                StatusCode = statusCode,
+                Success = false,
+                StatusCode = lastStatusCode,
                 Records = records,
-                ErrorMessage = string.Empty
+                PageCount = GitHubMaxPagesPerPackage,
+                ErrorMessage = $"GitHub GraphQL advisory pagination exceeded the safety limit of {GitHubMaxPagesPerPackage} page(s) for package '{packageName}'."
             };
         }
         catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
@@ -378,6 +404,7 @@ public static class SecurityReferenceProvider
                 Success = false,
                 StatusCode = null,
                 Records = new List<SecurityAdvisoryRecord>(),
+                PageCount = 0,
                 ErrorMessage = $"GitHub request timed out after {GitHubRequestTimeoutSeconds} seconds. {ex.Message}"
             };
         }
@@ -388,9 +415,59 @@ public static class SecurityReferenceProvider
                 Success = false,
                 StatusCode = null,
                 Records = new List<SecurityAdvisoryRecord>(),
+                PageCount = 0,
                 ErrorMessage = ex.Message
             };
         }
+    }
+
+    private static List<SecurityAdvisoryRecord> ReadSecurityAdvisoryRecords(JsonElement nodes, string packageName)
+    {
+        var records = new List<SecurityAdvisoryRecord>();
+
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var advisory = node.TryGetProperty("advisory", out var advisoryElement) ? advisoryElement : default;
+            var identifiers = advisory.ValueKind == JsonValueKind.Object && advisory.TryGetProperty("identifiers", out var identifierArray)
+                ? identifierArray
+                : default;
+
+            records.Add(new SecurityAdvisoryRecord
+            {
+                PackageName = packageName,
+                VulnerableVersionRange = ReadString(node, "vulnerableVersionRange"),
+                Severity = ReadString(node, "severity"),
+                GHSA = advisory.ValueKind == JsonValueKind.Object ? ReadString(advisory, "ghsaId") : string.Empty,
+                CVE = ExtractIdentifierValue(identifiers, "CVE"),
+                Summary = advisory.ValueKind == JsonValueKind.Object ? ReadString(advisory, "summary") : string.Empty,
+                ReferenceUrl = advisory.ValueKind == JsonValueKind.Object ? ReadString(advisory, "permalink") : string.Empty,
+                FirstPatchedVersion = ReadFirstPatchedVersion(node)
+            });
+        }
+
+        return records;
+    }
+
+    private static GitHubPageInfo ReadPageInfo(JsonElement vulnerabilities)
+    {
+        if (!vulnerabilities.TryGetProperty("pageInfo", out var pageInfo) ||
+            pageInfo.ValueKind != JsonValueKind.Object)
+        {
+            return new GitHubPageInfo { IsPresent = false };
+        }
+
+        return new GitHubPageInfo
+        {
+            IsPresent = true,
+            HasNextPage = pageInfo.TryGetProperty("hasNextPage", out var hasNextPage) &&
+                          hasNextPage.ValueKind == JsonValueKind.True,
+            EndCursor = ReadString(pageInfo, "endCursor")
+        };
     }
 
     private static bool IsTransientGitHubResult(GitHubPackageQueryResult result)
@@ -576,13 +653,21 @@ public static class SecurityReferenceProvider
         public bool Success { get; set; }
         public HttpStatusCode? StatusCode { get; set; }
         public List<SecurityAdvisoryRecord> Records { get; set; } = new();
+        public int PageCount { get; set; }
         public string ErrorMessage { get; set; } = string.Empty;
+    }
+
+    private sealed class GitHubPageInfo
+    {
+        public bool IsPresent { get; set; }
+        public bool HasNextPage { get; set; }
+        public string EndCursor { get; set; } = string.Empty;
     }
 
     private sealed class SecurityReferenceSettings
     {
         public string GitHubGraphQlUrl { get; set; } = "https://api.github.com/graphql";
-        public string GitHubGraphQlNuGetQuery { get; set; } = "query($package:String!){ securityVulnerabilities(first:20, ecosystem:NUGET, package:$package){ nodes{ package{ name } vulnerableVersionRange firstPatchedVersion{ identifier } severity advisory{ ghsaId summary permalink identifiers{ type value } } } } }";
+        public string GitHubGraphQlNuGetQuery { get; set; } = "query($package:String!,$after:String){ securityVulnerabilities(first:100, after:$after, ecosystem:NUGET, package:$package){ pageInfo{ hasNextPage endCursor } nodes{ package{ name } vulnerableVersionRange firstPatchedVersion{ identifier } severity advisory{ ghsaId summary permalink identifiers{ type value } } } } }";
         public string GitHubToken { get; set; } = string.Empty;
         public string GitHubUserAgentProductName { get; set; } = "GeminiNuGetAuditor";
         public string GitHubUserAgentProductVersion { get; set; } = "1.0";

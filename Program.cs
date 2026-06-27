@@ -417,17 +417,7 @@ public class Program
                 return result;
             }
 
-            WriteLine($"[{projectKey}] Found {packageReferences.Count} package(s). Starting Zero-Shot and retrieval concurrently.");
-
-            var zeroShotTask = RunGeminiScenarioSafelyAsync(
-                projectKey,
-                AuditScenario.ZeroShot,
-                apiKey,
-                modelName,
-                geminiSettings,
-                packageReferences,
-                "[]",
-                cancellationToken);
+            WriteLine($"[{projectKey}] Found {packageReferences.Count} package(s). Starting strict live GitHub GraphQL retrieval.");
 
             var securityContextTask = SecurityReferenceProvider.GetSecurityContextWithDiagnosticsAsync(
                 packageReferences.Select(x => x.PackageName).ToList(),
@@ -441,11 +431,33 @@ public class Program
                 WriteLine($"[{projectKey}] [Retrieval] {diagnostic}");
             }
 
+            if (!IsLiveSecurityReferenceSuccessful(securityContextResult))
+            {
+                var message = "Live GitHub GraphQL retrieval failed, so ground truth is unavailable. Project is excluded from all scenario metrics to protect experiment validity.";
+                result.ErrorMessage = message;
+                result.Messages.Add(message);
+                result.Scenarios.Add(CreateRetrievalFailedScenario(AuditScenario.ZeroShot, securityContextResult.Source, message));
+                result.Scenarios.Add(CreateRetrievalFailedScenario(AuditScenario.RagLlm, securityContextResult.Source, message));
+                result.Scenarios.Add(CreateRetrievalFailedScenario(AuditScenario.CodeBert, securityContextResult.Source, message));
+                WriteError($"[{projectKey}] {message}");
+                return result;
+            }
+
             var securityContext = securityContextResult.Context;
             var groundTruthLabels = GroundTruthProvider.BuildLabels(packageReferences, securityContext);
             result.GroundTruthLabels = groundTruthLabels.ToList();
 
-            WriteLine($"[{projectKey}] Ground truth prepared. Starting RAG-LLM and CodeBERT dataset preparation concurrently.");
+            WriteLine($"[{projectKey}] Ground truth prepared from live GitHub GraphQL data. Starting Zero-Shot, RAG-LLM, and CodeBERT preparation.");
+
+            var zeroShotTask = RunGeminiScenarioSafelyAsync(
+                projectKey,
+                AuditScenario.ZeroShot,
+                apiKey,
+                modelName,
+                geminiSettings,
+                packageReferences,
+                "[]",
+                cancellationToken);
 
             var ragTask = RunGeminiScenarioSafelyAsync(
                 projectKey,
@@ -525,6 +537,29 @@ public class Program
             result.ElapsedSeconds = stopwatch.Elapsed.TotalSeconds;
             WriteLine($"[{projectKey}] Completed in {FormatElapsed(stopwatch.Elapsed)}.");
         }
+    }
+
+    private static bool IsLiveSecurityReferenceSuccessful(SecurityReferenceProvider.SecurityContextResult result)
+    {
+        return string.Equals(result.Source, "GitHubGraphQLApi", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static ScenarioAuditResult CreateRetrievalFailedScenario(
+        AuditScenario scenario,
+        string retrievalSource,
+        string message)
+    {
+        return new ScenarioAuditResult
+        {
+            Scenario = scenario,
+            Status = "RETRIEVAL_FAILED",
+            Success = false,
+            ExcludedFromMetrics = true,
+            MetricExclusionReason = $"{message} RetrievalSource={retrievalSource}.",
+            ErrorMessage = message,
+            StartedAtUtc = DateTimeOffset.UtcNow,
+            CompletedAtUtc = DateTimeOffset.UtcNow
+        };
     }
 
     private static async Task<ScenarioAuditResult> RunGeminiScenarioSafelyAsync(
@@ -2036,7 +2071,7 @@ Security reference data:
             ("ZeroShotProjectResults", results.Count(x => x.Scenarios.Any(s => s.Scenario == AuditScenario.ZeroShot && s.Success)).ToString()),
             ("CodeBertProjectResults", results.Count(x => x.Scenarios.Any(s => s.Scenario == AuditScenario.CodeBert && s.Success)).ToString()),
             ("ApiFailedScenarioResults", results.SelectMany(x => x.Scenarios).Count(s => s.Status == "API_FAILED").ToString()),
-            ("MetricExclusionPolicy", "Scenario with API_FAILED or missing LLM prediction is excluded from confusion matrix; no Ground Truth fallback is used."),
+            ("MetricExclusionPolicy", "Scenario with API_FAILED, RETRIEVAL_FAILED, or missing prediction is excluded from confusion matrix; no Ground Truth fallback is used."),
             ("GroundTruthPolicy", "A package is labeled vulnerable only when its current version satisfies the advisory vulnerable version range."),
             ("CodeBertRecords", results.Sum(x => x.CodeBertRecords.Count).ToString()),
             ("CodeBertEvaluationPolicy", "CodeBERT dataset rows are exported in this run. CodeBERT prediction metrics require a trained model or imported prediction file."),
@@ -2162,7 +2197,7 @@ Security reference data:
             ("Scenario Metrics", "Confusion matrix dan metrik untuk RAG-LLM, Zero-Shot, dan CodeBERT."),
             ("Finding Detail", "Detail package-level: prediksi model, ground truth, CVE, severity, mitigasi, dan reasoning bilingual."),
             ("False Review", "Sheet False Positive Review dan False Negative Review memisahkan error prediksi agar mudah dianalisis."),
-            ("Ground Truth", "Label pembanding dari GitHub API/local advisory/fallback. Ini dasar TP/TN/FP/FN."),
+            ("Ground Truth", "Label pembanding berasal eksklusif dari GitHub GraphQL API real-time dan evaluasi rentang versi. Ini dasar TP/TN/FP/FN."),
             ("CodeBERT Dataset", "Record dataset yang diekspor: original, semantic_version_normalization, dan safe_dummy_dependency."),
             ("Retrieval Diagnostics", "Jejak sumber advisory yang dipakai untuk tiap project."),
             ("Field Descriptions", "Kamus field JSON dan Excel agar pembaca memahami arti setiap kolom temuan."),

@@ -14,7 +14,8 @@ Cara Menjalankan GeminiNuGetAuditor
    PowerShell:
    $env:GITHUB_TOKEN = "your-github-token"
 
-   Jika token tidak tersedia atau request GitHub gagal, aplikasi akan memakai fallback local advisory database atau appsettings.
+   Jika token tidak tersedia atau request GitHub gagal, aplikasi tidak memakai fallback lokal atau appsettings.
+   Project tersebut ditandai RETRIEVAL_FAILED dan dikeluarkan dari perhitungan metrik.
 
 4. Jalankan aplikasi tanpa argumen:
 

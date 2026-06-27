@@ -2,7 +2,7 @@
 
 ## 1. Pendahuluan
 
-Dokumen ini menjelaskan rancangan teknis `GeminiNuGetAuditor` sebagai instrumen penelitian untuk mendeteksi kerentanan dependency NuGet pada ekosistem .NET. Rancangan sistem diselaraskan dengan metodologi tesis Bab III, yaitu pendekatan eksperimental komparatif yang mengevaluasi efektivitas Retrieval-Augmented Generation berbasis Large Language Model terhadap skenario Zero-Shot dan baseline deep learning CodeBERT.
+Dokumen ini menjelaskan rancangan teknis `GeminiNuGetAuditor` sebagai instrumen penelitian untuk mendeteksi kerentanan dependency NuGet pada ekosistem .NET. Rancangan sistem diselaraskan dengan metodologi tesis Bab III, yaitu pendekatan eksperimental komparatif yang mengevaluasi efektivitas Retrieval-Augmented Generation berbasis Large Language Model terhadap skenario Zero-Shot dan skenario CodeBERT Python bridge sebagai validasi pipeline.
 
 Tujuan utama sistem adalah menyediakan pipeline yang replikatif untuk:
 
@@ -20,16 +20,13 @@ Secara konseptual, sistem terdiri atas lima tahap utama:
    Sistem membaca file `.csproj` dan mengekstraksi elemen `PackageReference`, meliputi nama package dan versi yang digunakan.
 
 2. **Retrieval**  
-   Sistem mengambil referensi keamanan sebagai ground truth. Urutan retrieval adalah:
-   - Priority 1: GitHub GraphQL API sebagai sumber real-time;
-   - Fallback 1: local OSV/GitHub Advisory database melalui `github-advisory-db.json`;
-   - Fallback 2: sample advisories pada `appsettings.json`.
+   Sistem mengambil referensi keamanan sebagai ground truth secara eksklusif dari GitHub GraphQL API real-time. Tidak ada fallback ke file lokal, appsettings, dummy data, atau sumber statis lain.
 
 3. **Ground Truth Labeling**  
    Data advisory yang diperoleh dipetakan ke dependency hasil ekstraksi untuk menghasilkan label `Vulnerable` atau `Not Vulnerable`.
 
 4. **Inference and Dataset Preparation**  
-   Sistem menjalankan skenario RAG-LLM dan Zero-Shot menggunakan Gemini 1.5 Pro, serta mengekspor dataset baseline CodeBERT.
+   Sistem menjalankan skenario RAG-LLM dan Zero-Shot menggunakan Gemini 2.5 Pro, serta mengekspor dataset dan menjalankan Python bridge untuk skenario CodeBERT.
 
 5. **Evaluation**  
    Hasil prediksi dibandingkan terhadap ground truth untuk menghitung TP, TN, FP, FN, Accuracy, Precision, Recall, dan F1-Score.
@@ -38,18 +35,9 @@ Secara konseptual, sistem terdiri atas lima tahap utama:
 
 Pengumpulan data dilakukan terhadap file proyek `.csproj` dari ekosistem .NET. Setiap dependency NuGet yang ditemukan diperlakukan sebagai unit observasi. Label kerentanan tidak ditentukan secara manual, tetapi dibangun dari metadata advisory yang tervalidasi.
 
-Sumber ground truth mengikuti prioritas berikut:
+Sumber ground truth adalah **GitHub GraphQL API sebagai sumber tunggal secara real-time**. Sistem memanggil query GraphQL secara paginated untuk setiap package NuGet yang dianalisis agar advisory live tidak terpotong pada halaman pertama. Hasil advisory live tersebut kemudian dipakai untuk mengevaluasi apakah `CurrentVersion` berada di dalam `vulnerableVersionRange`.
 
-1. **GitHub GraphQL API**  
-   Sumber utama karena menyediakan akses real-time ke GitHub Advisory Database. Sistem memanggil query GraphQL untuk package NuGet yang dianalisis.
-
-2. **Local OSV/GitHub Advisory Database**  
-   Digunakan ketika GitHub API gagal karena timeout, rate-limit, HTTP error, token tidak valid, atau respons tidak dapat diparse. File lokal yang digunakan adalah `github-advisory-db.json`.
-
-3. **Appsettings Fallback**  
-   Digunakan ketika file lokal tidak tersedia atau rusak. Fallback ini berasal dari konfigurasi `SecurityReference:FallbackAdvisories`.
-
-Strategi berlapis ini menjaga validitas data sekaligus memastikan sistem tetap dapat berjalan pada kondisi jaringan tidak stabil.
+Untuk menjaga integritas eksperimen, sistem tidak menggunakan fallback ke `github-advisory-db.json`, appsettings, dummy data, cache statis, atau sumber lokal lain. Jika GitHub GraphQL API gagal karena timeout, rate-limit, HTTP error, token tidak valid, atau respons tidak dapat diparse, project ditandai `RETRIEVAL_FAILED` dan seluruh skenario pada project tersebut dikeluarkan dari perhitungan confusion matrix. Dengan demikian, metrik Bab IV hanya berasal dari project yang memiliki ground truth live yang berhasil diambil.
 
 ## 4. Skenario Evaluasi
 
@@ -57,7 +45,7 @@ Penelitian menggunakan tiga skenario utama untuk memastikan perbandingan yang ad
 
 ### 4.1. Skenario RAG-LLM (Model Usulan)
 
-Skenario RAG-LLM menggunakan Gemini 1.5 Pro dengan konteks tambahan berupa data advisory. Mekanisme retrieval dilakukan sebelum prompt dikirim ke LLM. Prompt berisi daftar dependency lokal dan security reference data.
+Skenario RAG-LLM menggunakan Gemini 2.5 Pro dengan konteks tambahan berupa data advisory live dari GitHub GraphQL API. Mekanisme retrieval dilakukan sebelum prompt dikirim ke LLM. Prompt berisi daftar dependency lokal dan security reference data yang berhasil diambil secara real-time.
 
 Kriteria perilaku model pada skenario ini:
 
@@ -69,7 +57,7 @@ Skenario ini dirancang untuk mengurangi halusinasi dan false positive.
 
 ### 4.2. Skenario Zero-Shot
 
-Skenario Zero-Shot menggunakan Gemini 1.5 Pro tanpa injeksi konteks retrieval. Model hanya menerima daftar package dan versi, lalu diminta melakukan audit berdasarkan pengetahuan internalnya.
+Skenario Zero-Shot menggunakan Gemini 2.5 Pro tanpa injeksi konteks retrieval. Model hanya menerima daftar package dan versi, lalu diminta melakukan audit berdasarkan pengetahuan internalnya.
 
 Skenario ini berfungsi sebagai pembanding untuk mengukur:
 
@@ -82,7 +70,7 @@ Pada skenario ini, `IsGroundedInReference` harus bernilai `false` karena tidak a
 
 ### 4.3. Skenario CodeBERT (Deep Learning Baseline)
 
-Skenario CodeBERT digunakan sebagai baseline deep learning statis. CodeBERT tidak menggunakan retrieval saat inferensi. Dataset untuk skenario ini disiapkan oleh `CodeBertDatasetExporter`.
+Skenario CodeBERT digunakan sebagai Python inference bridge untuk memvalidasi pipeline ekspor dataset, eksekusi lokal, pembacaan prediksi, dan perhitungan metrik terpadu. Pada implementasi saat ini, `codebert_inference.py` menghasilkan prediksi mock deterministik lokal sehingga metrik CodeBERT hanya boleh dipakai sebagai validasi pipeline, bukan bukti kualitas model CodeBERT fine-tuned.
 
 Dataset memuat:
 
@@ -93,21 +81,21 @@ Dataset memuat:
 - metadata advisory seperti CVE, severity, dan advisory ID;
 - variasi augmentasi.
 
-Skenario ini digunakan untuk membandingkan pendekatan RAG-LLM dengan model deep learning yang dilatih pada data historis.
+Skenario ini digunakan untuk menyiapkan jalur integrasi model deep learning di masa depan. Untuk eksperimen final yang mengklaim performa CodeBERT sebagai baseline model, `codebert_inference.py` harus diganti dengan inferensi CodeBERT fine-tuned yang sesungguhnya.
 
 ## 5. Augmentasi Data dan Strategi Split
 
-`CodeBertDatasetExporter` menyiapkan dataset untuk baseline CodeBERT melalui augmentasi yang mempertahankan semantik. Strategi augmentasi meliputi:
+`CodeBertDatasetExporter` menyiapkan dataset untuk skenario CodeBERT bridge melalui augmentasi yang mempertahankan semantik. Strategi augmentasi meliputi:
 
 - **original**: representasi dependency sebagaimana ditemukan pada `.csproj`;
 - **semantic_version_normalization**: perubahan bentuk struktur XML versi, misalnya dari atribut menjadi elemen `<Version>`;
 - **safe_dummy_dependency**: penyisipan dependency dummy aman untuk menambah sampel negatif.
 
-Setelah augmentasi, dataset dibagi menjadi:
+Setelah augmentasi, record dataset dibagi menjadi:
 
-- **70% training** untuk pelatihan model;
-- **15% validation** untuk validasi selama fine-tuning;
-- **15% testing** untuk evaluasi akhir.
+- **70% training** sebagai calon data latih untuk integrasi CodeBERT fine-tuned di masa depan;
+- **15% validation** sebagai calon data validasi;
+- **15% testing** sebagai calon data uji.
 
 Pembagian dilakukan secara deterministik agar eksperimen dapat direplikasi.
 
@@ -160,11 +148,13 @@ Precision menjadi indikator utama untuk menilai mitigasi false positive dan halu
 
 ## 8. Kriteria Keberhasilan
 
-Arsitektur RAG-LLM dinilai efektif apabila menunjukkan peningkatan dibanding Zero-Shot dan CodeBERT, terutama pada:
+Arsitektur RAG-LLM dinilai efektif apabila menunjukkan peningkatan dibanding Zero-Shot, terutama pada:
 
 - peningkatan **Precision**, yang menunjukkan penurunan false positive dan halusinasi;
 - peningkatan atau stabilitas **Recall**, yang menunjukkan kemampuan menemukan kerentanan aktual;
 - peningkatan **F1-Score**, yang menunjukkan keseimbangan antara Precision dan Recall.
+
+Metrik CodeBERT bridge pada implementasi saat ini digunakan untuk memvalidasi kelengkapan pipeline otomatis lokal. Metrik tersebut tidak dipakai sebagai bukti performa model CodeBERT fine-tuned sebelum script inferensi diganti dengan model yang benar-benar dilatih.
 
 Dengan demikian, keberhasilan sistem tidak hanya diukur dari banyaknya temuan, tetapi dari kemampuan menghasilkan temuan yang akurat dan dapat ditelusuri ke ground truth.
 
@@ -174,11 +164,12 @@ Artefak yang dihasilkan oleh sistem meliputi:
 
 - file audit JSON untuk setiap skenario LLM;
 - file Excel metrik evaluasi;
-- dataset CodeBERT dalam format JSON dan CSV;
-- diagnostics console yang mencatat sumber retrieval yang digunakan.
+- dataset CodeBERT bridge dalam format JSON dan CSV;
+- prediksi CodeBERT bridge dari script Python lokal;
+- diagnostics console yang mencatat status retrieval live yang digunakan.
 
 Artefak ini mendukung kebutuhan replikasi, audit metodologis, dan pelaporan hasil penelitian.
 
 ## 10. Kesimpulan Rekayasa
 
-`GeminiNuGetAuditor` direkayasa sebagai instrumen penelitian yang menggabungkan parsing dependency .NET, retrieval data advisory real-time, inferensi LLM, baseline deep learning, dan evaluasi kuantitatif. Struktur ini memungkinkan pengujian empiris terhadap hipotesis bahwa RAG-LLM mampu mengurangi halusinasi dan meningkatkan kualitas deteksi kerentanan dibandingkan Zero-Shot dan CodeBERT.
+`GeminiNuGetAuditor` direkayasa sebagai instrumen penelitian yang menggabungkan parsing dependency .NET, retrieval data advisory real-time dari GitHub GraphQL API, inferensi LLM, CodeBERT Python bridge, dan evaluasi kuantitatif. Struktur ini memungkinkan pengujian empiris terhadap hipotesis bahwa RAG-LLM mampu mengurangi halusinasi dan meningkatkan kualitas deteksi kerentanan dibandingkan Zero-Shot, dengan jalur CodeBERT disiapkan sebagai validasi pipeline dan fondasi integrasi model fine-tuned di masa depan.
