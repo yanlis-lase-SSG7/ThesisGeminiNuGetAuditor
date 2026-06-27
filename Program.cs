@@ -2315,7 +2315,7 @@ Security reference data:
             ("MetricExclusionPolicy", "Scenario with API_FAILED, RETRIEVAL_FAILED, or missing prediction is excluded from confusion matrix; no Ground Truth fallback is used."),
             ("GroundTruthPolicy", "A package is labeled vulnerable only when its current version satisfies the advisory vulnerable version range."),
             ("CodeBertRecords", results.Sum(x => x.CodeBertRecords.Count).ToString()),
-            ("CodeBertEvaluationPolicy", "CodeBERT prediction metrics require local Python inference. The app creates .codebert-venv and installs requirements automatically. CODEBERT_MODEL_PATH is optional for a fine-tuned classifier; otherwise the script uses LOCAL_CODEBERT_EMBEDDING_LOGREG."),
+            ("CodeBertEvaluationPolicy", "CodeBERT prediction metrics require local Python inference. The app creates .codebert-venv and installs requirements automatically. CODEBERT_MODEL_PATH is optional for a fine-tuned classifier; otherwise the script uses LOCAL_CODEBERT_EMBEDDING_LOGREG with leave-one-package-out training to reduce package-level leakage."),
             ("MetricRows", metrics.Count.ToString())
         };
 
@@ -2430,7 +2430,7 @@ Security reference data:
             ("Purpose", "Workbook ini merangkum audit dependency NuGet dari file .csproj. Tiga jalur yang dihasilkan adalah RAG-LLM, Zero-Shot, dan CodeBERT dataset export."),
             ("RAG-LLM", "LLM menerima package list plus security reference hasil retrieval. Gunakan sheet Scenario Metrics dan Finding Detail untuk membaca prediksi dan evaluasinya."),
             ("Zero-Shot", "LLM hanya menerima package list tanpa konteks advisory. Bandingkan dengan RAG-LLM untuk melihat efek retrieval."),
-            ("CodeBERT", "Dataset CodeBERT diekspor, lalu codebert_inference.py menjalankan inferensi lokal. Aplikasi membuat .codebert-venv dan menginstal requirements otomatis. Jika CODEBERT_MODEL_PATH tidak diisi, script memakai baseline embedding CodeBERT otomatis."),
+            ("CodeBERT", "Dataset CodeBERT diekspor, lalu codebert_inference.py menjalankan inferensi lokal. Aplikasi membuat .codebert-venv dan menginstal requirements otomatis. Jika CODEBERT_MODEL_PATH tidak diisi, script memakai baseline embedding CodeBERT otomatis dengan leave-one-package-out."),
             ("Ground Truth Version Range", "Package hanya dianggap vulnerable jika CurrentVersion masuk VulnerableVersionRange. Ini mencegah package patched tetap dihitung sebagai vulnerable hanya karena namanya punya advisory."),
             ("Run Summary", "Ringkasan eksekusi: model, jumlah project, jumlah sukses/gagal, concurrency, dan jumlah record."),
             ("Method Comparison", "Tabel cepat untuk melihat status tiga metode per project: RAG-LLM, Zero-Shot, dan CodeBERT."),

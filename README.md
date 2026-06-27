@@ -39,7 +39,7 @@ Diagnostics retrieval disimpan di console log, JSON report, dan Excel report.
 
 Jika Gemini API gagal total untuk sebuah skenario, aplikasi tidak akan memakai ground truth sebagai pengganti prediksi LLM. Skenario tersebut diberi status `API_FAILED`, `ExcludedFromMetrics = true`, dan tidak dimasukkan ke confusion matrix TP, TN, FP, atau FN.
 
-Jika Python tidak tersedia sama sekali atau bootstrap dependency gagal, skenario CodeBERT diberi status `CODEBERT_FAILED`, `ExcludedFromMetrics = true`, dan tidak dimasukkan ke confusion matrix. Aplikasi membuat virtual environment lokal `.codebert-venv` dan menginstal dependency CodeBERT secara otomatis pada run pertama. Script bawaan tidak membuat prediksi sintetis. Jika `CODEBERT_MODEL_PATH` tidak diisi, script memakai baseline real lokal `LOCAL_CODEBERT_EMBEDDING_LOGREG` berbasis encoder CodeBERT dan classifier Logistic Regression yang dilatih dari split dataset lokal.
+Jika Python tidak tersedia sama sekali atau bootstrap dependency gagal, skenario CodeBERT diberi status `CODEBERT_FAILED`, `ExcludedFromMetrics = true`, dan tidak dimasukkan ke confusion matrix. Aplikasi membuat virtual environment lokal `.codebert-venv` dan menginstal dependency CodeBERT secara otomatis pada run pertama. Script bawaan tidak membuat prediksi sintetis. Jika `CODEBERT_MODEL_PATH` tidak diisi, script memakai baseline real lokal `LOCAL_CODEBERT_EMBEDDING_LOGREG` berbasis encoder CodeBERT dan classifier Logistic Regression dengan leave-one-package-out training untuk mengurangi package-level leakage.
 
 Dengan kebijakan ini, metrik hanya dihitung dari prediksi model yang benar-benar berhasil dikembalikan oleh jalur inferensi masing-masing.
 
@@ -104,7 +104,7 @@ Masukkan folder root yang berisi project `.NET`, misalnya:
 D:\path\to\solution-or-project-folder
 ```
 
-Aplikasi akan mencari semua file `.csproj` di folder tersebut secara rekursif, lalu menjalankan RAG-LLM, Zero-Shot, dan CodeBERT Python bridge secara paralel dengan checkpoint otomatis. Pada run pertama, aplikasi membuat `.codebert-venv` dan menginstal dependency CodeBERT otomatis. Jika `CODEBERT_MODEL_PATH` tidak diisi, CodeBERT memakai baseline embedding lokal otomatis; jika Python atau bootstrap dependency gagal, jalur CodeBERT gagal dengan aman dan tidak dihitung sebagai metrik model.
+Aplikasi akan mencari semua file `.csproj` di folder tersebut secara rekursif, lalu menjalankan RAG-LLM, Zero-Shot, dan CodeBERT Python bridge secara paralel dengan checkpoint otomatis. Pada run pertama, aplikasi membuat `.codebert-venv` dan menginstal dependency CodeBERT otomatis. Jika `CODEBERT_MODEL_PATH` tidak diisi, CodeBERT memakai baseline embedding lokal otomatis dengan leave-one-package-out; jika Python atau bootstrap dependency gagal, jalur CodeBERT gagal dengan aman dan tidak dihitung sebagai metrik model.
 
 ## Komponen Utama
 

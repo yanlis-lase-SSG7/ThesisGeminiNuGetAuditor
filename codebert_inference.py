@@ -189,36 +189,55 @@ def predict_with_embedding_classifier(payload: dict, encoder_model: str, batch_s
 
     train_texts = [build_inference_text(record) for record in train_records]
     train_labels = np.array([int(bool(record.get("Label", False))) for record in train_records])
+    train_package_names = np.array([
+        str(record.get("PackageName", "")).lower()
+        for record in train_records
+    ])
     predict_texts = [build_inference_text(record) for record in prediction_records]
 
     print(
-        f"Training local LogisticRegression classifier from {len(train_records)} labeled CodeBERT embedding record(s).",
+        f"Encoding {len(train_records)} labeled CodeBERT record(s) for leave-one-package-out local classification.",
         flush=True,
     )
     x_train = encode_texts(train_texts, tokenizer, model, torch, np, batch_size, max_length)
-    classifier = make_pipeline(
-        StandardScaler(),
-        LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42),
-    )
-    classifier.fit(x_train, train_labels)
 
     print(f"Running CodeBERT embedding inference for {len(prediction_records)} original package record(s).", flush=True)
     x_predict = encode_texts(predict_texts, tokenizer, model, torch, np, batch_size, max_length)
-    probabilities = classifier.predict_proba(x_predict)
-    positive_index = list(classifier.classes_).index(1)
 
     predictions = []
     for index, record in enumerate(prediction_records, start=1):
         package_name = record.get("PackageName", "")
         current_version = record.get("CurrentVersion", "")
-        score = float(probabilities[index - 1][positive_index])
-        is_vulnerable = score >= 0.5
+        current_package = str(package_name).lower()
+        train_mask = train_package_names != current_package
+        scoped_labels = train_labels[train_mask]
+
+        if set(scoped_labels.tolist()) == {0, 1}:
+            classifier = make_pipeline(
+                StandardScaler(),
+                LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42),
+            )
+            classifier.fit(x_train[train_mask], scoped_labels)
+            probabilities = classifier.predict_proba(x_predict[index - 1:index])
+            positive_index = list(classifier.classes_).index(1)
+            score = float(probabilities[0][positive_index])
+            is_vulnerable = score >= 0.5
+            evidence = "leave-one-package-out-embedding-logreg"
+        elif len(scoped_labels) > 0 and int(scoped_labels[0]) == 1:
+            score = 1.0
+            is_vulnerable = True
+            evidence = "single-class-after-package-exclusion-vulnerable"
+        else:
+            score = 1.0
+            is_vulnerable = False
+            evidence = "single-class-after-package-exclusion-non-vulnerable"
+
         print(
             f"[{index}/{len(prediction_records)}] CodeBERT embedding classifier {package_name}@{current_version} "
             f"=> vulnerable={str(is_vulnerable).lower()} confidence={score:.4f}",
             flush=True,
         )
-        predictions.append(build_prediction(record, is_vulnerable, score, "embedding-logreg"))
+        predictions.append(build_prediction(record, is_vulnerable, score, evidence))
 
     return predictions
 

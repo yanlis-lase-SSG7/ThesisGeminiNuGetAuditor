@@ -70,7 +70,7 @@ Pada skenario ini, `IsGroundedInReference` harus bernilai `false` karena tidak a
 
 ### 4.3. Skenario CodeBERT (Deep Learning Baseline)
 
-Skenario CodeBERT digunakan sebagai Python inference bridge untuk memvalidasi pipeline ekspor dataset, eksekusi lokal, pembacaan prediksi, dan perhitungan metrik terpadu. Implementasi saat ini bersifat real-only: `codebert_inference.py` tidak menghasilkan prediksi sintetis. Jika tersedia model sequence-classification fine-tuned lokal melalui `CODEBERT_MODEL_PATH` atau argumen `--model`, sistem memakai model tersebut. Jika tidak, sistem menjalankan baseline lokal `LOCAL_CODEBERT_EMBEDDING_LOGREG`, yaitu encoder CodeBERT untuk ekstraksi embedding dan Logistic Regression yang dilatih dari split dataset lokal.
+Skenario CodeBERT digunakan sebagai Python inference bridge untuk memvalidasi pipeline ekspor dataset, eksekusi lokal, pembacaan prediksi, dan perhitungan metrik terpadu. Implementasi saat ini bersifat real-only: `codebert_inference.py` tidak menghasilkan prediksi sintetis. Jika tersedia model sequence-classification fine-tuned lokal melalui `CODEBERT_MODEL_PATH` atau argumen `--model`, sistem memakai model tersebut. Jika tidak, sistem menjalankan baseline lokal `LOCAL_CODEBERT_EMBEDDING_LOGREG`, yaitu encoder CodeBERT untuk ekstraksi embedding dan Logistic Regression dengan mekanisme leave-one-package-out agar classifier tidak dilatih dari package yang sedang diprediksi.
 
 Dataset memuat:
 
