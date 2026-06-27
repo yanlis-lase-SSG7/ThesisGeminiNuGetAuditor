@@ -29,11 +29,7 @@ Project ini dibuat untuk:
 
 ## Retrieval Ground Truth
 
-`SecurityReferenceProvider.cs` menggunakan urutan sumber berikut:
-
-1. GitHub GraphQL API sebagai sumber real-time.
-2. Local advisory database `github-advisory-db.json`.
-3. Fallback advisory dari `appsettings.json`.
+`SecurityReferenceProvider.cs` secara eksklusif menggunakan **GitHub GraphQL API sebagai sumber tunggal secara real-time** untuk mengambil advisory kerentanan NuGet. Sistem tidak menggunakan local advisory database, fallback `appsettings.json`, dummy data, atau sumber statis lain sebagai pengganti ground truth.
 
 Diagnostics retrieval disimpan di console log, JSON report, dan Excel report.
 
@@ -108,7 +104,7 @@ Aplikasi akan mencari semua file `.csproj` di folder tersebut secara rekursif, l
 
 - `Program.cs`: orkestrasi interactive directory scan, parallel processing, checkpointing, Gemini inference, evaluasi, dan penyimpanan report.
 - `CsprojPackageExtractor.cs`: parsing `.csproj` dan ekstraksi `PackageReference`.
-- `SecurityReferenceProvider.cs`: retrieval GitHub GraphQL API, local advisory database, dan fallback `appsettings.json`.
+- `SecurityReferenceProvider.cs`: retrieval GitHub GraphQL API sebagai satu-satunya sumber ground truth real-time.
 - `GroundTruthProvider.cs`: pembentukan label ground truth dari advisory context.
 - `CodeBertDatasetExporter.cs`: augmentasi dan ekspor dataset CodeBERT.
 - `ModelEvaluator.cs`: perhitungan confusion matrix dan metrik evaluasi.

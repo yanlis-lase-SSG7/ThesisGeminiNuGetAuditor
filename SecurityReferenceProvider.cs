@@ -71,62 +71,45 @@ public static class SecurityReferenceProvider
         }
 
         var settings = GetSecurityReferenceSettings();
-        var diagnostics = new List<string>();
+        var diagnostics = new List<string>
+        {
+            "Strict real-time retrieval enabled. GitHub GraphQL API is the sole source of truth for vulnerability advisories."
+        };
 
-        diagnostics.Add("Priority 1: attempting GitHub GraphQL API real-time retrieval.");
         var githubResult = await TryGetSecurityContextFromGitHubApiAsync(packageSet, settings, cancellationToken);
         diagnostics.AddRange(githubResult.Diagnostics);
 
-        if (githubResult.AccessSucceeded)
+        if (!githubResult.AccessSucceeded)
+        {
+            var message = $"GitHub GraphQL API retrieval failed. Returning empty live context. Reason: {githubResult.ErrorMessage}";
+            diagnostics.Add(message);
+            Console.WriteLine($"[Retrieval] {message}");
+
+            return new SecurityContextResult
+            {
+                Context = "[]",
+                Source = "GitHubGraphQLApiFailed",
+                Diagnostics = diagnostics
+            };
+        }
+
+        if (githubResult.MatchedCount == 0)
+        {
+            const string message = "GitHub GraphQL API returned no advisory entries for the requested NuGet packages. Returning empty live context.";
+            diagnostics.Add(message);
+            Console.WriteLine($"[Retrieval] {message}");
+        }
+        else
         {
             var message = $"Security reference source selected: GitHubGraphQLApi. Matched advisory entries: {githubResult.MatchedCount}.";
             diagnostics.Add(message);
             Console.WriteLine($"[Retrieval] {message}");
-
-            return new SecurityContextResult
-            {
-                Context = githubResult.Context,
-                Source = "GitHubGraphQLApi",
-                Diagnostics = diagnostics
-            };
         }
-
-        diagnostics.Add($"GitHub GraphQL API unavailable. Reason: {githubResult.ErrorMessage}");
-        diagnostics.Add("Fallback 1: attempting local OSV/GitHub advisory JSON database.");
-
-        var localFileResult = TryGetSecurityContextFromLocalFile(packageSet, settings.AdvisoryDbFileName);
-        diagnostics.AddRange(localFileResult.Diagnostics);
-
-        if (localFileResult.IsLoaded)
-        {
-            var message = $"Security reference source selected: LocalOsvDatabase. File: {localFileResult.FilePath}. Matched advisory entries: {localFileResult.MatchedCount}.";
-            diagnostics.Add(message);
-            Console.WriteLine($"[Retrieval] {message}");
-
-            return new SecurityContextResult
-            {
-                Context = localFileResult.Context,
-                Source = "LocalOsvDatabase",
-                Diagnostics = diagnostics
-            };
-        }
-
-        diagnostics.Add($"Local OSV/GitHub advisory database unavailable. Reason: {localFileResult.ErrorMessage}");
-        diagnostics.Add("Fallback 2: attempting sample advisories from appsettings.");
-
-        var fallbackResult = TryGetFallbackSecurityContext(packageSet, settings);
-        diagnostics.AddRange(fallbackResult.Diagnostics);
-
-        var fallbackMessage = fallbackResult.IsLoaded
-            ? $"Security reference source selected: AppsettingsFallback. Matched advisory entries: {fallbackResult.MatchedCount}."
-            : $"Security reference source selected: EmptyFallback. Appsettings fallback unavailable. Reason: {fallbackResult.ErrorMessage}";
-        diagnostics.Add(fallbackMessage);
-        Console.WriteLine($"[Retrieval] {fallbackMessage}");
 
         return new SecurityContextResult
         {
-            Context = fallbackResult.Context,
-            Source = fallbackResult.IsLoaded ? "AppsettingsFallback" : "EmptyFallback",
+            Context = githubResult.Context,
+            Source = "GitHubGraphQLApi",
             Diagnostics = diagnostics
         };
     }
@@ -426,157 +409,6 @@ public static class SecurityReferenceProvider
                (int)result.StatusCode.Value >= 500;
     }
 
-    private static LocalSecurityContextResult TryGetSecurityContextFromLocalFile(
-        HashSet<string> packageSet,
-        string advisoryDbFileName)
-    {
-        var diagnostics = new List<string>();
-        var advisoryDbPath = ResolveLocalAdvisoryPath(advisoryDbFileName);
-
-        if (string.IsNullOrWhiteSpace(advisoryDbPath) || !File.Exists(advisoryDbPath))
-        {
-            return new LocalSecurityContextResult
-            {
-                IsLoaded = false,
-                Context = "[]",
-                FilePath = advisoryDbPath,
-                MatchedCount = 0,
-                ErrorMessage = $"Local advisory file was not found. Configured file name: '{advisoryDbFileName}'.",
-                Diagnostics = diagnostics
-            };
-        }
-
-        try
-        {
-            using var stream = File.OpenRead(advisoryDbPath);
-            using var document = JsonDocument.Parse(stream, InputJsonOptions);
-            var matched = new List<JsonElement>();
-
-            foreach (var advisory in GetAdvisoryArray(document.RootElement))
-            {
-                var packageName = TryGetPackageName(advisory);
-
-                if (!string.IsNullOrWhiteSpace(packageName) && packageSet.Contains(packageName))
-                {
-                    matched.Add(advisory.Clone());
-                }
-            }
-
-            diagnostics.Add($"Local advisory file parsed successfully: {advisoryDbPath}.");
-
-            return new LocalSecurityContextResult
-            {
-                IsLoaded = true,
-                Context = JsonSerializer.Serialize(matched, SerializerOptions),
-                FilePath = advisoryDbPath,
-                MatchedCount = matched.Count,
-                ErrorMessage = string.Empty,
-                Diagnostics = diagnostics
-            };
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            return new LocalSecurityContextResult
-            {
-                IsLoaded = false,
-                Context = "[]",
-                FilePath = advisoryDbPath,
-                MatchedCount = 0,
-                ErrorMessage = $"Local advisory file is missing, unreadable, or corrupted. {ex.Message}",
-                Diagnostics = diagnostics
-            };
-        }
-    }
-
-    private static FallbackSecurityContextResult TryGetFallbackSecurityContext(
-        HashSet<string> packageSet,
-        SecurityReferenceSettings settings)
-    {
-        var diagnostics = new List<string>();
-
-        if (string.IsNullOrWhiteSpace(settings.FallbackAdvisoriesJson))
-        {
-            return new FallbackSecurityContextResult
-            {
-                IsLoaded = false,
-                Context = "[]",
-                MatchedCount = 0,
-                ErrorMessage = "SecurityReference:FallbackAdvisories is empty.",
-                Diagnostics = diagnostics
-            };
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(settings.FallbackAdvisoriesJson, InputJsonOptions);
-
-            if (document.RootElement.ValueKind != JsonValueKind.Array)
-            {
-                return new FallbackSecurityContextResult
-                {
-                    IsLoaded = false,
-                    Context = "[]",
-                    MatchedCount = 0,
-                    ErrorMessage = "SecurityReference:FallbackAdvisories must be a JSON array.",
-                    Diagnostics = diagnostics
-                };
-            }
-
-            var matched = new List<JsonElement>();
-
-            foreach (var advisory in document.RootElement.EnumerateArray())
-            {
-                var packageName = TryGetPackageName(advisory);
-
-                if (!string.IsNullOrWhiteSpace(packageName) && packageSet.Contains(packageName))
-                {
-                    matched.Add(advisory.Clone());
-                }
-            }
-
-            return new FallbackSecurityContextResult
-            {
-                IsLoaded = true,
-                Context = JsonSerializer.Serialize(matched, SerializerOptions),
-                MatchedCount = matched.Count,
-                ErrorMessage = string.Empty,
-                Diagnostics = diagnostics
-            };
-        }
-        catch (JsonException ex)
-        {
-            return new FallbackSecurityContextResult
-            {
-                IsLoaded = false,
-                Context = "[]",
-                MatchedCount = 0,
-                ErrorMessage = $"SecurityReference:FallbackAdvisories JSON is corrupted. {ex.Message}",
-                Diagnostics = diagnostics
-            };
-        }
-    }
-
-    private static string ResolveLocalAdvisoryPath(string advisoryDbFileName)
-    {
-        if (string.IsNullOrWhiteSpace(advisoryDbFileName))
-        {
-            return string.Empty;
-        }
-
-        if (Path.IsPathRooted(advisoryDbFileName))
-        {
-            return advisoryDbFileName;
-        }
-
-        var currentDirectoryPath = Path.Combine(Directory.GetCurrentDirectory(), advisoryDbFileName);
-        if (File.Exists(currentDirectoryPath))
-        {
-            return currentDirectoryPath;
-        }
-
-        return Path.Combine(AppContext.BaseDirectory, advisoryDbFileName);
-    }
-
     private static string ResolveGitHubToken(SecurityReferenceSettings settings)
     {
         var environmentToken = Environment.GetEnvironmentVariable(GitHubTokenEnvironmentVariableName);
@@ -609,13 +441,11 @@ public static class SecurityReferenceProvider
                 continue;
             }
 
-            settings.AdvisoryDbFileName = ReadString(section, "AdvisoryDbFileName", settings.AdvisoryDbFileName);
             settings.GitHubGraphQlUrl = ReadString(section, "GitHubGraphQlUrl", settings.GitHubGraphQlUrl);
             settings.GitHubGraphQlNuGetQuery = ReadString(section, "GitHubGraphQlNuGetQuery", settings.GitHubGraphQlNuGetQuery);
             settings.GitHubToken = ReadString(section, "GitHubToken", settings.GitHubToken);
             settings.GitHubUserAgentProductName = ReadString(section, "GitHubUserAgentProductName", settings.GitHubUserAgentProductName);
             settings.GitHubUserAgentProductVersion = ReadString(section, "GitHubUserAgentProductVersion", settings.GitHubUserAgentProductVersion);
-            settings.FallbackAdvisoriesJson = ReadArrayRawJson(section, "FallbackAdvisories", settings.FallbackAdvisoriesJson);
         }
 
         ValidateSecurityReferenceSettings(settings);
@@ -624,11 +454,6 @@ public static class SecurityReferenceProvider
 
     private static void ValidateSecurityReferenceSettings(SecurityReferenceSettings settings)
     {
-        if (string.IsNullOrWhiteSpace(settings.AdvisoryDbFileName))
-        {
-            throw new InvalidOperationException("Konfigurasi 'SecurityReference:AdvisoryDbFileName' wajib diisi.");
-        }
-
         if (string.IsNullOrWhiteSpace(settings.GitHubGraphQlUrl))
         {
             throw new InvalidOperationException("Konfigurasi 'SecurityReference:GitHubGraphQlUrl' wajib diisi.");
@@ -644,10 +469,6 @@ public static class SecurityReferenceProvider
         {
             throw new InvalidOperationException("Konfigurasi 'SecurityReference:GitHubUserAgentProductName' dan 'SecurityReference:GitHubUserAgentProductVersion' wajib diisi.");
         }
-
-        settings.FallbackAdvisoriesJson = string.IsNullOrWhiteSpace(settings.FallbackAdvisoriesJson)
-            ? "[]"
-            : settings.FallbackAdvisoriesJson;
     }
 
     private static IEnumerable<string> GetAppSettingsPaths()
@@ -661,73 +482,6 @@ public static class SecurityReferenceProvider
         {
             yield return currentPath;
         }
-    }
-
-    private static IEnumerable<JsonElement> GetAdvisoryArray(JsonElement root)
-    {
-        if (root.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var item in root.EnumerateArray())
-            {
-                yield return item;
-            }
-
-            yield break;
-        }
-
-        if (root.ValueKind != JsonValueKind.Object)
-        {
-            yield break;
-        }
-
-        if (root.TryGetProperty("advisories", out var advisories) && advisories.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var item in advisories.EnumerateArray())
-            {
-                yield return item;
-            }
-
-            yield break;
-        }
-
-        if (root.TryGetProperty("vulnerabilities", out var vulnerabilities) && vulnerabilities.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var item in vulnerabilities.EnumerateArray())
-            {
-                yield return item;
-            }
-        }
-    }
-
-    private static string TryGetPackageName(JsonElement advisory)
-    {
-        if (advisory.ValueKind != JsonValueKind.Object)
-        {
-            return string.Empty;
-        }
-
-        var directName = ReadString(advisory, "PackageName", "packageName", "name");
-        if (!string.IsNullOrWhiteSpace(directName))
-        {
-            return directName;
-        }
-
-        if (!advisory.TryGetProperty("package", out var package))
-        {
-            return string.Empty;
-        }
-
-        if (package.ValueKind == JsonValueKind.String)
-        {
-            return package.GetString() ?? string.Empty;
-        }
-
-        if (package.ValueKind == JsonValueKind.Object)
-        {
-            return ReadString(package, "name", "Name");
-        }
-
-        return string.Empty;
     }
 
     private static string ReadFirstPatchedVersion(JsonElement node)
@@ -791,16 +545,6 @@ public static class SecurityReferenceProvider
         return string.IsNullOrWhiteSpace(value) ? currentValue : value;
     }
 
-    private static string ReadArrayRawJson(JsonElement section, string propertyName, string currentValue)
-    {
-        if (!section.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.Array)
-        {
-            return currentValue;
-        }
-
-        return property.GetRawText();
-    }
-
     private static string TruncateForDiagnostics(string value, int maxLength = 500)
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length <= maxLength)
@@ -835,34 +579,13 @@ public static class SecurityReferenceProvider
         public string ErrorMessage { get; set; } = string.Empty;
     }
 
-    private sealed class LocalSecurityContextResult
-    {
-        public bool IsLoaded { get; set; }
-        public string Context { get; set; } = "[]";
-        public string FilePath { get; set; } = string.Empty;
-        public int MatchedCount { get; set; }
-        public string ErrorMessage { get; set; } = string.Empty;
-        public List<string> Diagnostics { get; set; } = new();
-    }
-
-    private sealed class FallbackSecurityContextResult
-    {
-        public bool IsLoaded { get; set; }
-        public string Context { get; set; } = "[]";
-        public int MatchedCount { get; set; }
-        public string ErrorMessage { get; set; } = string.Empty;
-        public List<string> Diagnostics { get; set; } = new();
-    }
-
     private sealed class SecurityReferenceSettings
     {
-        public string AdvisoryDbFileName { get; set; } = "github-advisory-db.json";
         public string GitHubGraphQlUrl { get; set; } = "https://api.github.com/graphql";
         public string GitHubGraphQlNuGetQuery { get; set; } = "query($package:String!){ securityVulnerabilities(first:20, ecosystem:NUGET, package:$package){ nodes{ package{ name } vulnerableVersionRange firstPatchedVersion{ identifier } severity advisory{ ghsaId summary permalink identifiers{ type value } } } } }";
         public string GitHubToken { get; set; } = string.Empty;
         public string GitHubUserAgentProductName { get; set; } = "GeminiNuGetAuditor";
         public string GitHubUserAgentProductVersion { get; set; } = "1.0";
-        public string FallbackAdvisoriesJson { get; set; } = "[]";
     }
 
     private sealed class SecurityAdvisoryRecord

@@ -1,24 +1,9 @@
 {
-  "Gemini": {
-    "ApiKey": "sample",
-    "Model": "gemini-2.5-pro"
-
-    // Optional overrides:
-    // "GenerateContentEndpointTemplate": "https://generativelanguage.googleapis.com/v1/models/{0}:generateContent",
-    // "RequestTimeoutSeconds": 300,
-    // "MaxPackagesPerRequest": 15,
-    // "MaxRetryCount": 5,
-    // "RetryDelayMilliseconds": 5000
-  },
-  "SecurityReference": {
-    "GitHubToken": "sample"
-
-    // Optional overrides:
-    // "AdvisoryDbFileName": "github-advisory-db.json",
-    // "GitHubGraphQlUrl": "https://api.github.com/graphql",
-    // "GitHubGraphQlNuGetQuery": "query($package:String!){ securityVulnerabilities(first:20, ecosystem:NUGET, package:$package){ nodes{ package{ name } vulnerableVersionRange firstPatchedVersion{ identifier } severity advisory{ ghsaId summary permalink identifiers{ type value } } } } }",
-    // "GitHubUserAgentProductName": "GeminiNuGetAuditor",
-    // "GitHubUserAgentProductVersion": "1.0",
-    // "FallbackAdvisories": []
-  }
+    "Gemini": {
+        "ApiKey": "sample",
+        "Model": "gemini-2.5-pro"
+    },
+    "SecurityReference": {
+        "GitHubToken": "sample"
+    }
 }
