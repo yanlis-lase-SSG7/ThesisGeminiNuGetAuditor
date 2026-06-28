@@ -11,6 +11,7 @@ Ringkasan ini dibuat otomatis oleh aplikasi sebagai bahan awal Bab 4. File ini b
 - LlmInferenceMode: `VERTEX_AI_GEMINI`
 - GroundTruthProvider: `GitHub GraphQL API live`
 - CodeBertProvider: `Local CodeBERT Python bridge`
+- InteractiveHtmlGitHubPages: `https://yanlis-lase-ssg7.github.io/ThesisGeminiNuGetAuditor/audit-results/20260628%2011-42-56/audit-interactive-report.html`
 - ProjectCount: `1000`
 - PackageCount: `3698`
 - CodeBertRecordCount: `11094`
@@ -30,10 +31,19 @@ Ringkasan ini dibuat otomatis oleh aplikasi sebagai bahan awal Bab 4. File ini b
 ## Comparative Notes
 
 - Best F1-Score: `RAG-LLM` dengan F1 `99.6593 %`.
-- Delta F1 RAG-LLM vs Zero-Shot: `+0.5782`.
-- Delta F1 RAG-LLM vs CodeBERT: `+0.8765`.
-- Delta Recall RAG-LLM vs Zero-Shot: `+0.3607`.
-- Delta Precision RAG-LLM vs Zero-Shot: `+0.6823`.
+- Delta F1 RAG-LLM vs Zero-Shot: `+57.8248 percentage points`.
+- Delta F1 RAG-LLM vs CodeBERT: `+87.6479 percentage points`.
+- Delta Recall RAG-LLM vs Zero-Shot: `+36.0684 percentage points`.
+- Delta Precision RAG-LLM vs Zero-Shot: `+68.2320 percentage points`.
+
+## Diagnostic Notes
+
+- Vertex AI Gemini call attempts: `2010`.
+- Vertex AI Gemini successful attempts: `2000`.
+- Vertex AI Gemini transient failed attempts recovered by retry: `10`.
+- Final API failed scenario results: `0`.
+- Final CodeBERT failed scenario results: `0`.
+- Final retrieval failed projects: `0`.
 
 ## Interpretation Guardrails
 
@@ -50,5 +60,6 @@ Ringkasan ini dibuat otomatis oleh aplikasi sebagai bahan awal Bab 4. File ini b
 - Comprehensive CSV: `audit-comprehensive-metrics.csv`
 - Comprehensive Excel: `audit-comprehensive-report.xlsx`
 - Interactive HTML: `audit-interactive-report.html`
+- Interactive HTML GitHub Pages: `https://yanlis-lase-ssg7.github.io/ThesisGeminiNuGetAuditor/audit-results/20260628%2011-42-56/audit-interactive-report.html`
 - Vertex AI Gemini Diagnostics JSON: `api-diagnostics.json`
 - Console Execution Log JSON: `console-execution-log.json`
