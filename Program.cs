@@ -23,6 +23,9 @@ public class Program
     private const string CodeBertDependencyMarkerFileName = ".dependencies-ready";
     private const string CheckpointSchemaVersion = "2026-06-27-codebert-auto-bootstrap-v5";
     private const string VertexAiGeminiInferenceMode = "VERTEX_AI_GEMINI";
+    private const string LlmProviderName = "Vertex AI Gemini";
+    private const string GroundTruthProviderName = "GitHub GraphQL API live";
+    private const string CodeBertProviderName = "Local CodeBERT Python bridge";
     private const int ProjectMaxDegreeOfParallelism = 4;
     private const int GeminiGlobalConcurrencyLimit = 4;
 
@@ -71,7 +74,7 @@ public class Program
 
             WriteLine($"Audit root folder: {rootFolder}");
             WriteLine($"Found {csprojFiles.Count} .csproj file(s).");
-            WriteLine($"Using Gemini model: {modelName}");
+            WriteLine($"Using Vertex AI Gemini model: {modelName}");
             WriteLine($"Run output directory: {outputDirectory}");
             var runTimestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmssfff");
             var artifactSet = CreateArtifactSet(outputDirectory, runTimestamp);
@@ -203,7 +206,8 @@ public class Program
             WriteLine($"Comprehensive CSV report: {artifactSet.CsvReportPath}");
             WriteLine($"Comprehensive Excel report: {artifactSet.ExcelReportPath}");
             WriteLine($"Interactive HTML report: {artifactSet.HtmlReportPath}");
-            WriteLine($"Gemini API diagnostics JSON: {artifactSet.ApiDiagnosticsJsonPath}");
+            WriteLine($"Chapter 4 summary markdown: {artifactSet.Chapter4SummaryPath}");
+            WriteLine($"Vertex AI Gemini diagnostics JSON: {artifactSet.ApiDiagnosticsJsonPath}");
             WriteLine($"Console execution log JSON: {artifactSet.ConsoleLogJsonPath}");
             SaveConsoleLogJson(artifactSet.ConsoleLogJsonPath);
 
@@ -1020,7 +1024,7 @@ public class Program
             }
         }
 
-        throw new GeminiApiFailedException($"Gemini API failed after {maxAttempts} attempt(s). No prediction was produced.");
+        throw new GeminiApiFailedException($"Vertex AI Gemini call failed after {maxAttempts} attempt(s). No prediction was produced.");
     }
 
     private static async Task<GeminiResponse?> AnalyzeWithGemini(
@@ -1661,6 +1665,7 @@ Security reference data:
             CsvReportPath = Path.Combine(outputDirectory, $"audit-comprehensive-metrics-{timestamp}.csv"),
             ExcelReportPath = Path.Combine(outputDirectory, $"audit-comprehensive-report-{timestamp}.xlsx"),
             HtmlReportPath = Path.Combine(outputDirectory, $"audit-interactive-report-{timestamp}.html"),
+            Chapter4SummaryPath = Path.Combine(outputDirectory, $"chapter-4-summary-{timestamp}.md"),
             ApiDiagnosticsJsonPath = Path.Combine(outputDirectory, $"api-diagnostics-{timestamp}.json"),
             ConsoleLogJsonPath = Path.Combine(outputDirectory, $"console-execution-log-{timestamp}.json")
         };
@@ -1778,6 +1783,7 @@ Security reference data:
         SaveComprehensiveCsvReport(artifactSet.CsvReportPath, results);
         SaveComprehensiveExcelReport(artifactSet.ExcelReportPath, rootFolder, modelName, results);
         SaveInteractiveHtmlReport(artifactSet.HtmlReportPath, rootFolder, modelName, results, artifactSet);
+        SaveChapter4SummaryMarkdown(artifactSet.Chapter4SummaryPath, rootFolder, modelName, results, artifactSet);
     }
 
     private static IReadOnlyList<ProjectAuditResult> LoadCheckpointResults(
@@ -1933,6 +1939,9 @@ Security reference data:
             GeneratedAtUtc = DateTimeOffset.UtcNow,
             RootFolder = rootFolder,
             ModelName = modelName,
+            LlmProvider = LlmProviderName,
+            InferenceMode = VertexAiGeminiInferenceMode,
+            GroundTruthProvider = GroundTruthProviderName,
             Scenario = scenario,
             ProjectCount = results.Count,
             SucceededProjectCount = projectReports.Count(x => x.ScenarioResult?.Success == true),
@@ -1983,6 +1992,8 @@ Security reference data:
             GeneratedAtUtc = DateTimeOffset.UtcNow,
             RootFolder = rootFolder,
             ModelName = modelName,
+            LlmProvider = LlmProviderName,
+            InferenceMode = VertexAiGeminiInferenceMode,
             TotalCalls = diagnostics.Count,
             SuccessfulCalls = diagnostics.Count(x => x.Success),
             FailedCalls = diagnostics.Count(x => !x.Success),
@@ -2088,6 +2099,8 @@ Security reference data:
             GeneratedAtUtc = DateTimeOffset.UtcNow,
             RootFolder = rootFolder,
             ModelName = modelName,
+            CodeBertProvider = CodeBertProviderName,
+            GroundTruthProvider = GroundTruthProviderName,
             ProjectCount = results.Count,
             TotalRecords = projectReports.Sum(x => x.TotalRecords),
             TrainingCount = projectReports.Sum(x => x.TrainingCount),
@@ -2244,7 +2257,13 @@ Security reference data:
             ("GeneratedAtUtc", DateTimeOffset.UtcNow.ToString("O")),
             ("RootFolder", rootFolder),
             ("GeminiModel", modelName),
+            ("LlmProvider", LlmProviderName),
+            ("LlmInferenceMode", VertexAiGeminiInferenceMode),
+            ("GroundTruthProvider", GroundTruthProviderName),
+            ("CodeBertProvider", CodeBertProviderName),
+            ("CodeBertInferenceMode", "LOCAL_CODEBERT_EMBEDDING_LOGREG or local fine-tuned classifier via optional CODEBERT_MODEL_PATH"),
             ("ExecutionMode", "Parallel checkpointed interactive directory scan"),
+            ("ResumeMode", "Latest compatible checkpoint folder is reused automatically when schema, model, and project paths match."),
             ("MaxDegreeOfParallelism", ProjectMaxDegreeOfParallelism.ToString()),
             ("GlobalGeminiRequestConcurrency", GeminiGlobalConcurrencyLimit.ToString()),
             ("ProjectCount", results.Count.ToString()),
@@ -2256,8 +2275,8 @@ Security reference data:
             ("ZeroShotProjectResults", results.Count(x => x.Scenarios.Any(s => s.Scenario == AuditScenario.ZeroShot && s.Success)).ToString()),
             ("CodeBertProjectResults", results.Count(x => x.Scenarios.Any(s => s.Scenario == AuditScenario.CodeBert && s.Success)).ToString()),
             ("ApiFailedScenarioResults", results.SelectMany(x => x.Scenarios).Count(s => s.Status == "API_FAILED").ToString()),
-            ("MetricExclusionPolicy", "Scenario with API_FAILED, RETRIEVAL_FAILED, or missing prediction is excluded from confusion matrix; no Ground Truth fallback is used."),
-            ("GroundTruthPolicy", "A package is labeled vulnerable only when its current version satisfies the advisory vulnerable version range."),
+            ("MetricExclusionPolicy", "Scenario with API_FAILED, RETRIEVAL_FAILED, or missing prediction is excluded from confusion matrix; no ground-truth-as-prediction fallback is used."),
+            ("GroundTruthPolicy", "A package is labeled vulnerable only when its current version satisfies the advisory vulnerable version range from live GitHub GraphQL retrieval."),
             ("CodeBertRecords", results.Sum(x => x.CodeBertRecords.Count).ToString()),
             ("CodeBertEvaluationPolicy", "CodeBERT prediction metrics require local Python inference. The app creates .codebert-venv and installs requirements automatically. CODEBERT_MODEL_PATH is optional for a fine-tuned classifier; otherwise the script uses LOCAL_CODEBERT_EMBEDDING_LOGREG with leave-one-package-out training to reduce package-level leakage."),
             ("MetricRows", metrics.Count.ToString())
@@ -2371,9 +2390,9 @@ Security reference data:
 
         var rows = new List<(string Section, string HowToRead)>
         {
-            ("Purpose", "Workbook ini merangkum audit dependency NuGet dari file .csproj. Tiga jalur yang dihasilkan adalah RAG-LLM, Zero-Shot, dan CodeBERT dataset export."),
-            ("RAG-LLM", "LLM menerima package list plus security reference hasil retrieval. Gunakan sheet Scenario Metrics dan Finding Detail untuk membaca prediksi dan evaluasinya."),
-            ("Zero-Shot", "LLM hanya menerima package list tanpa konteks advisory. Bandingkan dengan RAG-LLM untuk melihat efek retrieval."),
+            ("Purpose", "Workbook ini merangkum audit dependency NuGet dari file .csproj. Tiga jalur yang dihasilkan adalah RAG-LLM, Zero-Shot, dan CodeBERT local bridge."),
+            ("RAG-LLM", "Vertex AI Gemini menerima package list plus security reference hasil retrieval. Gunakan sheet Scenario Metrics dan Finding Detail untuk membaca prediksi dan evaluasinya."),
+            ("Zero-Shot", "Vertex AI Gemini hanya menerima package list tanpa konteks advisory. Bandingkan dengan RAG-LLM untuk melihat efek retrieval."),
             ("CodeBERT", $"Dataset CodeBERT diekspor, lalu {CodeBertInferenceScriptPath} menjalankan inferensi lokal. Aplikasi membuat .codebert-venv dan menginstal requirements otomatis. Jika CODEBERT_MODEL_PATH tidak diisi, script memakai baseline embedding CodeBERT otomatis dengan leave-one-package-out."),
             ("Ground Truth Version Range", "Package hanya dianggap vulnerable jika CurrentVersion masuk VulnerableVersionRange. Ini mencegah package patched tetap dihitung sebagai vulnerable hanya karena namanya punya advisory."),
             ("Run Summary", "Ringkasan eksekusi: model, jumlah project, jumlah sukses/gagal, concurrency, dan jumlah record."),
@@ -2387,8 +2406,9 @@ Security reference data:
             ("Retrieval Diagnostics", "Jejak sumber advisory yang dipakai untuk tiap project."),
             ("Field Descriptions", "Kamus field JSON dan Excel agar pembaca memahami arti setiap kolom temuan."),
             ("Metric Definitions", "Rumus Accuracy, Precision, Recall, F1, False Positive Ratio, dan confusion matrix."),
-            ("JSON Reports", "audit-rag-llm*.json dan audit-zero-shot*.json berisi report LLM; audit-codebert*.json berisi dataset, prediksi CodeBERT bridge, metadata inference, dan metrik; api-diagnostics*.json berisi kesehatan API."),
-            ("HTML Report", "audit-interactive-report*.html adalah ringkasan interaktif untuk dibuka di browser dan difilter tanpa membuka Excel.")
+            ("JSON Reports", "audit-rag-llm*.json dan audit-zero-shot*.json berisi report Vertex AI Gemini; audit-codebert*.json berisi dataset, prediksi CodeBERT bridge, metadata inference, dan metrik; api-diagnostics*.json berisi kesehatan panggilan Vertex AI Gemini."),
+            ("HTML Report", "audit-interactive-report*.html adalah ringkasan interaktif untuk dibuka di browser dan difilter tanpa membuka Excel."),
+            ("Chapter 4 Summary", "chapter-4-summary*.md adalah ringkasan otomatis metrik, confusion matrix, delta antarskenario, dan daftar artefak untuk bahan awal Bab 4.")
         };
 
         for (var i = 0; i < rows.Count; i++)
@@ -2936,29 +2956,29 @@ details{background:#f8fbff;border:1px solid var(--line);border-radius:8px;paddin
         builder.AppendLine("<h1>GeminiNuGetAuditor Interactive Audit Report</h1>");
         builder.AppendLine("<p class=\"id-block\" style=\"color:#dbeafe\">Laporan Audit Interaktif GeminiNuGetAuditor</p>");
         builder.AppendLine("</div></div>");
-        builder.AppendLine($"<p>Audit root <span class=\"id\">Folder audit</span>: {Html(rootFolder)} &nbsp; | &nbsp; Model <span class=\"id\">Model</span>: <strong>{Html(modelName)}</strong> &nbsp; | &nbsp; Generated <span class=\"id\">Dibuat</span>: {Html(DateTimeOffset.UtcNow.ToString("O"))}</p>");
+        builder.AppendLine($"<p>Audit root <span class=\"id\">Folder audit</span>: {Html(rootFolder)} &nbsp; | &nbsp; Provider <span class=\"id\">Penyedia</span>: <strong>{Html(LlmProviderName)}</strong> &nbsp; | &nbsp; Model <span class=\"id\">Model</span>: <strong>{Html(modelName)}</strong> &nbsp; | &nbsp; Generated <span class=\"id\">Dibuat</span>: {Html(DateTimeOffset.UtcNow.ToString("O"))}</p>");
         builder.AppendLine("<div class=\"hero-meta\">");
-        builder.AppendLine($"<span>{results.Count} project(s) <span class=\"id\">proyek</span></span><span>{results.Sum(x => x.PackageCount)} package(s) <span class=\"id\">paket</span></span><span>{vulnerableTruthCount} ground-truth vulnerable <span class=\"id\">rentan menurut ground truth</span></span><span>{results.SelectMany(x => x.Scenarios).Count(x => x.Status == "API_FAILED")} API failed scenario(s) <span class=\"id\">skenario API gagal</span></span>");
+        builder.AppendLine($"<span>{results.Count} project(s) <span class=\"id\">proyek</span></span><span>{results.Sum(x => x.PackageCount)} package(s) <span class=\"id\">paket</span></span><span>{Html(GroundTruthProviderName)} <span class=\"id\">ground truth</span></span><span>{Html(CodeBertProviderName)} <span class=\"id\">CodeBERT</span></span><span>{vulnerableTruthCount} ground-truth vulnerable <span class=\"id\">rentan menurut ground truth</span></span><span>{results.SelectMany(x => x.Scenarios).Count(x => x.Status == "API_FAILED")} Vertex failed scenario(s) <span class=\"id\">skenario Vertex gagal</span></span>");
         builder.AppendLine("</div>");
         builder.AppendLine("</header><main>");
 
         builder.AppendLine("<section class=\"grid\">");
         AppendMetricCard(builder, "Projects", "Proyek", results.Count.ToString(CultureInfo.InvariantCulture), $"{results.Count(IsProjectFullySuccessfulForResume)} all-scenario complete", $"{results.Count(IsProjectFullySuccessfulForResume)} semua skenario selesai");
         AppendMetricCard(builder, "Packages", "Paket", results.Sum(x => x.PackageCount).ToString(CultureInfo.InvariantCulture), $"{vulnerableTruthCount} vulnerable by ground truth", $"{vulnerableTruthCount} rentan menurut ground truth");
-        AppendMetricCard(builder, "RAG Findings", "Temuan RAG", ragResults.Sum(x => x.Scenario.Response?.VulnerabilityReports.Count(r => r.IsVulnerable) ?? 0).ToString(CultureInfo.InvariantCulture), "grounded Gemini scenario", "skenario Gemini dengan konteks");
+        AppendMetricCard(builder, "RAG Findings", "Temuan RAG", ragResults.Sum(x => x.Scenario.Response?.VulnerabilityReports.Count(r => r.IsVulnerable) ?? 0).ToString(CultureInfo.InvariantCulture), "grounded Vertex AI Gemini scenario", "skenario Vertex AI Gemini dengan konteks");
         AppendMetricCard(builder, "Zero-Shot Findings", "Temuan Zero-Shot", zeroShotResults.Sum(x => x.Scenario.Response?.VulnerabilityReports.Count(r => r.IsVulnerable) ?? 0).ToString(CultureInfo.InvariantCulture), "no retrieval context", "tanpa konteks retrieval");
         AppendMetricCard(builder, "CodeBERT Findings", "Temuan CodeBERT", codeBertResults.Sum(x => x.Scenario.Response?.VulnerabilityReports.Count(r => r.IsVulnerable) ?? 0).ToString(CultureInfo.InvariantCulture), $"{results.Sum(x => x.CodeBertRecords.Count)} dataset records", $"{results.Sum(x => x.CodeBertRecords.Count)} record dataset");
         AppendMetricCard(builder, "False Positives", "Positif Palsu", falsePositiveCount.ToString(CultureInfo.InvariantCulture), "all evaluated scenarios", "semua skenario");
         AppendMetricCard(builder, "False Negatives", "Negatif Palsu", falseNegativeCount.ToString(CultureInfo.InvariantCulture), "all evaluated scenarios", "semua skenario");
-        AppendMetricCard(builder, "API Failed", "API Gagal", results.SelectMany(x => x.Scenarios).Count(x => x.Status == "API_FAILED").ToString(CultureInfo.InvariantCulture), "Gemini scenario failures", "kegagalan skenario Gemini");
+        AppendMetricCard(builder, "Vertex Failed", "Vertex Gagal", results.SelectMany(x => x.Scenarios).Count(x => x.Status == "API_FAILED").ToString(CultureInfo.InvariantCulture), "Vertex AI Gemini scenario failures", "kegagalan skenario Vertex AI Gemini");
         builder.AppendLine("</section>");
 
         builder.AppendLine("""
 <section class="card">
 <div class="section-title"><h2>How to read<span class="id-block">Cara membaca</span></h2><span class="hint">Two LLM audit scenarios and one CodeBERT bridge scenario.<span class="id-block">Dua skenario audit LLM dan satu skenario bridge CodeBERT.</span></span></div>
 <div class="two">
-<div><strong>RAG-LLM</strong><p>Gemini receives package references plus retrieved security context.<span class="id-block">Gemini menerima daftar package plus konteks keamanan hasil retrieval.</span></p></div>
-<div><strong>Zero-Shot</strong><p>Gemini receives only package references.<span class="id-block">Gemini hanya menerima daftar package tanpa konteks advisory.</span></p></div>
+<div><strong>RAG-LLM</strong><p>Vertex AI Gemini receives package references plus retrieved security context.<span class="id-block">Vertex AI Gemini menerima daftar package plus konteks keamanan hasil retrieval.</span></p></div>
+<div><strong>Zero-Shot</strong><p>Vertex AI Gemini receives only package references.<span class="id-block">Vertex AI Gemini hanya menerima daftar package tanpa konteks advisory.</span></p></div>
 <div><strong>CodeBERT</strong><p>The app exports labeled rows, executes the local CodeBERT Python bridge, and evaluates predictions with the same confusion matrix only when local CodeBERT inference succeeds.<span class="id-block">Aplikasi mengekspor dataset berlabel, menjalankan bridge Python CodeBERT lokal, lalu mengevaluasi prediksi dengan confusion matrix yang sama hanya ketika inferensi CodeBERT lokal berhasil.</span></p></div>
 <div><strong>Ground Truth<span class="id-block">Label Acuan</span></strong><p>Labels come exclusively from live GitHub GraphQL advisory retrieval and version-range evaluation.<span class="id-block">Label berasal secara eksklusif dari retrieval advisory GitHub GraphQL real-time dan evaluasi rentang versi sebagai dasar TP/TN/FP/FN.</span></p></div>
 </div>
@@ -3025,6 +3045,95 @@ function filter(){
         File.WriteAllText(outputFilePath, builder.ToString(), Encoding.UTF8);
     }
 
+    private static void SaveChapter4SummaryMarkdown(
+        string outputFilePath,
+        string rootFolder,
+        string modelName,
+        IReadOnlyCollection<ProjectAuditResult> results,
+        FinalArtifactSet artifactSet)
+    {
+        var rag = AggregateScenarioMetrics(results, AuditScenario.RagLlm);
+        var zeroShot = AggregateScenarioMetrics(results, AuditScenario.ZeroShot);
+        var codeBert = AggregateScenarioMetrics(results, AuditScenario.CodeBert);
+        var scenarios = new[]
+        {
+            (Name: "RAG-LLM", Metrics: rag),
+            (Name: "Zero-Shot", Metrics: zeroShot),
+            (Name: "CodeBERT", Metrics: codeBert)
+        };
+        var totalScenarios = results.SelectMany(x => x.Scenarios).ToList();
+        var apiFailed = totalScenarios.Count(x => x.Status == "API_FAILED");
+        var codeBertFailed = totalScenarios.Count(x => x.Scenario == AuditScenario.CodeBert && !x.Success);
+        var retrievalFailed = results.Count(x => string.Equals(x.SecurityReferenceSource, "GitHubGraphQLApi", StringComparison.OrdinalIgnoreCase) is false);
+        var bestByF1 = scenarios.OrderByDescending(x => x.Metrics.F1Score).First();
+        var builder = new StringBuilder();
+
+        string Percent(double value) => value.ToString("P4", CultureInfo.InvariantCulture);
+        string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
+        string Artifact(string path) => Path.GetFileName(path);
+        string Delta(double left, double right) => (left - right).ToString("+0.0000;-0.0000;0.0000", CultureInfo.InvariantCulture);
+
+        builder.AppendLine("# Chapter 4 Experiment Summary");
+        builder.AppendLine();
+        builder.AppendLine("Ringkasan ini dibuat otomatis oleh aplikasi sebagai bahan awal Bab 4. File ini belum mengubah dokumen tesis utama.");
+        builder.AppendLine();
+        builder.AppendLine("## Execution Metadata");
+        builder.AppendLine();
+        builder.AppendLine($"- GeneratedAtUtc: `{DateTimeOffset.UtcNow:O}`");
+        builder.AppendLine($"- DatasetRoot: `{rootFolder}`");
+        builder.AppendLine($"- LlmProvider: `{LlmProviderName}`");
+        builder.AppendLine($"- LlmModel: `{modelName}`");
+        builder.AppendLine($"- LlmInferenceMode: `{VertexAiGeminiInferenceMode}`");
+        builder.AppendLine($"- GroundTruthProvider: `{GroundTruthProviderName}`");
+        builder.AppendLine($"- CodeBertProvider: `{CodeBertProviderName}`");
+        builder.AppendLine($"- ProjectCount: `{Number(results.Count)}`");
+        builder.AppendLine($"- PackageCount: `{Number(results.Sum(x => x.PackageCount))}`");
+        builder.AppendLine($"- CodeBertRecordCount: `{Number(results.Sum(x => x.CodeBertRecords.Count))}`");
+        builder.AppendLine($"- AllScenarioSuccessfulProjects: `{Number(results.Count(IsProjectFullySuccessfulForResume))}`");
+        builder.AppendLine($"- APIFailedScenarioResults: `{Number(apiFailed)}`");
+        builder.AppendLine($"- CodeBertFailedScenarioResults: `{Number(codeBertFailed)}`");
+        builder.AppendLine($"- RetrievalFailedProjects: `{Number(retrievalFailed)}`");
+        builder.AppendLine();
+        builder.AppendLine("## Aggregate Metrics");
+        builder.AppendLine();
+        builder.AppendLine("| Scenario | Total | TP | TN | FP | FN | Accuracy | Precision | Recall | F1-Score | False Positive Ratio |");
+        builder.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+        foreach (var item in scenarios)
+        {
+            var metrics = item.Metrics;
+            builder.AppendLine($"| {item.Name} | {Number(metrics.Total)} | {Number(metrics.TruePositive)} | {Number(metrics.TrueNegative)} | {Number(metrics.FalsePositive)} | {Number(metrics.FalseNegative)} | {Percent(metrics.Accuracy)} | {Percent(metrics.Precision)} | {Percent(metrics.Recall)} | {Percent(metrics.F1Score)} | {Percent(metrics.FalsePositiveRatio)} |");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## Comparative Notes");
+        builder.AppendLine();
+        builder.AppendLine($"- Best F1-Score: `{bestByF1.Name}` dengan F1 `{Percent(bestByF1.Metrics.F1Score)}`.");
+        builder.AppendLine($"- Delta F1 RAG-LLM vs Zero-Shot: `{Delta(rag.F1Score, zeroShot.F1Score)}`.");
+        builder.AppendLine($"- Delta F1 RAG-LLM vs CodeBERT: `{Delta(rag.F1Score, codeBert.F1Score)}`.");
+        builder.AppendLine($"- Delta Recall RAG-LLM vs Zero-Shot: `{Delta(rag.Recall, zeroShot.Recall)}`.");
+        builder.AppendLine($"- Delta Precision RAG-LLM vs Zero-Shot: `{Delta(rag.Precision, zeroShot.Precision)}`.");
+        builder.AppendLine();
+        builder.AppendLine("## Interpretation Guardrails");
+        builder.AppendLine();
+        builder.AppendLine("- Ground truth hanya berasal dari GitHub GraphQL API live dan evaluasi vulnerable version range.");
+        builder.AppendLine("- Skenario dengan kegagalan Vertex AI Gemini, kegagalan retrieval, atau prediksi hilang dikeluarkan dari confusion matrix.");
+        builder.AppendLine("- Tidak ada fallback ke local advisory database, dummy data, atau ground-truth-as-prediction.");
+        builder.AppendLine("- CodeBERT dihitung hanya dari inferensi Python lokal yang berhasil menghasilkan prediction JSON.");
+        builder.AppendLine();
+        builder.AppendLine("## Generated Artifacts");
+        builder.AppendLine();
+        builder.AppendLine($"- RAG-LLM JSON: `{Artifact(artifactSet.RagJsonPath)}`");
+        builder.AppendLine($"- Zero-Shot JSON: `{Artifact(artifactSet.ZeroShotJsonPath)}`");
+        builder.AppendLine($"- CodeBERT JSON: `{Artifact(artifactSet.CodeBertJsonPath)}`");
+        builder.AppendLine($"- Comprehensive CSV: `{Artifact(artifactSet.CsvReportPath)}`");
+        builder.AppendLine($"- Comprehensive Excel: `{Artifact(artifactSet.ExcelReportPath)}`");
+        builder.AppendLine($"- Interactive HTML: `{Artifact(artifactSet.HtmlReportPath)}`");
+        builder.AppendLine($"- Vertex AI Gemini Diagnostics JSON: `{Artifact(artifactSet.ApiDiagnosticsJsonPath)}`");
+        builder.AppendLine($"- Console Execution Log JSON: `{Artifact(artifactSet.ConsoleLogJsonPath)}`");
+
+        File.WriteAllText(outputFilePath, builder.ToString(), Encoding.UTF8);
+    }
+
     private static void AppendMetricCard(StringBuilder builder, string labelEnglish, string labelIndonesia, string value, string subtitleEnglish, string subtitleIndonesia)
     {
         builder.AppendLine($"<div class=\"card metric\"><div class=\"label\">{Html(labelEnglish)}<span class=\"id-block\">{Html(labelIndonesia)}</span></div><div class=\"value\">{Html(value)}</div><div class=\"sub\">{Html(subtitleEnglish)}<span class=\"id-block\">{Html(subtitleIndonesia)}</span></div></div>");
@@ -3050,11 +3159,11 @@ function filter(){
         builder.AppendLine("<div><strong>Best F1<span class=\"id-block\">F1 Terbaik</span></strong>");
         builder.AppendLine($"<p>{Html(GetScenarioDisplayName(best.Scenario))}: {best.Metrics.F1Score:P1}. Accuracy <span class=\"id\">Akurasi</span> {best.Metrics.Accuracy:P1}, Recall {best.Metrics.Recall:P1}.</p></div>");
         builder.AppendLine("<div><strong>Execution Health<span class=\"id-block\">Kesehatan Eksekusi</span></strong>");
-        builder.AppendLine($"<p>{results.Count(IsProjectFullySuccessfulForResume)} / {results.Count} project all-scenario runs complete. API failed scenarios: {apiFailed}.<span class=\"id-block\">{results.Count(IsProjectFullySuccessfulForResume)} / {results.Count} run semua skenario selesai. Skenario API gagal: {apiFailed}.</span></p></div>");
+        builder.AppendLine($"<p>{results.Count(IsProjectFullySuccessfulForResume)} / {results.Count} project all-scenario runs complete. Vertex failed scenarios: {apiFailed}.<span class=\"id-block\">{results.Count(IsProjectFullySuccessfulForResume)} / {results.Count} run semua skenario selesai. Skenario Vertex gagal: {apiFailed}.</span></p></div>");
         builder.AppendLine("<div><strong>CodeBERT Status<span class=\"id-block\">Status CodeBERT</span></strong>");
         builder.AppendLine(codeBertSucceeded > 0
             ? $"<p>{codeBertSucceeded} CodeBERT local inference result(s) were evaluated; {codeBertFailed} failed or excluded.<span class=\"id-block\">{codeBertSucceeded} hasil inferensi CodeBERT lokal dievaluasi; {codeBertFailed} gagal atau dikeluarkan.</span></p>"
-            : $"<p>No CodeBERT metrics were counted because local inference did not complete. Configure {Html(CodeBertModelEnvironmentVariableName)} to enable this scenario.<span class=\"id-block\">Tidak ada metrik CodeBERT yang dihitung karena inferensi lokal tidak selesai. Atur {Html(CodeBertModelEnvironmentVariableName)} untuk mengaktifkan skenario ini.</span></p>");
+            : "<p>No CodeBERT metrics were counted because local inference did not complete. Check the console log, Python bootstrap, and prediction JSON artifact.<span class=\"id-block\">Tidak ada metrik CodeBERT yang dihitung karena inferensi lokal tidak selesai. Periksa console log, bootstrap Python, dan artefak prediction JSON.</span></p>");
         builder.AppendLine("</div></div>");
 
         if (results.Count < 1000)
@@ -3375,7 +3484,7 @@ function filter(){
             if (IsSyntheticCodeBertScenario(item.Scenario))
             {
                 mitigation = "Output sintetis CodeBERT terdeteksi. Baris ini hanya dipertahankan untuk traceability dan tidak dipakai sebagai bukti kualitas model.";
-                reasoning = "Jalankan ulang dengan dependency Python CodeBERT yang lengkap, atau gunakan CODEBERT_MODEL_PATH untuk model fine-tuned lokal.";
+                reasoning = "Jalankan ulang setelah bootstrap Python CodeBERT selesai. CODEBERT_MODEL_PATH hanya opsional untuk model fine-tuned lokal.";
             }
             builder.AppendLine($"<td class=\"detail\"><details><summary>{Html(TruncateForDisplay(mitigation, 120))}</summary><p>{Html(mitigation)}</p><p class=\"hint\">{Html(reasoning)}</p></details></td>");
             builder.AppendLine("</tr>");
@@ -3439,7 +3548,8 @@ function filter(){
             ("CodeBERT JSON", artifactSet.CodeBertJsonPath),
             ("Comprehensive Metrics CSV", artifactSet.CsvReportPath),
             ("Excel Workbook", artifactSet.ExcelReportPath),
-            ("API Diagnostics JSON", artifactSet.ApiDiagnosticsJsonPath),
+            ("Chapter 4 Summary Markdown", artifactSet.Chapter4SummaryPath),
+            ("Vertex AI Gemini Diagnostics JSON", artifactSet.ApiDiagnosticsJsonPath),
             ("Console Log JSON", artifactSet.ConsoleLogJsonPath)
         };
 
@@ -3911,6 +4021,7 @@ function filter(){
         public string CsvReportPath { get; set; } = string.Empty;
         public string ExcelReportPath { get; set; } = string.Empty;
         public string HtmlReportPath { get; set; } = string.Empty;
+        public string Chapter4SummaryPath { get; set; } = string.Empty;
         public string ApiDiagnosticsJsonPath { get; set; } = string.Empty;
         public string ConsoleLogJsonPath { get; set; } = string.Empty;
     }
@@ -3943,6 +4054,8 @@ function filter(){
         public DateTimeOffset GeneratedAtUtc { get; set; }
         public string RootFolder { get; set; } = string.Empty;
         public string ModelName { get; set; } = string.Empty;
+        public string LlmProvider { get; set; } = string.Empty;
+        public string InferenceMode { get; set; } = string.Empty;
         public int TotalCalls { get; set; }
         public int SuccessfulCalls { get; set; }
         public int FailedCalls { get; set; }
@@ -3994,6 +4107,9 @@ function filter(){
         public DateTimeOffset GeneratedAtUtc { get; set; }
         public string RootFolder { get; set; } = string.Empty;
         public string ModelName { get; set; } = string.Empty;
+        public string LlmProvider { get; set; } = string.Empty;
+        public string InferenceMode { get; set; } = string.Empty;
+        public string GroundTruthProvider { get; set; } = string.Empty;
         public AuditScenario Scenario { get; set; }
         public int ProjectCount { get; set; }
         public int SucceededProjectCount { get; set; }
@@ -4040,6 +4156,8 @@ function filter(){
         public DateTimeOffset GeneratedAtUtc { get; set; }
         public string RootFolder { get; set; } = string.Empty;
         public string ModelName { get; set; } = string.Empty;
+        public string CodeBertProvider { get; set; } = string.Empty;
+        public string GroundTruthProvider { get; set; } = string.Empty;
         public int ProjectCount { get; set; }
         public int TotalRecords { get; set; }
         public int TrainingCount { get; set; }

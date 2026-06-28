@@ -1,6 +1,6 @@
 # GeminiNuGetAuditor
 
-`GeminiNuGetAuditor` adalah aplikasi console berbasis .NET 10 untuk audit keamanan dependency NuGet pada banyak file `.csproj` secara interaktif. Aplikasi ini menjalankan tiga alur penelitian dalam satu workflow: RAG-LLM, Zero-Shot, dan ekspor dataset CodeBERT.
+`GeminiNuGetAuditor` adalah aplikasi console berbasis .NET 10 untuk audit keamanan dependency NuGet pada banyak file `.csproj` secara interaktif. Aplikasi ini menjalankan tiga alur penelitian dalam satu workflow: RAG-LLM, Zero-Shot, dan CodeBERT local inference bridge.
 
 ## Tujuan Project
 
@@ -9,8 +9,8 @@ Project ini dibuat untuk:
 - mengekstraksi daftar package NuGet dan versi dari file `.csproj`;
 - memindai folder secara rekursif untuk menemukan banyak file `.csproj`;
 - mengambil data ground truth kerentanan secara eksklusif dari GitHub GraphQL API real-time;
-- menjalankan evaluasi RAG-LLM dengan Gemini dan konteks advisory;
-- menjalankan evaluasi Zero-Shot dengan Gemini tanpa konteks advisory;
+- menjalankan evaluasi RAG-LLM dengan Vertex AI Gemini dan konteks advisory;
+- menjalankan evaluasi Zero-Shot dengan Vertex AI Gemini tanpa konteks advisory;
 - menyiapkan dataset CodeBERT bridge melalui augmentasi dan split data;
 - menjalankan inferensi CodeBERT lokal melalui `Scripts/CodeBert/codebert_inference.py`, baik dengan model fine-tuned lokal maupun baseline embedding CodeBERT otomatis;
 - menghitung metrik TP, TN, FP, FN, Accuracy, Precision, Recall, F1-Score, dan False Positive Ratio;
@@ -27,7 +27,7 @@ Project ini dibuat untuk:
 7. Setelah konteks keamanan tersedia, aplikasi membentuk ground truth, menjalankan RAG-LLM, dan menyiapkan record CodeBERT.
 8. Aplikasi menjalankan Python bridge CodeBERT dan membaca file prediksi CodeBERT.
 9. Hasil prediksi model dibandingkan dengan ground truth untuk menghasilkan metrik evaluasi.
-10. Semua report disimpan di folder run baru di dalam `audit-results`.
+10. Semua report disimpan di folder run di dalam `audit-results`; jika ada checkpoint kompatibel, aplikasi otomatis resume ke folder run tersebut.
 
 ## Retrieval Ground Truth
 
@@ -37,7 +37,7 @@ Diagnostics retrieval disimpan di console log, JSON report, dan Excel report.
 
 ## Integritas Metrik
 
-Jika Gemini API gagal total untuk sebuah skenario, aplikasi tidak akan memakai ground truth sebagai pengganti prediksi LLM. Skenario tersebut diberi status `API_FAILED`, `ExcludedFromMetrics = true`, dan tidak dimasukkan ke confusion matrix TP, TN, FP, atau FN.
+Jika panggilan Vertex AI Gemini gagal total untuk sebuah skenario, aplikasi tidak akan memakai ground truth sebagai pengganti prediksi LLM. Skenario tersebut diberi status `API_FAILED`, `ExcludedFromMetrics = true`, dan tidak dimasukkan ke confusion matrix TP, TN, FP, atau FN.
 
 Jika Python tidak tersedia sama sekali atau bootstrap dependency gagal, skenario CodeBERT diberi status `CODEBERT_FAILED`, `ExcludedFromMetrics = true`, dan tidak dimasukkan ke confusion matrix. Aplikasi membuat virtual environment lokal `.codebert-venv` dan menginstal dependency CodeBERT secara otomatis pada run pertama. Script bawaan tidak membuat prediksi sintetis. Jika `CODEBERT_MODEL_PATH` tidak diisi, script memakai baseline real lokal `LOCAL_CODEBERT_EMBEDDING_LOGREG` berbasis encoder CodeBERT dan classifier Logistic Regression dengan leave-one-package-out training untuk mengurangi package-level leakage.
 
@@ -45,7 +45,7 @@ Dengan kebijakan ini, metrik hanya dihitung dari prediksi model yang benar-benar
 
 ## Checkpoint dan Resume
 
-Setiap scan membuat folder output baru dengan format timestamp Windows-safe, misalnya:
+Setiap scan membuat atau memakai folder output kompatibel dengan format timestamp Windows-safe, misalnya:
 
 ```text
 audit-results/20261231 14-15-16/
@@ -57,13 +57,13 @@ Setiap hasil project disimpan sebagai JSON checkpoint di dalam folder run terseb
 audit-results/20261231 14-15-16/checkpoints/
 ```
 
-Selama satu run, jika checkpoint JSON untuk sebuah `.csproj` sudah ada di folder run tersebut, project tersebut akan dilewati.
+Ketika aplikasi dijalankan ulang dengan dataset dan model yang sama, aplikasi mencari folder run terbaru yang memiliki checkpoint kompatibel. Project dengan checkpoint sukses akan dilewati, sedangkan project incomplete, `API_FAILED`, atau `CODEBERT_FAILED` akan dicoba kembali.
 
 Untuk memproses ulang project tertentu di folder run yang sama, hapus file JSON checkpoint project tersebut dari folder `checkpoints`.
 
 ## Output
 
-Output utama disimpan di folder run baru di dalam `audit-results`:
+Output utama disimpan di folder run di dalam `audit-results`:
 
 - `audit-results/20261231 14-15-16/audit-rag-llm-<timestamp>.json`
 - `audit-results/20261231 14-15-16/audit-zero-shot-<timestamp>.json`
@@ -71,6 +71,7 @@ Output utama disimpan di folder run baru di dalam `audit-results`:
 - `audit-results/20261231 14-15-16/audit-comprehensive-metrics-<timestamp>.csv`
 - `audit-results/20261231 14-15-16/audit-comprehensive-report-<timestamp>.xlsx`
 - `audit-results/20261231 14-15-16/audit-interactive-report-<timestamp>.html`
+- `audit-results/20261231 14-15-16/chapter-4-summary-<timestamp>.md`
 - `audit-results/20261231 14-15-16/api-diagnostics-<timestamp>.json`
 - `audit-results/20261231 14-15-16/console-execution-log-<timestamp>.json`
 - `audit-results/20261231 14-15-16/checkpoints/<project-key>.json`
@@ -126,6 +127,6 @@ Aplikasi akan mencari semua file `.csproj` di folder tersebut secara rekursif, l
 
 ## Ringkasan Cepat
 
-`GeminiNuGetAuditor` memindai folder berisi banyak `.csproj`, mengekstrak dependency NuGet, mengambil ground truth keamanan, menjalankan RAG-LLM dan Zero-Shot dengan Gemini, menjalankan CodeBERT lokal secara otomatis, lalu menghasilkan JSON, HTML, CSV, dan Excel report untuk evaluasi penelitian.
+`GeminiNuGetAuditor` memindai folder berisi banyak `.csproj`, mengekstrak dependency NuGet, mengambil ground truth keamanan live, menjalankan RAG-LLM dan Zero-Shot dengan Vertex AI Gemini, menjalankan CodeBERT lokal secara otomatis, lalu menghasilkan JSON, HTML, CSV, Excel, dan ringkasan Markdown untuk evaluasi penelitian.
 
-Last Updated: 27 Juni 2026
+Last Updated: 28 Juni 2026

@@ -162,11 +162,13 @@ Dengan demikian, keberhasilan sistem tidak hanya diukur dari banyaknya temuan, t
 
 Artefak yang dihasilkan oleh sistem meliputi:
 
-- file audit JSON untuk setiap skenario LLM;
-- file Excel metrik evaluasi;
+- file audit JSON untuk skenario RAG-LLM, Zero-Shot, dan CodeBERT;
+- file CSV dan Excel metrik evaluasi;
+- file HTML interaktif untuk eksplorasi hasil;
+- file Markdown `chapter-4-summary-*.md` sebagai ringkasan awal Bab IV;
 - dataset CodeBERT bridge dalam format JSON dan CSV;
-- prediksi CodeBERT bridge dari script Python lokal, hanya jika model CodeBERT lokal tersedia;
-- diagnostics console yang mencatat status retrieval live yang digunakan.
+- prediksi CodeBERT bridge dari script Python lokal melalui baseline embedding otomatis atau model fine-tuned opsional;
+- diagnostics console dan diagnostics Vertex AI Gemini yang mencatat status panggilan model dan retrieval live yang digunakan.
 
 Artefak ini mendukung kebutuhan replikasi, audit metodologis, dan pelaporan hasil penelitian.
 

@@ -44,11 +44,11 @@ Cara Menjalankan GeminiNuGetAuditor
 7. Aplikasi akan:
 
    - mencari semua file .csproj secara rekursif;
-   - membuat folder hasil baru di dalam audit-results, contoh audit-results\20261231 14-15-16;
-   - melewati project yang sudah memiliki checkpoint JSON di folder checkpoints milik run tersebut;
+   - membuat folder hasil baru atau resume ke folder hasil kompatibel di dalam audit-results, contoh audit-results\20261231 14-15-16;
+   - melewati project yang sudah memiliki checkpoint sukses di folder checkpoints milik run tersebut;
    - memproses banyak project secara paralel;
-   - menjalankan Zero-Shot, retrieval ground truth, RAG-LLM, dan CodeBERT Python bridge;
-   - menyimpan report JSON, HTML, CSV, dan Excel ke folder audit-results.
+   - menjalankan Zero-Shot Vertex AI Gemini, retrieval ground truth, RAG-LLM Vertex AI Gemini, dan CodeBERT Python bridge;
+   - menyimpan report JSON, HTML, CSV, Excel, dan ringkasan Markdown ke folder audit-results.
 
 8. Output utama:
 
@@ -58,6 +58,7 @@ Cara Menjalankan GeminiNuGetAuditor
    audit-results\20261231 14-15-16\audit-comprehensive-metrics-<timestamp>.csv
    audit-results\20261231 14-15-16\audit-comprehensive-report-<timestamp>.xlsx
    audit-results\20261231 14-15-16\audit-interactive-report-<timestamp>.html
+   audit-results\20261231 14-15-16\chapter-4-summary-<timestamp>.md
    audit-results\20261231 14-15-16\api-diagnostics-<timestamp>.json
    audit-results\20261231 14-15-16\console-execution-log-<timestamp>.json
    audit-results\20261231 14-15-16\checkpoints\<project-key>.json
@@ -65,8 +66,8 @@ Cara Menjalankan GeminiNuGetAuditor
 Catatan:
 
 - Jalankan aplikasi tanpa argumen CLI.
-- Jika Gemini API gagal untuk sebuah skenario, status skenario menjadi API_FAILED.
+- Jika panggilan Vertex AI Gemini gagal untuk sebuah skenario, status skenario menjadi API_FAILED.
 - API_FAILED tidak memakai ground truth sebagai prediksi pengganti dan tidak dihitung ke confusion matrix.
 - Jika CodeBERT gagal karena Python tidak tersedia atau bootstrap dependency gagal, status skenario menjadi CODEBERT_FAILED dan tidak dihitung ke confusion matrix.
-- Untuk memproses ulang satu project di folder run yang sama, hapus checkpoint JSON project tersebut dari folder checkpoints.
+- Untuk memproses ulang satu project di folder run yang sama, hapus checkpoint JSON project tersebut dari folder checkpoints. Project dengan checkpoint sukses akan dilewati otomatis saat resume.
 - Format folder memakai tanda hubung pada jam-menit-detik karena karakter ":" tidak valid untuk nama folder Windows.
