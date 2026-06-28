@@ -79,6 +79,31 @@ Output utama disimpan di folder run di dalam `audit-results`:
 - `audit-results/20261231 14-15-16/console-execution-log.json`
 - `audit-results/20261231 14-15-16/checkpoints/<project-key>.json`
 
+## Artefak Eksperimen Final
+
+Artefak eksperimen final yang sudah dipublikasikan melalui GitHub Pages:
+
+- Interactive HTML Report: https://yanlis-lase-ssg7.github.io/ThesisGeminiNuGetAuditor/audit-results/20260628%2011-42-56/audit-interactive-report.html
+- Folder artefak lokal: `audit-results/20260628 11-42-56/`
+- Dataset eksperimen: `Thesis_Dataset_1000`
+- Jumlah project: `1000`
+- Jumlah observasi package: `3698`
+- Jumlah record CodeBERT setelah augmentasi: `11094`
+- Retrieval ground truth: `GitHub GraphQL API live`
+- Provider LLM: `Vertex AI Gemini`
+- Model LLM eksperimen final: `gemini-2.5-pro`
+- Status akhir: `1000` project berhasil pada RAG-LLM, Zero-Shot, dan CodeBERT.
+
+Metrik agregat eksperimen final:
+
+| Scenario | Total | TP | TN | FP | FN | Accuracy | Precision | Recall | F1-Score | False Positive Ratio |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| RAG-LLM | 3698 | 585 | 3109 | 4 | 0 | 99.8918 % | 99.3209 % | 100.0000 % | 99.6593 % | 0.6791 % |
+| Zero-Shot | 3698 | 374 | 2284 | 829 | 211 | 71.8767 % | 31.0889 % | 63.9316 % | 41.8345 % | 68.9111 % |
+| CodeBERT | 3698 | 63 | 2712 | 401 | 522 | 75.0406 % | 13.5776 % | 10.7692 % | 12.0114 % | 86.4224 % |
+
+Catatan diagnostik: `api-diagnostics.json` mencatat `2010` percobaan panggilan Vertex AI Gemini, terdiri dari `2000` panggilan sukses dan `10` kegagalan transient yang berhasil dipulihkan oleh mekanisme retry. Status akhir report tetap `APIFailedScenarioResults = 0`, `CodeBertFailedScenarioResults = 0`, dan `RetrievalFailedProjects = 0`.
+
 ## Cara Menjalankan
 
 Pastikan .NET 10 SDK sudah terinstall dan Application Default Credentials untuk Google Cloud sudah tersedia.

@@ -26,7 +26,7 @@ Secara konseptual, sistem terdiri atas lima tahap utama:
    Data advisory yang diperoleh dipetakan ke dependency hasil ekstraksi untuk menghasilkan label `Vulnerable` atau `Not Vulnerable`.
 
 4. **Inference and Dataset Preparation**  
-   Sistem menjalankan skenario RAG-LLM dan Zero-Shot menggunakan Gemini Pro melalui Vertex AI, serta mengekspor dataset dan menjalankan Python bridge untuk skenario CodeBERT.
+   Sistem menjalankan skenario RAG-LLM dan Zero-Shot menggunakan Gemini melalui Vertex AI, serta mengekspor dataset dan menjalankan Python bridge untuk skenario CodeBERT. Pada eksperimen final, model LLM yang digunakan adalah `gemini-2.5-pro`.
 
 5. **Evaluation**  
    Hasil prediksi dibandingkan terhadap ground truth untuk menghitung TP, TN, FP, FN, Accuracy, Precision, Recall, dan F1-Score.
@@ -45,7 +45,7 @@ Penelitian menggunakan tiga skenario utama untuk memastikan perbandingan yang ad
 
 ### 4.1. Skenario RAG-LLM (Model Usulan)
 
-Skenario RAG-LLM menggunakan Gemini Pro melalui Vertex AI dengan konteks tambahan berupa data advisory live dari GitHub GraphQL API. Mekanisme retrieval dilakukan sebelum prompt dikirim ke LLM. Prompt berisi daftar dependency lokal dan security reference data yang berhasil diambil secara real-time.
+Skenario RAG-LLM menggunakan Gemini melalui Vertex AI dengan konteks tambahan berupa data advisory live dari GitHub GraphQL API. Pada eksperimen final, model yang digunakan adalah `gemini-2.5-pro`. Mekanisme retrieval dilakukan sebelum prompt dikirim ke LLM. Prompt berisi daftar dependency lokal dan security reference data yang berhasil diambil secara real-time.
 
 Kriteria perilaku model pada skenario ini:
 
@@ -57,7 +57,7 @@ Skenario ini dirancang untuk mengurangi halusinasi dan false positive.
 
 ### 4.2. Skenario Zero-Shot
 
-Skenario Zero-Shot menggunakan Gemini Pro melalui Vertex AI tanpa injeksi konteks retrieval. Model hanya menerima daftar package dan versi, lalu diminta melakukan audit berdasarkan pengetahuan internalnya.
+Skenario Zero-Shot menggunakan Gemini melalui Vertex AI tanpa injeksi konteks retrieval. Pada eksperimen final, model yang digunakan adalah `gemini-2.5-pro`. Model hanya menerima daftar package dan versi, lalu diminta melakukan audit berdasarkan pengetahuan internalnya.
 
 Skenario ini berfungsi sebagai pembanding untuk mengukur:
 
@@ -89,7 +89,7 @@ Pada run pertama, aplikasi membuat virtual environment lokal `.codebert-venv` da
 
 - **original**: representasi dependency sebagaimana ditemukan pada `.csproj`;
 - **semantic_version_normalization**: perubahan bentuk struktur XML versi, misalnya dari atribut menjadi elemen `<Version>`;
-- **safe_dummy_dependency**: penyisipan dependency dummy aman untuk menambah sampel negatif.
+- **safe_dummy_dependency**: penyisipan dependency dummy aman untuk menambah sampel negatif pada dataset CodeBERT. Variasi ini hanya dipakai sebagai augmentasi lokal untuk pembentukan record pembelajaran dan bukan sumber ground truth, bukan fallback advisory, serta bukan prediksi sintetis.
 
 Setelah augmentasi, record dataset dibagi menjadi:
 
@@ -174,6 +174,35 @@ Artefak ini mendukung kebutuhan replikasi, audit metodologis, dan pelaporan hasi
 
 Report final menggunakan nama file tetap di dalam folder run dan dioverwrite secara atomic pada retry. Dengan demikian, percobaan lanjutan memperbarui artefak yang sama tanpa menumpuk file timestamp baru, sementara checkpoint per project tetap menjadi sumber resume.
 
-## 10. Kesimpulan Rekayasa
+## 10. Hasil Eksperimen Final
+
+Eksperimen final dijalankan pada dataset `Thesis_Dataset_1000` dan menghasilkan artefak pada folder `audit-results/20260628 11-42-56/`. Interactive HTML report dapat dibaca melalui GitHub Pages:
+
+https://yanlis-lase-ssg7.github.io/ThesisGeminiNuGetAuditor/audit-results/20260628%2011-42-56/audit-interactive-report.html
+
+Ringkasan cakupan eksperimen:
+
+- jumlah project: `1000`;
+- jumlah observasi package: `3698`;
+- jumlah record CodeBERT setelah augmentasi: `11094`;
+- retrieval ground truth: `GitHub GraphQL API live`;
+- provider LLM: `Vertex AI Gemini`;
+- model LLM: `gemini-2.5-pro`;
+- project sukses penuh pada ketiga skenario: `1000`;
+- `APIFailedScenarioResults`: `0`;
+- `CodeBertFailedScenarioResults`: `0`;
+- `RetrievalFailedProjects`: `0`.
+
+Metrik agregat eksperimen final:
+
+| Scenario | Total | TP | TN | FP | FN | Accuracy | Precision | Recall | F1-Score | False Positive Ratio |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| RAG-LLM | 3698 | 585 | 3109 | 4 | 0 | 99.8918 % | 99.3209 % | 100.0000 % | 99.6593 % | 0.6791 % |
+| Zero-Shot | 3698 | 374 | 2284 | 829 | 211 | 71.8767 % | 31.0889 % | 63.9316 % | 41.8345 % | 68.9111 % |
+| CodeBERT | 3698 | 63 | 2712 | 401 | 522 | 75.0406 % | 13.5776 % | 10.7692 % | 12.0114 % | 86.4224 % |
+
+Diagnostik API mencatat `2010` percobaan panggilan Vertex AI Gemini, terdiri dari `2000` panggilan sukses dan `10` kegagalan transient yang dipulihkan melalui retry. Kegagalan transient tersebut tidak menjadi kegagalan akhir skenario karena report final mencatat `APIFailedScenarioResults = 0`.
+
+## 11. Kesimpulan Rekayasa
 
 `GeminiNuGetAuditor` direkayasa sebagai instrumen penelitian yang menggabungkan parsing dependency .NET, retrieval data advisory real-time dari GitHub GraphQL API, inferensi LLM, CodeBERT Python bridge lokal, dan evaluasi kuantitatif. Struktur ini memungkinkan pengujian empiris terhadap hipotesis bahwa RAG-LLM mampu mengurangi halusinasi dan meningkatkan kualitas deteksi kerentanan dibandingkan Zero-Shot, dengan jalur CodeBERT tetap otomatis namun hanya menghasilkan metrik ketika inferensi lokal real tersedia.
