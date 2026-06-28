@@ -58,6 +58,7 @@ def build_inference_text(record: dict) -> str:
 
 def load_sequence_classifier(model_path: str):
     try:
+        import torch
         from transformers import pipeline
     except ImportError as exc:
         raise RuntimeError(
@@ -69,12 +70,14 @@ def load_sequence_classifier(model_path: str):
     if not model_directory.exists():
         raise FileNotFoundError(f"Local CodeBERT model path was not found: {model_directory}")
 
-    print(f"Loading local fine-tuned CodeBERT classifier from: {model_directory}", flush=True)
+    device = 0 if torch.cuda.is_available() else -1
+    device_name = "cuda:0" if device == 0 else "cpu"
+    print(f"Loading local fine-tuned CodeBERT classifier from: {model_directory} on {device_name}", flush=True)
     return pipeline(
         task="text-classification",
         model=str(model_directory),
         tokenizer=str(model_directory),
-        device=-1,
+        device=device,
         truncation=True,
     )
 
@@ -136,6 +139,7 @@ def import_embedding_dependencies():
 def encode_texts(texts: list[str], tokenizer, model, torch, np, batch_size: int, max_length: int):
     vectors = []
     model.eval()
+    device = next(model.parameters()).device
     with torch.no_grad():
         for start in range(0, len(texts), batch_size):
             batch = texts[start:start + batch_size]
@@ -146,6 +150,7 @@ def encode_texts(texts: list[str], tokenizer, model, torch, np, batch_size: int,
                 max_length=max_length,
                 return_tensors="pt",
             )
+            encoded = {key: value.to(device) for key, value in encoded.items()}
             output = model(**encoded)
             mask = encoded["attention_mask"].unsqueeze(-1)
             token_embeddings = output.last_hidden_state * mask
@@ -157,8 +162,33 @@ def encode_texts(texts: list[str], tokenizer, model, torch, np, batch_size: int,
     return np.vstack(vectors)
 
 
-def predict_with_embedding_classifier(payload: dict, encoder_model: str, batch_size: int, max_length: int) -> list[dict]:
+def load_embedding_context(encoder_model: str) -> dict:
     np, torch, LogisticRegression, make_pipeline, StandardScaler, AutoModel, AutoTokenizer = import_embedding_dependencies()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Loading CodeBERT encoder: {encoder_model} on {device}", flush=True)
+    tokenizer = AutoTokenizer.from_pretrained(encoder_model)
+    model = AutoModel.from_pretrained(encoder_model)
+    model.to(device)
+
+    return {
+        "np": np,
+        "torch": torch,
+        "LogisticRegression": LogisticRegression,
+        "make_pipeline": make_pipeline,
+        "StandardScaler": StandardScaler,
+        "tokenizer": tokenizer,
+        "model": model,
+    }
+
+
+def predict_with_embedding_classifier_context(payload: dict, context: dict, batch_size: int, max_length: int) -> list[dict]:
+    np = context["np"]
+    torch = context["torch"]
+    LogisticRegression = context["LogisticRegression"]
+    make_pipeline = context["make_pipeline"]
+    StandardScaler = context["StandardScaler"]
+    tokenizer = context["tokenizer"]
+    model = context["model"]
     train_records = labeled_training_records(payload)
     prediction_records = original_records(payload)
 
@@ -182,10 +212,6 @@ def predict_with_embedding_classifier(payload: dict, encoder_model: str, batch_s
             "CodeBERT local training requires at least one labeled record. "
             "The current project dataset is empty or invalid."
         )
-
-    print(f"Loading CodeBERT encoder: {encoder_model}", flush=True)
-    tokenizer = AutoTokenizer.from_pretrained(encoder_model)
-    model = AutoModel.from_pretrained(encoder_model)
 
     train_texts = [build_inference_text(record) for record in train_records]
     train_labels = np.array([int(bool(record.get("Label", False))) for record in train_records])
@@ -242,6 +268,32 @@ def predict_with_embedding_classifier(payload: dict, encoder_model: str, batch_s
     return predictions
 
 
+def predict_with_embedding_classifier(payload: dict, encoder_model: str, batch_size: int, max_length: int) -> list[dict]:
+    context = load_embedding_context(encoder_model)
+    return predict_with_embedding_classifier_context(payload, context, batch_size, max_length)
+
+
+def is_batch_payload(payload: dict) -> bool:
+    return isinstance(payload.get("Projects"), list)
+
+
+def batch_projects(payload: dict) -> list[dict]:
+    if is_batch_payload(payload):
+        return payload.get("Projects", [])
+
+    return [payload]
+
+
+def build_project_output(project_payload: dict, predictions: list[dict], model_name: str, inference_mode: str) -> dict:
+    return {
+        "ModelName": model_name,
+        "InferenceMode": inference_mode,
+        "GeneratedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "ProjectKey": project_payload.get("ProjectKey", ""),
+        "VulnerabilityReports": predictions,
+    }
+
+
 def build_prediction(record: dict, is_vulnerable: bool, confidence: float, evidence: str) -> dict:
     return {
         "PackageName": record.get("PackageName", ""),
@@ -289,29 +341,64 @@ def main() -> int:
 
     print(f"Loading CodeBERT bridge input: {input_path}", flush=True)
     payload = load_payload(input_path)
-    print(f"Loaded {len(payload.get('Records', []))} dataset record(s). Running local CodeBERT inference.", flush=True)
+    projects = batch_projects(payload)
+    record_count = sum(len(project.get("Records", [])) for project in projects)
+    print(
+        f"Loaded {len(projects)} project payload(s) and {record_count} dataset record(s). "
+        "Running local CodeBERT inference.",
+        flush=True,
+    )
+
+    outputs = []
 
     if args.model:
         classifier = load_sequence_classifier(args.model)
-        predictions = predict_with_sequence_classifier(payload, classifier)
         model_name = f"codebert-local-sequence-classifier::{Path(args.model).name}"
         inference_mode = "LOCAL_CODEBERT_SEQUENCE_CLASSIFICATION"
+        for project_index, project_payload in enumerate(projects, start=1):
+            print(
+                f"[Batch {project_index}/{len(projects)}] Running fine-tuned CodeBERT classifier "
+                f"for project {project_payload.get('ProjectKey', '')}",
+                flush=True,
+            )
+            predictions = predict_with_sequence_classifier(project_payload, classifier)
+            outputs.append(build_project_output(project_payload, predictions, model_name, inference_mode))
     else:
-        predictions = predict_with_embedding_classifier(payload, args.encoder, args.batch_size, args.max_length)
         model_name = f"codebert-embedding-logreg::{args.encoder}"
         inference_mode = "LOCAL_CODEBERT_EMBEDDING_LOGREG"
+        context = load_embedding_context(args.encoder)
+        for project_index, project_payload in enumerate(projects, start=1):
+            print(
+                f"[Batch {project_index}/{len(projects)}] Running CodeBERT embedding classifier "
+                f"for project {project_payload.get('ProjectKey', '')}",
+                flush=True,
+            )
+            predictions = predict_with_embedding_classifier_context(
+                project_payload,
+                context,
+                args.batch_size,
+                args.max_length,
+            )
+            outputs.append(build_project_output(project_payload, predictions, model_name, inference_mode))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_payload = {
-        "ModelName": model_name,
-        "InferenceMode": inference_mode,
-        "GeneratedAtUtc": datetime.now(timezone.utc).isoformat(),
-        "ProjectKey": payload.get("ProjectKey", ""),
-        "VulnerabilityReports": predictions,
-    }
+    output_payload = (
+        {
+            "ModelName": model_name,
+            "InferenceMode": inference_mode,
+            "GeneratedAtUtc": datetime.now(timezone.utc).isoformat(),
+            "Projects": outputs,
+        }
+        if is_batch_payload(payload)
+        else outputs[0]
+    )
     output_path.write_text(json.dumps(output_payload, indent=2), encoding="utf-8")
 
-    print(f"Wrote {len(predictions)} CodeBERT prediction(s) to {output_path}", flush=True)
+    prediction_count = sum(len(item.get("VulnerabilityReports", [])) for item in outputs)
+    print(
+        f"Wrote {prediction_count} CodeBERT prediction(s) for {len(outputs)} project(s) to {output_path}",
+        flush=True,
+    )
     return 0
 
 

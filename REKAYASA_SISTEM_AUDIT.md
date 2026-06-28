@@ -70,7 +70,7 @@ Pada skenario ini, `IsGroundedInReference` harus bernilai `false` karena tidak a
 
 ### 4.3. Skenario CodeBERT (Deep Learning Baseline)
 
-Skenario CodeBERT digunakan sebagai Python inference bridge untuk memvalidasi pipeline ekspor dataset, eksekusi lokal, pembacaan prediksi, dan perhitungan metrik terpadu. Implementasi saat ini bersifat real-only: `Scripts/CodeBert/codebert_inference.py` tidak menghasilkan prediksi sintetis. Jika tersedia model sequence-classification fine-tuned lokal melalui `CODEBERT_MODEL_PATH` atau argumen `--model`, sistem memakai model tersebut. Jika tidak, sistem menjalankan baseline lokal `LOCAL_CODEBERT_EMBEDDING_LOGREG`, yaitu encoder CodeBERT untuk ekstraksi embedding dan Logistic Regression dengan mekanisme leave-one-package-out agar classifier tidak dilatih dari package yang sedang diprediksi.
+Skenario CodeBERT digunakan sebagai Python inference bridge untuk memvalidasi pipeline ekspor dataset, eksekusi lokal, pembacaan prediksi, dan perhitungan metrik terpadu. Implementasi saat ini bersifat real-only: `Scripts/CodeBert/codebert_inference.py` tidak menghasilkan prediksi sintetis. Jika tersedia model sequence-classification fine-tuned lokal melalui `CODEBERT_MODEL_PATH` atau argumen `--model`, sistem memakai model tersebut. Jika tidak, sistem menjalankan baseline lokal `LOCAL_CODEBERT_EMBEDDING_LOGREG`, yaitu encoder CodeBERT untuk ekstraksi embedding dan Logistic Regression dengan mekanisme leave-one-package-out agar classifier tidak dilatih dari package yang sedang diprediksi. Untuk efisiensi, inferensi CodeBERT dijalankan dalam batch satu proses Python sehingga encoder dimuat sekali untuk banyak project; script juga memakai CUDA secara otomatis jika PyTorch mendeteksi GPU.
 
 Dataset memuat:
 
@@ -165,12 +165,14 @@ Artefak yang dihasilkan oleh sistem meliputi:
 - file audit JSON untuk skenario RAG-LLM, Zero-Shot, dan CodeBERT;
 - file CSV dan Excel metrik evaluasi;
 - file HTML interaktif untuk eksplorasi hasil;
-- file Markdown `chapter-4-summary-*.md` sebagai ringkasan awal Bab IV;
+- file Markdown `chapter-4-summary.md` sebagai ringkasan awal Bab IV;
 - dataset CodeBERT bridge dalam format JSON dan CSV;
 - prediksi CodeBERT bridge dari script Python lokal melalui baseline embedding otomatis atau model fine-tuned opsional;
 - diagnostics console dan diagnostics Vertex AI Gemini yang mencatat status panggilan model dan retrieval live yang digunakan.
 
 Artefak ini mendukung kebutuhan replikasi, audit metodologis, dan pelaporan hasil penelitian.
+
+Report final menggunakan nama file tetap di dalam folder run dan dioverwrite secara atomic pada retry. Dengan demikian, percobaan lanjutan memperbarui artefak yang sama tanpa menumpuk file timestamp baru, sementara checkpoint per project tetap menjadi sumber resume.
 
 ## 10. Kesimpulan Rekayasa
 

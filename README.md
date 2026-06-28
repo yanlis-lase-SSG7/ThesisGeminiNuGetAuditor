@@ -15,6 +15,7 @@ Project ini dibuat untuk:
 - menjalankan inferensi CodeBERT lokal melalui `Scripts/CodeBert/codebert_inference.py`, baik dengan model fine-tuned lokal maupun baseline embedding CodeBERT otomatis;
 - menghitung metrik TP, TN, FP, FN, Accuracy, Precision, Recall, F1-Score, dan False Positive Ratio;
 - menghasilkan artefak JSON, HTML, CSV, dan Excel untuk analisis tesis.
+- menyediakan HTML report komprehensif berisi timing eksekusi, glossary label/metrik, grafik status, severity, confusion matrix, dan review error.
 
 ## Business Flow Singkat
 
@@ -25,7 +26,7 @@ Project ini dibuat untuk:
 5. Untuk setiap project, aplikasi mengekstrak `PackageReference`.
 6. Aplikasi menjalankan Zero-Shot dan retrieval referensi keamanan secara konkuren.
 7. Setelah konteks keamanan tersedia, aplikasi membentuk ground truth, menjalankan RAG-LLM, dan menyiapkan record CodeBERT.
-8. Aplikasi menjalankan Python bridge CodeBERT dan membaca file prediksi CodeBERT.
+8. Aplikasi menjalankan Python bridge CodeBERT dalam batch satu proses dan membaca file prediksi CodeBERT.
 9. Hasil prediksi model dibandingkan dengan ground truth untuk menghasilkan metrik evaluasi.
 10. Semua report disimpan di folder run di dalam `audit-results`; jika ada checkpoint kompatibel, aplikasi otomatis resume ke folder run tersebut.
 
@@ -59,21 +60,23 @@ audit-results/20261231 14-15-16/checkpoints/
 
 Ketika aplikasi dijalankan ulang dengan dataset dan model yang sama, aplikasi mencari folder run terbaru yang memiliki checkpoint kompatibel. Project dengan checkpoint sukses akan dilewati, sedangkan project incomplete, `API_FAILED`, atau `CODEBERT_FAILED` akan dicoba kembali.
 
+Untuk menghemat waktu CPU lokal, CodeBERT diproses dalam batch satu proses Python setelah skenario LLM selesai. Encoder CodeBERT dimuat sekali untuk banyak project, dan script otomatis memakai CUDA jika PyTorch mendeteksi GPU. Resume juga bersifat parsial: jika sebuah project sebelumnya sudah memiliki CodeBERT `SUCCESS`, prediction artifact masih ada, daftar package sama, ground truth live yang baru masih sama, dan mode inferensi masih `LOCAL_CODEBERT_EMBEDDING_LOGREG`, aplikasi akan memakai ulang hasil CodeBERT dari checkpoint dan melewati eksekusi Python.
+
 Untuk memproses ulang project tertentu di folder run yang sama, hapus file JSON checkpoint project tersebut dari folder `checkpoints`.
 
 ## Output
 
 Output utama disimpan di folder run di dalam `audit-results`:
 
-- `audit-results/20261231 14-15-16/audit-rag-llm-<timestamp>.json`
-- `audit-results/20261231 14-15-16/audit-zero-shot-<timestamp>.json`
-- `audit-results/20261231 14-15-16/audit-codebert-<timestamp>.json`
-- `audit-results/20261231 14-15-16/audit-comprehensive-metrics-<timestamp>.csv`
-- `audit-results/20261231 14-15-16/audit-comprehensive-report-<timestamp>.xlsx`
-- `audit-results/20261231 14-15-16/audit-interactive-report-<timestamp>.html`
-- `audit-results/20261231 14-15-16/chapter-4-summary-<timestamp>.md`
-- `audit-results/20261231 14-15-16/api-diagnostics-<timestamp>.json`
-- `audit-results/20261231 14-15-16/console-execution-log-<timestamp>.json`
+- `audit-results/20261231 14-15-16/audit-rag-llm.json`
+- `audit-results/20261231 14-15-16/audit-zero-shot.json`
+- `audit-results/20261231 14-15-16/audit-codebert.json`
+- `audit-results/20261231 14-15-16/audit-comprehensive-metrics.csv`
+- `audit-results/20261231 14-15-16/audit-comprehensive-report.xlsx`
+- `audit-results/20261231 14-15-16/audit-interactive-report.html`
+- `audit-results/20261231 14-15-16/chapter-4-summary.md`
+- `audit-results/20261231 14-15-16/api-diagnostics.json`
+- `audit-results/20261231 14-15-16/console-execution-log.json`
 - `audit-results/20261231 14-15-16/checkpoints/<project-key>.json`
 
 ## Cara Menjalankan
@@ -112,7 +115,7 @@ Masukkan folder root yang berisi project `.NET`, misalnya:
 D:\path\to\solution-or-project-folder
 ```
 
-Aplikasi akan mencari semua file `.csproj` di folder tersebut secara rekursif, lalu menjalankan RAG-LLM, Zero-Shot, dan CodeBERT Python bridge secara paralel dengan checkpoint otomatis. Pada run pertama, aplikasi membuat `.codebert-venv` dan menginstal dependency CodeBERT otomatis. Jika `CODEBERT_MODEL_PATH` tidak diisi, CodeBERT memakai baseline embedding lokal otomatis dengan leave-one-package-out; jika Python atau bootstrap dependency gagal, jalur CodeBERT gagal dengan aman dan tidak dihitung sebagai metrik model.
+Aplikasi akan mencari semua file `.csproj` di folder tersebut secara rekursif, lalu menjalankan RAG-LLM dan Zero-Shot secara paralel dengan checkpoint otomatis. Setelah itu, project yang membutuhkan CodeBERT diproses dalam batch Python satu proses. Pada run pertama, aplikasi membuat `.codebert-venv` dan menginstal dependency CodeBERT otomatis. Jika `CODEBERT_MODEL_PATH` tidak diisi, CodeBERT memakai baseline embedding lokal otomatis dengan leave-one-package-out; jika Python atau bootstrap dependency gagal, jalur CodeBERT gagal dengan aman dan tidak dihitung sebagai metrik model.
 
 ## Komponen Utama
 
@@ -127,6 +130,6 @@ Aplikasi akan mencari semua file `.csproj` di folder tersebut secara rekursif, l
 
 ## Ringkasan Cepat
 
-`GeminiNuGetAuditor` memindai folder berisi banyak `.csproj`, mengekstrak dependency NuGet, mengambil ground truth keamanan live, menjalankan RAG-LLM dan Zero-Shot dengan Vertex AI Gemini, menjalankan CodeBERT lokal secara otomatis, lalu menghasilkan JSON, HTML, CSV, Excel, dan ringkasan Markdown untuk evaluasi penelitian.
+`GeminiNuGetAuditor` memindai folder berisi banyak `.csproj`, mengekstrak dependency NuGet, mengambil ground truth keamanan live, menjalankan RAG-LLM dan Zero-Shot dengan Vertex AI Gemini, menjalankan CodeBERT lokal secara otomatis, lalu menghasilkan JSON, HTML komprehensif, CSV, Excel, dan ringkasan Markdown untuk evaluasi penelitian.
 
 Last Updated: 28 Juni 2026

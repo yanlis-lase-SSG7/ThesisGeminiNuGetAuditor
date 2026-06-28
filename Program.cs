@@ -21,7 +21,7 @@ public class Program
     private const string CodeBertRequirementsFilePath = @"Scripts\CodeBert\requirements-codebert.txt";
     private const string CodeBertVirtualEnvironmentDirectoryName = ".codebert-venv";
     private const string CodeBertDependencyMarkerFileName = ".dependencies-ready";
-    private const string CheckpointSchemaVersion = "2026-06-27-codebert-auto-bootstrap-v5";
+    private const string CheckpointSchemaVersion = "2026-06-28-strict-prediction-coverage-v6";
     private const string VertexAiGeminiInferenceMode = "VERTEX_AI_GEMINI";
     private const string LlmProviderName = "Vertex AI Gemini";
     private const string GroundTruthProviderName = "GitHub GraphQL API live";
@@ -145,19 +145,32 @@ public class Program
                     var projectNumber = Interlocked.Increment(ref processedCount);
                     var checkpointPath = CreateProjectCheckpointPath(checkpointDirectory, BuildProjectKey(csprojPath));
 
+                    ProjectAuditResult? resumeCheckpoint = null;
                     if (File.Exists(checkpointPath) &&
-                        TryLoadCheckpointResult(checkpointPath, csprojFiles, modelName, out var existingResult) &&
-                        IsProjectFullySuccessfulForResume(existingResult))
+                        TryLoadCheckpointResult(checkpointPath, csprojFiles, modelName, out var existingResult))
                     {
-                        resultsByProjectPath[Path.GetFullPath(existingResult.ProjectPath)] = existingResult;
-                        WriteLine($"[Checkpoint] Skipping existing project result {projectNumber}/{pendingCsprojFiles.Count}: {existingResult.ProjectPath}");
-                        await SaveAggregateArtifactsAsync(cancellationToken);
-                        return;
+                        if (IsProjectFullySuccessfulForResume(existingResult))
+                        {
+                            resultsByProjectPath[Path.GetFullPath(existingResult.ProjectPath)] = existingResult;
+                            WriteLine($"[Checkpoint] Skipping existing project result {projectNumber}/{pendingCsprojFiles.Count}: {existingResult.ProjectPath}");
+                            await SaveAggregateArtifactsAsync(cancellationToken);
+                            return;
+                        }
+
+                        if (IsProjectReadyForCodeBertBatchResume(existingResult))
+                        {
+                            resultsByProjectPath[Path.GetFullPath(existingResult.ProjectPath)] = existingResult;
+                            WriteLine($"[Checkpoint] Reusing completed Vertex/RAG/Zero-Shot result and queueing CodeBERT batch only {projectNumber}/{pendingCsprojFiles.Count}: {existingResult.ProjectPath}");
+                            await SaveAggregateArtifactsAsync(cancellationToken);
+                            return;
+                        }
+
+                        resumeCheckpoint = existingResult;
                     }
 
-                    if (File.Exists(checkpointPath))
+                    if (resumeCheckpoint is not null)
                     {
-                        WriteLine($"[Checkpoint] Existing checkpoint is incomplete/API_FAILED and will be retried: {csprojPath}");
+                        WriteLine($"[Checkpoint] Existing checkpoint is incomplete/API_FAILED and will be retried with partial reuse when safe: {csprojPath}");
                     }
 
                     WriteLine($"Processing project {projectNumber}/{pendingCsprojFiles.Count}: {csprojPath}");
@@ -167,6 +180,7 @@ public class Program
                         modelName,
                         geminiSettings,
                         outputDirectory,
+                        resumeCheckpoint,
                         cancellationToken);
 
                     SaveProjectCheckpoint(checkpointDirectory, result);
@@ -187,6 +201,14 @@ public class Program
             {
                 resultsByProjectPath[Path.GetFullPath(missingResult.ProjectPath)] = missingResult;
             }
+
+            await RunPendingCodeBertBatchAsync(
+                resultsByProjectPath.Values
+                    .OrderBy(x => x.ProjectPath, StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
+                checkpointDirectory,
+                outputDirectory,
+                CancellationToken.None);
 
             results = resultsByProjectPath.Values
                 .OrderBy(x => x.ProjectPath, StringComparer.OrdinalIgnoreCase)
@@ -290,6 +312,7 @@ public class Program
         string modelName,
         GeminiSettings geminiSettings,
         string outputDirectory,
+        ProjectAuditResult? resumeCheckpoint,
         CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -370,10 +393,6 @@ public class Program
                 securityContext,
                 cancellationToken);
 
-            var codeBertTask = Task.Run(
-                () => CodeBertDatasetExporter.BuildDatasetRecords(packageReferences, groundTruthLabels),
-                cancellationToken);
-
             var zeroShotResult = await zeroShotTask;
             var ragResult = await ragTask;
             result.Scenarios.Add(zeroShotResult);
@@ -381,15 +400,27 @@ public class Program
 
             try
             {
-                result.CodeBertRecords = await codeBertTask;
-                result.Messages.Add($"CodeBERT records prepared: {result.CodeBertRecords.Count}.");
+                ScenarioAuditResult codeBertResult;
+                if (TryReuseSuccessfulCodeBertScenario(
+                        projectKey,
+                        resumeCheckpoint,
+                        packageReferences,
+                        groundTruthLabels,
+                        out var reusedCodeBertResult,
+                        out var reusedCodeBertRecords))
+                {
+                    result.CodeBertRecords = reusedCodeBertRecords.ToList();
+                    codeBertResult = reusedCodeBertResult;
+                    result.Messages.Add($"CodeBERT reused from checkpoint: {result.CodeBertRecords.Count} records.");
+                    WriteLine($"[{projectKey}] [CodeBERT] Reused successful local inference from checkpoint. Python execution skipped.");
+                }
+                else
+                {
+                    result.CodeBertRecords = CodeBertDatasetExporter.BuildDatasetRecords(packageReferences, groundTruthLabels);
+                    result.Messages.Add($"CodeBERT records prepared: {result.CodeBertRecords.Count}.");
+                    codeBertResult = CreatePendingCodeBertScenario("CodeBERT inference is queued for batch execution after LLM scenarios complete.");
+                }
 
-                var codeBertResult = await RunCodeBertScenarioSafelyAsync(
-                    projectKey,
-                    result.CodeBertRecords,
-                    groundTruthLabels,
-                    outputDirectory,
-                    cancellationToken);
                 result.Scenarios.Add(codeBertResult);
                 result.CodeBertInputJsonPath = codeBertResult.InputJsonPath;
                 result.CodeBertPredictionJsonPath = codeBertResult.PredictionJsonPath;
@@ -404,6 +435,12 @@ public class Program
             {
                 if (scenarioResult.Response is null)
                 {
+                    if (scenarioResult.Scenario == AuditScenario.CodeBert &&
+                        string.Equals(scenarioResult.Status, "CODEBERT_PENDING", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
                     scenarioResult.Status = scenarioResult.Scenario == AuditScenario.CodeBert ? "CODEBERT_FAILED" : "API_FAILED";
                     scenarioResult.ExcludedFromMetrics = true;
                     scenarioResult.MetricExclusionReason = scenarioResult.Scenario == AuditScenario.CodeBert
@@ -521,73 +558,133 @@ public class Program
         return result;
     }
 
-    private static async Task<ScenarioAuditResult> RunCodeBertScenarioSafelyAsync(
+    private static bool TryReuseSuccessfulCodeBertScenario(
         string projectKey,
-        IReadOnlyCollection<CodeBertDatasetRecord> records,
-        IReadOnlyCollection<GroundTruthLabel> groundTruthLabels,
-        string outputDirectory,
-        CancellationToken cancellationToken)
+        ProjectAuditResult? resumeCheckpoint,
+        IReadOnlyCollection<NuGetPackageReference> currentPackageReferences,
+        IReadOnlyCollection<GroundTruthLabel> currentGroundTruthLabels,
+        out ScenarioAuditResult reusableScenario,
+        out IReadOnlyList<CodeBertDatasetRecord> reusableRecords)
     {
-        var stopwatch = Stopwatch.StartNew();
-        var result = new ScenarioAuditResult
+        reusableScenario = new ScenarioAuditResult();
+        reusableRecords = Array.Empty<CodeBertDatasetRecord>();
+
+        if (resumeCheckpoint is null)
         {
-            Scenario = AuditScenario.CodeBert,
-            StartedAtUtc = DateTimeOffset.UtcNow
-        };
-
-        try
-        {
-            WriteLine($"[{projectKey}] [CodeBERT] Preparing Python inference input.");
-            var codeBertDirectory = Path.Combine(outputDirectory, "codebert");
-            Directory.CreateDirectory(codeBertDirectory);
-
-            var inputPath = Path.Combine(codeBertDirectory, $"{projectKey}-codebert-input.json");
-            var predictionPath = Path.Combine(codeBertDirectory, $"{projectKey}-codebert-predictions.json");
-            var input = new CodeBertInferenceInput
-            {
-                ProjectKey = projectKey,
-                GeneratedAtUtc = DateTimeOffset.UtcNow,
-                Records = records.ToList(),
-                GroundTruthLabels = groundTruthLabels.ToList()
-            };
-
-            File.WriteAllText(inputPath, JsonSerializer.Serialize(input, SerializerOptions), Encoding.UTF8);
-            result.InputJsonPath = inputPath;
-            result.PredictionJsonPath = predictionPath;
-
-            await ExecuteCodeBertPythonAsync(inputPath, predictionPath, cancellationToken);
-
-            var response = ModelEvaluator.LoadCodeBertPredictions(predictionPath);
-            result.Response = NormalizeResponse(
-                groundTruthLabels.Select(x => new NuGetPackageReference
-                {
-                    PackageName = x.PackageName,
-                    CurrentVersion = x.CurrentVersion
-                }).ToList(),
-                response);
-            result.Status = "SUCCESS";
-            result.ExcludedFromMetrics = false;
-            result.Success = true;
-            result.VulnerableCount = result.Response.VulnerabilityReports.Count(x => x.IsVulnerable);
-            WriteLine($"[{projectKey}] [CodeBERT] Finished. Vulnerable detections: {result.VulnerableCount}.");
-        }
-        catch (Exception ex)
-        {
-            result.Success = false;
-            result.Status = "CODEBERT_FAILED";
-            result.ExcludedFromMetrics = true;
-            result.MetricExclusionReason = "Prediksi CodeBERT tidak tersedia karena Python inference gagal.";
-            result.ErrorMessage = ex.Message;
-            WriteError($"[{projectKey}] [CodeBERT] Failed: {ex.Message}");
-        }
-        finally
-        {
-            stopwatch.Stop();
-            result.CompletedAtUtc = DateTimeOffset.UtcNow;
-            result.ElapsedSeconds = stopwatch.Elapsed.TotalSeconds;
+            return false;
         }
 
-        return result;
+        var codeBert = resumeCheckpoint.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.CodeBert);
+        if (codeBert is not { Success: true, Response: not null } ||
+            IsSyntheticCodeBertScenario(codeBert) ||
+            !IsCodeBertInferenceConfigurationReusable(codeBert))
+        {
+            return false;
+        }
+
+        if (resumeCheckpoint.CodeBertRecords.Count == 0 ||
+            !ArePackageReferencesEquivalent(currentPackageReferences, resumeCheckpoint.ExtractedPackages) ||
+            !AreGroundTruthLabelsEquivalent(currentGroundTruthLabels, resumeCheckpoint.GroundTruthLabels))
+        {
+            return false;
+        }
+
+        var predictionPath = !string.IsNullOrWhiteSpace(codeBert.PredictionJsonPath)
+            ? codeBert.PredictionJsonPath
+            : resumeCheckpoint.CodeBertPredictionJsonPath;
+        var inputPath = !string.IsNullOrWhiteSpace(codeBert.InputJsonPath)
+            ? codeBert.InputJsonPath
+            : resumeCheckpoint.CodeBertInputJsonPath;
+
+        if (string.IsNullOrWhiteSpace(predictionPath) ||
+            string.IsNullOrWhiteSpace(inputPath) ||
+            !File.Exists(predictionPath) ||
+            !File.Exists(inputPath))
+        {
+            WriteLine($"[{projectKey}] [CodeBERT] Checkpoint has successful metrics, but input/prediction artifacts are missing. Python inference will run again.");
+            return false;
+        }
+
+        var clonedScenario = JsonSerializer.Deserialize<ScenarioAuditResult>(
+            JsonSerializer.Serialize(codeBert, SerializerOptions),
+            SerializerOptions);
+        if (clonedScenario is null)
+        {
+            return false;
+        }
+
+        clonedScenario.Metrics = null;
+        clonedScenario.InputJsonPath = inputPath;
+        clonedScenario.PredictionJsonPath = predictionPath;
+        reusableScenario = clonedScenario;
+        reusableRecords = resumeCheckpoint.CodeBertRecords.ToList();
+        return true;
+    }
+
+    private static bool IsCodeBertInferenceConfigurationReusable(ScenarioAuditResult scenario)
+    {
+        var currentModelPath = Environment.GetEnvironmentVariable(CodeBertModelEnvironmentVariableName);
+        if (!string.IsNullOrWhiteSpace(currentModelPath))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            GetInferenceMode(scenario),
+            "LOCAL_CODEBERT_EMBEDDING_LOGREG",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ArePackageReferencesEquivalent(
+        IReadOnlyCollection<NuGetPackageReference> current,
+        IReadOnlyCollection<NuGetPackageReference> checkpoint)
+    {
+        return BuildPackageReferenceSignature(current) == BuildPackageReferenceSignature(checkpoint);
+    }
+
+    private static string BuildPackageReferenceSignature(IEnumerable<NuGetPackageReference> packageReferences)
+    {
+        return string.Join(
+            '\n',
+            packageReferences
+                .OrderBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.CurrentVersion, StringComparer.OrdinalIgnoreCase)
+                .Select(x => $"{NormalizeSignaturePart(x.PackageName)}|{NormalizeSignaturePart(x.CurrentVersion)}"));
+    }
+
+    private static bool AreGroundTruthLabelsEquivalent(
+        IReadOnlyCollection<GroundTruthLabel> current,
+        IReadOnlyCollection<GroundTruthLabel> checkpoint)
+    {
+        return BuildGroundTruthSignature(current) == BuildGroundTruthSignature(checkpoint);
+    }
+
+    private static string BuildGroundTruthSignature(IEnumerable<GroundTruthLabel> labels)
+    {
+        return string.Join(
+            '\n',
+            labels
+                .OrderBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.CurrentVersion, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.AdvisoryId, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.CVE_ID, StringComparer.OrdinalIgnoreCase)
+                .Select(x => string.Join(
+                    '|',
+                    NormalizeSignaturePart(x.PackageName),
+                    NormalizeSignaturePart(x.CurrentVersion),
+                    x.IsVulnerable.ToString(CultureInfo.InvariantCulture),
+                    NormalizeSignaturePart(x.CVE_ID),
+                    NormalizeSignaturePart(x.Severity),
+                    NormalizeSignaturePart(x.AdvisoryId),
+                    NormalizeSignaturePart(x.VulnerableVersionRange),
+                    NormalizeSignaturePart(x.FirstPatchedVersion),
+                    x.IsVersionRangeMatched.ToString(CultureInfo.InvariantCulture),
+                    NormalizeSignaturePart(x.VersionRangeEvaluation))));
+    }
+
+    private static string NormalizeSignaturePart(string? value)
+    {
+        return (value ?? string.Empty).Trim();
     }
 
     private static ScenarioAuditResult CreateFailedCodeBertScenario(string message)
@@ -603,6 +700,235 @@ public class Program
             StartedAtUtc = DateTimeOffset.UtcNow,
             CompletedAtUtc = DateTimeOffset.UtcNow
         };
+    }
+
+    private static ScenarioAuditResult CreatePendingCodeBertScenario(string message)
+    {
+        return new ScenarioAuditResult
+        {
+            Scenario = AuditScenario.CodeBert,
+            Status = "CODEBERT_PENDING",
+            Success = false,
+            ExcludedFromMetrics = true,
+            MetricExclusionReason = message,
+            ErrorMessage = string.Empty,
+            StartedAtUtc = DateTimeOffset.UtcNow,
+            CompletedAtUtc = DateTimeOffset.UtcNow
+        };
+    }
+
+    private static async Task RunPendingCodeBertBatchAsync(
+        IReadOnlyCollection<ProjectAuditResult> results,
+        string checkpointDirectory,
+        string outputDirectory,
+        CancellationToken cancellationToken)
+    {
+        var pendingProjects = results
+            .Where(ShouldRunCodeBertBatch)
+            .OrderBy(x => x.ProjectPath, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (pendingProjects.Count == 0)
+        {
+            WriteLine("[CodeBERT Batch] No pending CodeBERT project requires Python inference.");
+            return;
+        }
+
+        var codeBertDirectory = Path.Combine(outputDirectory, "codebert");
+        Directory.CreateDirectory(codeBertDirectory);
+        var batchInputPath = Path.Combine(codeBertDirectory, "codebert-batch-input.json");
+        var batchPredictionPath = Path.Combine(codeBertDirectory, "codebert-batch-predictions.json");
+        var batchInput = new CodeBertBatchInferenceInput
+        {
+            GeneratedAtUtc = DateTimeOffset.UtcNow,
+            Projects = pendingProjects
+                .Select(project => new CodeBertBatchProjectInput
+                {
+                    ProjectKey = project.ProjectKey,
+                    Records = project.CodeBertRecords,
+                    GroundTruthLabels = project.GroundTruthLabels
+                })
+                .ToList()
+        };
+
+        AtomicWriteText(batchInputPath, JsonSerializer.Serialize(batchInput, SerializerOptions));
+        WriteLine($"[CodeBERT Batch] Running one Python process for {pendingProjects.Count} project(s). Input: {batchInputPath}");
+
+        try
+        {
+            var batchStopwatch = Stopwatch.StartNew();
+            await ExecuteCodeBertPythonAsync(batchInputPath, batchPredictionPath, cancellationToken);
+            batchStopwatch.Stop();
+            var perProjectElapsedSeconds = pendingProjects.Count > 0
+                ? batchStopwatch.Elapsed.TotalSeconds / pendingProjects.Count
+                : 0d;
+            var batchOutput = LoadCodeBertBatchPredictions(batchPredictionPath);
+            var outputsByProjectKey = batchOutput.Projects
+                .Where(x => !string.IsNullOrWhiteSpace(x.ProjectKey))
+                .GroupBy(x => x.ProjectKey, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(x => x.Key, x => x.Last(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var project in pendingProjects)
+            {
+                if (!outputsByProjectKey.TryGetValue(project.ProjectKey, out var projectOutput))
+                {
+                    ApplyFailedCodeBertBatchResult(project, $"Batch prediction output did not contain ProjectKey={project.ProjectKey}.");
+                    SaveProjectCheckpoint(checkpointDirectory, project);
+                    continue;
+                }
+
+                var inputPath = Path.Combine(codeBertDirectory, $"{project.ProjectKey}-codebert-input.json");
+                var predictionPath = Path.Combine(codeBertDirectory, $"{project.ProjectKey}-codebert-predictions.json");
+                var singleInput = new CodeBertInferenceInput
+                {
+                    ProjectKey = project.ProjectKey,
+                    GeneratedAtUtc = DateTimeOffset.UtcNow,
+                    Records = project.CodeBertRecords,
+                    GroundTruthLabels = project.GroundTruthLabels
+                };
+                var singleOutput = new GeminiResponse
+                {
+                    ModelName = projectOutput.ModelName,
+                    InferenceMode = projectOutput.InferenceMode,
+                    VulnerabilityReports = projectOutput.VulnerabilityReports
+                };
+                var projectPackageReferences = project.GroundTruthLabels.Select(x => new NuGetPackageReference
+                {
+                    PackageName = x.PackageName,
+                    CurrentVersion = x.CurrentVersion
+                }).ToList();
+                var coverageError = GetPredictionCoverageError(projectPackageReferences, singleOutput);
+                if (coverageError is not null)
+                {
+                    ApplyFailedCodeBertBatchResult(project, $"CodeBERT batch prediction output is incomplete. {coverageError}");
+                    SaveProjectCheckpoint(checkpointDirectory, project);
+                    WriteError($"[{project.ProjectKey}] [CodeBERT Batch] Prediction output incomplete: {coverageError}");
+                    continue;
+                }
+
+                AtomicWriteText(inputPath, JsonSerializer.Serialize(singleInput, SerializerOptions));
+                AtomicWriteText(
+                    predictionPath,
+                    JsonSerializer.Serialize(new
+                    {
+                        projectOutput.ModelName,
+                        projectOutput.InferenceMode,
+                        GeneratedAtUtc = DateTimeOffset.UtcNow,
+                        project.ProjectKey,
+                        projectOutput.VulnerabilityReports
+                    }, SerializerOptions));
+
+                var response = NormalizeResponse(
+                    projectPackageReferences,
+                    singleOutput);
+                var scenario = new ScenarioAuditResult
+                {
+                    Scenario = AuditScenario.CodeBert,
+                    Success = true,
+                    Status = "SUCCESS",
+                    ExcludedFromMetrics = false,
+                    StartedAtUtc = DateTimeOffset.UtcNow,
+                    CompletedAtUtc = DateTimeOffset.UtcNow,
+                    ElapsedSeconds = perProjectElapsedSeconds,
+                    InputJsonPath = inputPath,
+                    PredictionJsonPath = predictionPath,
+                    Response = response,
+                    VulnerableCount = response.VulnerabilityReports.Count(x => x.IsVulnerable)
+                };
+                scenario.Metrics = ModelEvaluator.Calculate(
+                    $"{project.ProjectKey}:{GetScenarioDisplayName(AuditScenario.CodeBert)}",
+                    scenario.Response.VulnerabilityReports,
+                    project.GroundTruthLabels);
+
+                ReplaceScenario(project, scenario);
+                project.CodeBertInputJsonPath = inputPath;
+                project.CodeBertPredictionJsonPath = predictionPath;
+                project.Messages.Add("CodeBERT completed through batch Python inference.");
+                project.CompletedAtUtc = scenario.CompletedAtUtc;
+                project.ElapsedSeconds = Math.Max(
+                    project.ElapsedSeconds,
+                    Math.Max(0d, (project.CompletedAtUtc - project.StartedAtUtc).TotalSeconds));
+                project.Success = IsProjectFullySuccessfulForResume(project);
+                SaveProjectCheckpoint(checkpointDirectory, project);
+                WriteLine($"[{project.ProjectKey}] [CodeBERT Batch] Metrics calculated and checkpoint updated.");
+            }
+        }
+        catch (Exception ex)
+        {
+            WriteError($"[CodeBERT Batch] Failed: {ex.Message}");
+            foreach (var project in pendingProjects)
+            {
+                ApplyFailedCodeBertBatchResult(project, ex.Message);
+                SaveProjectCheckpoint(checkpointDirectory, project);
+            }
+        }
+    }
+
+    private static bool ShouldRunCodeBertBatch(ProjectAuditResult project)
+    {
+        if (!string.Equals(project.SecurityReferenceSource, "GitHubGraphQLApi", StringComparison.OrdinalIgnoreCase) ||
+            project.CodeBertRecords.Count == 0 ||
+            project.GroundTruthLabels.Count == 0)
+        {
+            return false;
+        }
+
+        var codeBert = project.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.CodeBert);
+        return codeBert is null ||
+               !codeBert.Success ||
+               codeBert.Response is null ||
+               codeBert.Metrics is null;
+    }
+
+    private static void ApplyFailedCodeBertBatchResult(ProjectAuditResult project, string message)
+    {
+        var failed = new ScenarioAuditResult
+        {
+            Scenario = AuditScenario.CodeBert,
+            Status = "CODEBERT_FAILED",
+            Success = false,
+            ExcludedFromMetrics = true,
+            MetricExclusionReason = "Prediksi CodeBERT tidak tersedia karena batch Python inference gagal.",
+            ErrorMessage = message,
+            StartedAtUtc = DateTimeOffset.UtcNow,
+            CompletedAtUtc = DateTimeOffset.UtcNow
+        };
+
+        ReplaceScenario(project, failed);
+        project.Messages.Add($"CodeBERT batch inference failed: {message}");
+        project.Success = IsProjectFullySuccessfulForResume(project);
+    }
+
+    private static void ReplaceScenario(ProjectAuditResult project, ScenarioAuditResult scenario)
+    {
+        project.Scenarios.RemoveAll(x => x.Scenario == scenario.Scenario);
+        project.Scenarios.Add(scenario);
+    }
+
+    private static CodeBertBatchPredictionOutput LoadCodeBertBatchPredictions(string predictionJsonPath)
+    {
+        if (!File.Exists(predictionJsonPath))
+        {
+            throw new FileNotFoundException("CodeBERT batch prediction JSON was not found.", predictionJsonPath);
+        }
+
+        var json = File.ReadAllText(predictionJsonPath, Encoding.UTF8);
+        var output = JsonSerializer.Deserialize<CodeBertBatchPredictionOutput>(json, SerializerOptions);
+        if (output?.Projects is not { Count: > 0 })
+        {
+            var single = JsonSerializer.Deserialize<CodeBertBatchProjectPrediction>(json, SerializerOptions);
+            if (single?.VulnerabilityReports is { Count: > 0 })
+            {
+                return new CodeBertBatchPredictionOutput
+                {
+                    Projects = new List<CodeBertBatchProjectPrediction> { single }
+                };
+            }
+
+            throw new InvalidOperationException("CodeBERT batch prediction JSON does not contain project predictions.");
+        }
+
+        return output;
     }
 
     private static async Task ExecuteCodeBertPythonAsync(
@@ -994,6 +1320,21 @@ public class Program
 
                 if (response is not null)
                 {
+                    var coverageError = GetPredictionCoverageError(packageReferences, response);
+                    if (coverageError is not null)
+                    {
+                        if (attempt < maxAttempts)
+                        {
+                            var delay = CalculateBackoffDelay(settings.RetryDelayMilliseconds, attempt);
+                            WriteLine($"[Gemini] Incomplete prediction response attempt {attempt}/{maxAttempts}: {coverageError}. Retrying in {delay.TotalMilliseconds:0}ms.");
+                            await Task.Delay(delay, cancellationToken);
+                            continue;
+                        }
+
+                        throw new GeminiApiFailedException(
+                            $"Vertex AI Gemini returned an incomplete prediction response after {maxAttempts} attempt(s). {coverageError}");
+                    }
+
                     return response;
                 }
 
@@ -1559,7 +1900,7 @@ Local packages:
 
         return $$"""
 You are a NuGet security auditor evaluating the RAG-LLM scenario for a controlled experiment.
-Use the provided security reference data as ground-truth context from GitHub Advisory/local DB.
+Use the provided security reference data as ground-truth context from the live GitHub GraphQL API only.
 Only mark IsVulnerable=true when the package is supported by the provided reference context.
 Set IsGroundedInReference=true only when the finding is directly supported by the reference context.
 If a package is absent from the reference context, set IsVulnerable=false, IsGroundedInReference=false, Severity=Unknown, and SeverityIndonesia=Tidak diketahui.
@@ -1579,6 +1920,12 @@ Security reference data:
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
         GeminiResponse? geminiResponse)
     {
+        var coverageError = GetPredictionCoverageError(packageReferences, geminiResponse);
+        if (coverageError is not null)
+        {
+            throw new InvalidOperationException($"Prediction response is incomplete or ambiguous. {coverageError}");
+        }
+
         var reportLookup = (geminiResponse?.VulnerabilityReports ?? new List<VulnerabilityReport>())
             .Where(x => !string.IsNullOrWhiteSpace(x.PackageName))
             .GroupBy(x => x.PackageName, StringComparer.OrdinalIgnoreCase)
@@ -1600,20 +1947,7 @@ Security reference data:
                 return report;
             }
 
-            return new VulnerabilityReport
-            {
-                PackageName = packageReference.PackageName,
-                CurrentVersion = packageReference.CurrentVersion,
-                IsVulnerable = false,
-                CVE_ID = string.Empty,
-                Severity = "Unknown",
-                SeverityIndonesia = "Tidak diketahui",
-                MitigationPlan = string.Empty,
-                MitigationPlanIndonesia = string.Empty,
-                IsGroundedInReference = false,
-                ReasoningTrace = string.Empty,
-                ReasoningTraceIndonesia = string.Empty
-            };
+            throw new InvalidOperationException($"Prediction response did not include package '{packageReference.PackageName}'.");
         }).ToList();
 
         return new GeminiResponse
@@ -1624,50 +1958,73 @@ Security reference data:
         };
     }
 
-    private static string SaveAuditResult(
-        string outputDirectory,
-        string csprojPath,
-        string modelName,
+    private static string? GetPredictionCoverageError(
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
-        GeminiResponse geminiResponse,
-        AuditScenario scenario,
-        string projectKey)
+        GeminiResponse? response)
     {
-        Directory.CreateDirectory(outputDirectory);
+        var expectedPackages = packageReferences
+            .Where(x => !string.IsNullOrWhiteSpace(x.PackageName))
+            .Select(x => x.PackageName.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
-        var outputFilePath = Path.Combine(
-            outputDirectory,
-            $"audit-{projectKey}-{GetScenarioTag(scenario)}-{DateTime.UtcNow:yyyyMMdd-HHmmssfff}.json");
-
-        var sessionRecord = new AuditSessionRecord
+        if (expectedPackages.Count == 0)
         {
-            GeneratedAtUtc = DateTimeOffset.UtcNow,
-            SourceProjectPath = csprojPath,
-            ModelName = modelName,
-            Scenario = scenario,
-            ExtractedPackages = packageReferences.ToList(),
-            VulnerabilityReports = geminiResponse.VulnerabilityReports,
-            VulnerabilityReportFieldDescriptions = GetVulnerabilityReportFieldDescriptions()
-        };
+            return null;
+        }
 
-        File.WriteAllText(outputFilePath, JsonSerializer.Serialize(sessionRecord, SerializerOptions), Encoding.UTF8);
-        return outputFilePath;
+        var reports = response?.VulnerabilityReports ?? new List<VulnerabilityReport>();
+        if (reports.Count == 0)
+        {
+            return $"Expected {expectedPackages.Count} package prediction(s), but the response contained none.";
+        }
+
+        var actualPackages = reports
+            .Where(x => !string.IsNullOrWhiteSpace(x.PackageName))
+            .Select(x => x.PackageName.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var missingPackages = expectedPackages
+            .Where(packageName => !actualPackages.Contains(packageName))
+            .Take(10)
+            .ToList();
+
+        if (missingPackages.Count > 0)
+        {
+            return $"Missing prediction(s) for package(s): {string.Join(", ", missingPackages)}.";
+        }
+
+        var duplicatePackages = reports
+            .Where(x => !string.IsNullOrWhiteSpace(x.PackageName))
+            .GroupBy(x => x.PackageName.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Where(x => x.Count() > 1)
+            .Select(x => x.Key)
+            .Take(10)
+            .ToList();
+
+        if (duplicatePackages.Count > 0)
+        {
+            return $"Duplicate prediction(s) found for package(s): {string.Join(", ", duplicatePackages)}.";
+        }
+
+        return null;
     }
 
     private static FinalArtifactSet CreateArtifactSet(string outputDirectory, string timestamp)
     {
         Directory.CreateDirectory(outputDirectory);
+        _ = timestamp;
         return new FinalArtifactSet
         {
-            RagJsonPath = Path.Combine(outputDirectory, $"audit-rag-llm-{timestamp}.json"),
-            ZeroShotJsonPath = Path.Combine(outputDirectory, $"audit-zero-shot-{timestamp}.json"),
-            CodeBertJsonPath = Path.Combine(outputDirectory, $"audit-codebert-{timestamp}.json"),
-            CsvReportPath = Path.Combine(outputDirectory, $"audit-comprehensive-metrics-{timestamp}.csv"),
-            ExcelReportPath = Path.Combine(outputDirectory, $"audit-comprehensive-report-{timestamp}.xlsx"),
-            HtmlReportPath = Path.Combine(outputDirectory, $"audit-interactive-report-{timestamp}.html"),
-            Chapter4SummaryPath = Path.Combine(outputDirectory, $"chapter-4-summary-{timestamp}.md"),
-            ApiDiagnosticsJsonPath = Path.Combine(outputDirectory, $"api-diagnostics-{timestamp}.json"),
-            ConsoleLogJsonPath = Path.Combine(outputDirectory, $"console-execution-log-{timestamp}.json")
+            RagJsonPath = Path.Combine(outputDirectory, "audit-rag-llm.json"),
+            ZeroShotJsonPath = Path.Combine(outputDirectory, "audit-zero-shot.json"),
+            CodeBertJsonPath = Path.Combine(outputDirectory, "audit-codebert.json"),
+            CsvReportPath = Path.Combine(outputDirectory, "audit-comprehensive-metrics.csv"),
+            ExcelReportPath = Path.Combine(outputDirectory, "audit-comprehensive-report.xlsx"),
+            HtmlReportPath = Path.Combine(outputDirectory, "audit-interactive-report.html"),
+            Chapter4SummaryPath = Path.Combine(outputDirectory, "chapter-4-summary.md"),
+            ApiDiagnosticsJsonPath = Path.Combine(outputDirectory, "api-diagnostics.json"),
+            ConsoleLogJsonPath = Path.Combine(outputDirectory, "console-execution-log.json")
         };
     }
 
@@ -1773,13 +2130,12 @@ Security reference data:
         var zeroShotReport = BuildScenarioJsonReport(rootFolder, modelName, AuditScenario.ZeroShot, results);
         var codeBertReport = BuildCodeBertJsonReport(rootFolder, modelName, results);
 
-        File.WriteAllText(artifactSet.RagJsonPath, JsonSerializer.Serialize(ragReport, SerializerOptions), Encoding.UTF8);
-        File.WriteAllText(artifactSet.ZeroShotJsonPath, JsonSerializer.Serialize(zeroShotReport, SerializerOptions), Encoding.UTF8);
-        File.WriteAllText(artifactSet.CodeBertJsonPath, JsonSerializer.Serialize(codeBertReport, SerializerOptions), Encoding.UTF8);
-        File.WriteAllText(
+        AtomicWriteText(artifactSet.RagJsonPath, JsonSerializer.Serialize(ragReport, SerializerOptions));
+        AtomicWriteText(artifactSet.ZeroShotJsonPath, JsonSerializer.Serialize(zeroShotReport, SerializerOptions));
+        AtomicWriteText(artifactSet.CodeBertJsonPath, JsonSerializer.Serialize(codeBertReport, SerializerOptions));
+        AtomicWriteText(
             artifactSet.ApiDiagnosticsJsonPath,
-            JsonSerializer.Serialize(BuildApiDiagnosticsReport(rootFolder, modelName, artifactSet.ApiDiagnosticsJsonPath), SerializerOptions),
-            Encoding.UTF8);
+            JsonSerializer.Serialize(BuildApiDiagnosticsReport(rootFolder, modelName, artifactSet.ApiDiagnosticsJsonPath), SerializerOptions));
         SaveComprehensiveCsvReport(artifactSet.CsvReportPath, results);
         SaveComprehensiveExcelReport(artifactSet.ExcelReportPath, rootFolder, modelName, results);
         SaveInteractiveHtmlReport(artifactSet.HtmlReportPath, rootFolder, modelName, results, artifactSet);
@@ -1886,6 +2242,22 @@ Security reference data:
                rag is { Success: true, Response: not null } &&
                zeroShot is { Success: true, Response: not null } &&
                codeBert is { Success: true, Response: not null, Metrics: not null };
+    }
+
+    private static bool IsProjectReadyForCodeBertBatchResume(ProjectAuditResult result)
+    {
+        var rag = result.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.RagLlm);
+        var zeroShot = result.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.ZeroShot);
+        var codeBert = result.Scenarios.FirstOrDefault(x => x.Scenario == AuditScenario.CodeBert);
+
+        return result.ErrorMessage.Length == 0 &&
+               result.PackageCount > 0 &&
+               string.Equals(result.SecurityReferenceSource, "GitHubGraphQLApi", StringComparison.OrdinalIgnoreCase) &&
+               result.GroundTruthLabels.Count > 0 &&
+               result.CodeBertRecords.Count > 0 &&
+               rag is { Success: true, Response: not null } &&
+               zeroShot is { Success: true, Response: not null } &&
+               codeBert is { Success: false, Status: "CODEBERT_PENDING" };
     }
 
     private static bool IsCodeBertScenarioSuccessful(ProjectAuditResult result)
@@ -2022,7 +2394,7 @@ Security reference data:
         }
 
         var diagnostics = new List<GeminiApiDiagnostic>();
-        foreach (var path in Directory.EnumerateFiles(outputDirectory, "api-diagnostics-*.json", SearchOption.TopDirectoryOnly))
+        foreach (var path in Directory.EnumerateFiles(outputDirectory, "api-diagnostics*.json", SearchOption.TopDirectoryOnly))
         {
             try
             {
@@ -2139,7 +2511,7 @@ Security reference data:
         WriteRetrievalDiagnosticsSheet(workbook, results);
         WriteFieldDescriptionsSheet(workbook);
         WriteMetricDefinitionsSheet(workbook);
-        workbook.SaveAs(outputFilePath);
+        AtomicSaveWorkbook(workbook, outputFilePath);
     }
 
     private static string GetPredictionModelName(ScenarioAuditResult? scenario)
@@ -2240,7 +2612,7 @@ Security reference data:
             }
         }
 
-        File.WriteAllText(outputFilePath, builder.ToString(), Encoding.UTF8);
+        AtomicWriteText(outputFilePath, builder.ToString());
     }
 
     private static void WriteRunSummarySheet(
@@ -2406,7 +2778,7 @@ Security reference data:
             ("Retrieval Diagnostics", "Jejak sumber advisory yang dipakai untuk tiap project."),
             ("Field Descriptions", "Kamus field JSON dan Excel agar pembaca memahami arti setiap kolom temuan."),
             ("Metric Definitions", "Rumus Accuracy, Precision, Recall, F1, False Positive Ratio, dan confusion matrix."),
-            ("JSON Reports", "audit-rag-llm*.json dan audit-zero-shot*.json berisi report Vertex AI Gemini; audit-codebert*.json berisi dataset, prediksi CodeBERT bridge, metadata inference, dan metrik; api-diagnostics*.json berisi kesehatan panggilan Vertex AI Gemini."),
+            ("JSON Reports", "audit-rag-llm.json dan audit-zero-shot.json berisi report Vertex AI Gemini; audit-codebert.json berisi dataset, prediksi CodeBERT bridge, metadata inference, dan metrik; api-diagnostics.json berisi kesehatan panggilan Vertex AI Gemini."),
             ("HTML Report", "audit-interactive-report*.html adalah ringkasan interaktif untuk dibuka di browser dan difilter tanpa membuka Excel."),
             ("Chapter 4 Summary", "chapter-4-summary*.md adalah ringkasan otomatis metrik, confusion matrix, delta antarskenario, dan daftar artefak untuk bahan awal Bab 4.")
         };
@@ -2940,8 +3312,9 @@ table{width:100%;border-collapse:collapse;background:var(--panel);border:1px sol
 .summary-card{border-left:4px solid var(--brand)}.summary-card.codebert{border-left-color:var(--bert)}.summary-card.zero{border-left-color:var(--brand2)}.score{font-size:22px;font-weight:700}.bar-label{display:flex;justify-content:space-between;gap:8px;margin-top:8px}.bar-track{height:12px;background:#e5e7eb;border-radius:999px;overflow:hidden}.bar-fill{height:12px}.detail{max-width:520px}.row-hidden{display:none!important}
 .flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.flow-step{border:1px solid var(--line);border-radius:8px;padding:12px;background:#f8fbff;position:relative}.flow-step strong{display:block}.flow-step .num{display:inline-flex;width:24px;height:24px;align-items:center;justify-content:center;border-radius:999px;background:var(--brand);color:white;font-weight:700;margin-bottom:8px}.flow-step:not(:last-child)::after{content:"";position:absolute;right:-10px;top:50%;width:10px;border-top:2px solid #93c5fd}
 .chart-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.donut-card{display:flex;gap:14px;align-items:center}.donut{width:112px;height:112px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto}.donut span{width:72px;height:72px;border-radius:50%;background:white;display:grid;place-items:center;text-align:center;font-size:12px;font-weight:700}.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.legend span{font-size:12px;color:var(--muted)}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}.stack{height:16px;background:#e5e7eb;border-radius:999px;overflow:hidden;display:flex}.stack span{display:block;height:16px}.mini-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.mini-kpi{border:1px solid var(--line);border-radius:8px;padding:12px;background:#f8fbff}.mini-kpi strong{font-size:20px}.small-table td,.small-table th{font-size:12px}.codebert-note{border:1px solid #c4b5fd;background:#f5f3ff;color:#4c1d95;border-radius:8px;padding:10px;margin-top:10px}
+.info{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-size:11px;font-weight:800;margin-left:4px;cursor:help}.glossary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.glossary-item{border:1px solid var(--line);border-radius:8px;background:#f8fbff;padding:12px}.glossary-item strong{display:block}.time-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}.timeline-row{display:grid;grid-template-columns:160px 1fr 90px;gap:10px;align-items:center;margin:8px 0}.timeline-track{height:14px;background:#e5e7eb;border-radius:999px;overflow:hidden}.timeline-fill{height:14px;border-radius:999px}.severity-chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 9px;border:1px solid var(--line);font-size:12px;margin:3px;background:white}.spark-row{display:grid;grid-template-columns:120px 1fr 70px;gap:10px;align-items:center;margin:7px 0}.spark{height:10px;background:#e5e7eb;border-radius:999px;overflow:hidden}.spark span{display:block;height:10px;border-radius:999px}
 details{background:#f8fbff;border:1px solid var(--line);border-radius:8px;padding:10px}summary{cursor:pointer;font-weight:600}
-@media(max-width:1100px){main,header{padding-left:18px;padding-right:18px}.brand-lockup{align-items:flex-start;gap:12px}.brand-logo{width:104px}.grid,.two,.three,.flow,.chart-grid,.mini-kpis{grid-template-columns:1fr}.toolbar input,.toolbar select{min-width:100%;width:100%}.flow-step:not(:last-child)::after{display:none}}
+@media(max-width:1100px){main,header{padding-left:18px;padding-right:18px}.brand-lockup{align-items:flex-start;gap:12px}.brand-logo{width:104px}.grid,.two,.three,.flow,.chart-grid,.mini-kpis,.glossary-grid,.time-grid{grid-template-columns:1fr}.timeline-row,.spark-row{grid-template-columns:1fr}.toolbar input,.toolbar select{min-width:100%;width:100%}.flow-step:not(:last-child)::after{display:none}}
 @media(max-width:640px){.brand-lockup{display:block}.brand-logo{width:112px;margin-bottom:14px}.brand-title h1{font-size:24px}}
 </style>
 """);
@@ -2987,6 +3360,8 @@ details{background:#f8fbff;border:1px solid var(--line);border-radius:8px;paddin
 
         AppendExecutiveSummary(builder, results);
         AppendExperimentFlow(builder, results);
+        AppendExecutionTiming(builder, results);
+        AppendLabelAndMetricGuide(builder);
 
         builder.AppendLine("<section><div class=\"section-title\"><h2>Interactive Dashboard<span class=\"id-block\">Dashboard Interaktif</span></h2><span class=\"hint\">Search and filter without opening Excel.<span class=\"id-block\">Cari dan filter tanpa membuka Excel.</span></span></div>");
         builder.AppendLine("""
@@ -3012,6 +3387,8 @@ details{background:#f8fbff;border:1px solid var(--line);border-radius:8px;paddin
         AppendComparisonChart(builder, results);
         AppendConfusionDonutChart(builder, results);
         AppendPredictionOutcomeChart(builder, results);
+        AppendSeverityDistributionChart(builder, results);
+        AppendScenarioStatusChart(builder, results);
         AppendConfusionMatrixTable(builder, results);
         AppendHotspotTable(builder, allFindings, allMetricRecords);
         builder.AppendLine("</div><div id=\"projects\" class=\"panel\">");
@@ -3042,7 +3419,7 @@ function filter(){
 </script>
 """);
         builder.AppendLine("</main></body></html>");
-        File.WriteAllText(outputFilePath, builder.ToString(), Encoding.UTF8);
+        AtomicWriteText(outputFilePath, builder.ToString());
     }
 
     private static void SaveChapter4SummaryMarkdown(
@@ -3131,7 +3508,7 @@ function filter(){
         builder.AppendLine($"- Vertex AI Gemini Diagnostics JSON: `{Artifact(artifactSet.ApiDiagnosticsJsonPath)}`");
         builder.AppendLine($"- Console Execution Log JSON: `{Artifact(artifactSet.ConsoleLogJsonPath)}`");
 
-        File.WriteAllText(outputFilePath, builder.ToString(), Encoding.UTF8);
+        AtomicWriteText(outputFilePath, builder.ToString());
     }
 
     private static void AppendMetricCard(StringBuilder builder, string labelEnglish, string labelIndonesia, string value, string subtitleEnglish, string subtitleIndonesia)
@@ -3200,6 +3577,110 @@ function filter(){
         builder.AppendLine($"<strong>{Html(labelEnglish)}<span class=\"id-block\">{Html(labelIndonesia)}</span></strong>");
         builder.AppendLine($"<p class=\"hint\">{Html(valueEnglish)}<span class=\"id-block\">{Html(valueIndonesia)}</span></p>");
         builder.AppendLine("</div>");
+    }
+
+    private static void AppendExecutionTiming(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var started = results.Count > 0 ? results.Min(x => x.StartedAtUtc) : DateTimeOffset.UtcNow;
+        var completed = results.Count > 0 ? results.Max(x => x.CompletedAtUtc) : DateTimeOffset.UtcNow;
+        var wallClock = completed > started ? completed - started : TimeSpan.Zero;
+        var scenarioElapsed = new[]
+        {
+            (Scenario: "RAG-LLM", Seconds: SumScenarioElapsed(results, AuditScenario.RagLlm), Color: "#1d4ed8"),
+            (Scenario: "Zero-Shot", Seconds: SumScenarioElapsed(results, AuditScenario.ZeroShot), Color: "#0f766e"),
+            (Scenario: "CodeBERT", Seconds: SumScenarioElapsed(results, AuditScenario.CodeBert), Color: "#7c3aed")
+        };
+        var maxScenarioSeconds = Math.Max(1d, scenarioElapsed.Max(x => x.Seconds));
+        var averageProjectSeconds = results.Count > 0 ? results.Average(x => x.ElapsedSeconds) : 0d;
+        var slowestProjects = results
+            .OrderByDescending(x => x.ElapsedSeconds)
+            .Take(5)
+            .ToList();
+        var maxProjectSeconds = Math.Max(1d, slowestProjects.Count > 0 ? slowestProjects.Max(x => x.ElapsedSeconds) : 1d);
+
+        builder.AppendLine("<section class=\"card\">");
+        builder.AppendLine($"<div class=\"section-title\"><h2>Execution Timing<span class=\"id-block\">Waktu Eksekusi</span></h2><span class=\"hint\">Timing is calculated from checkpoint timestamps and scenario elapsed values.<span class=\"id-block\">Waktu dihitung dari timestamp checkpoint dan durasi tiap skenario.</span></span></div>");
+        builder.AppendLine("<div class=\"mini-kpis\">");
+        AppendMiniKpi(builder, "Started", "Mulai", FormatTimestamp(started), "first project checkpoint");
+        AppendMiniKpi(builder, "Completed", "Selesai", FormatTimestamp(completed), "last project checkpoint");
+        AppendMiniKpi(builder, "Wall-clock", "Durasi total", FormatDuration(wallClock.TotalSeconds), "start to finish");
+        AppendMiniKpi(builder, "Avg/project", "Rata-rata/proyek", FormatDuration(averageProjectSeconds), $"{results.Count} project(s)");
+        builder.AppendLine("</div>");
+        builder.AppendLine("<div class=\"time-grid\">");
+        builder.AppendLine("<div><h2>Scenario Time Share<span class=\"id-block\">Porsi Waktu Skenario</span></h2>");
+        foreach (var item in scenarioElapsed)
+        {
+            builder.AppendLine("<div class=\"timeline-row\">");
+            builder.AppendLine($"<span>{Html(item.Scenario)} {InfoTip(GetScenarioTimingDescription(item.Scenario))}</span>");
+            builder.AppendLine($"<div class=\"timeline-track\"><div class=\"timeline-fill\" style=\"width:{CssPercent(item.Seconds / maxScenarioSeconds)};background:{Html(item.Color)}\"></div></div>");
+            builder.AppendLine($"<span class=\"hint\">{Html(FormatDuration(item.Seconds))}</span>");
+            builder.AppendLine("</div>");
+        }
+        builder.AppendLine("</div>");
+        builder.AppendLine("<div><h2>Slowest Projects<span class=\"id-block\">Proyek Terlama</span></h2>");
+        foreach (var project in slowestProjects)
+        {
+            builder.AppendLine("<div class=\"spark-row\">");
+            builder.AppendLine($"<span title=\"{Html(project.ProjectPath)}\">{Html(TruncateForDisplay(project.ProjectName, 32))}</span>");
+            builder.AppendLine($"<div class=\"spark\"><span style=\"width:{CssPercent(project.ElapsedSeconds / maxProjectSeconds)};background:#ea580c\"></span></div>");
+            builder.AppendLine($"<span class=\"hint\">{Html(FormatDuration(project.ElapsedSeconds))}</span>");
+            builder.AppendLine("</div>");
+        }
+        builder.AppendLine("</div></div></section>");
+    }
+
+    private static void AppendLabelAndMetricGuide(StringBuilder builder)
+    {
+        var items = new[]
+        {
+            ("SUCCESS", "Skenario berhasil dan prediksi dapat dipakai untuk metrik."),
+            ("API_FAILED", "Panggilan Vertex AI Gemini gagal setelah retry; skenario dikeluarkan dari confusion matrix."),
+            ("CODEBERT_FAILED", "Inferensi Python CodeBERT gagal; skenario dikeluarkan dari confusion matrix."),
+            ("CODEBERT_PENDING", "Dataset CodeBERT sudah siap dan menunggu batch Python selesai."),
+            ("VULNERABLE", "Package dinilai rentan oleh ground truth atau prediksi model, tergantung konteks tabel."),
+            ("SAFE", "Package dinilai tidak rentan."),
+            ("GROUNDED", "Temuan didukung oleh konteks retrieval yang diberikan ke RAG-LLM."),
+            ("UNGROUNDED", "Temuan tidak didukung konteks retrieval; normal untuk Zero-Shot dan CodeBERT."),
+            ("True Positive", "Model memprediksi rentan dan ground truth juga rentan."),
+            ("True Negative", "Model memprediksi aman dan ground truth juga aman."),
+            ("False Positive", "Model memprediksi rentan padahal ground truth aman; ini alarm palsu."),
+            ("False Negative", "Model memprediksi aman padahal ground truth rentan; ini miss detection."),
+            ("Accuracy", "Proporsi semua prediksi yang benar: (TP + TN) / total."),
+            ("Precision", "Ketepatan prediksi rentan: TP / (TP + FP)."),
+            ("Recall", "Kemampuan menemukan kerentanan aktual: TP / (TP + FN)."),
+            ("F1-Score", "Rata-rata harmonik precision dan recall.")
+        };
+
+        builder.AppendLine("<section class=\"card\">");
+        builder.AppendLine("<div class=\"section-title\"><h2>Label & Metric Guide<span class=\"id-block\">Panduan Label & Metrik</span></h2><span class=\"hint\">Every important label used in this report is explained here.<span class=\"id-block\">Semua label penting pada report ini dijelaskan di sini.</span></span></div>");
+        builder.AppendLine("<div class=\"glossary-grid\">");
+        foreach (var (label, description) in items)
+        {
+            builder.AppendLine("<div class=\"glossary-item\">");
+            builder.AppendLine($"<strong>{Html(label)}</strong>");
+            builder.AppendLine($"<span class=\"hint\">{Html(description)}</span>");
+            builder.AppendLine("</div>");
+        }
+        builder.AppendLine("</div></section>");
+    }
+
+    private static double SumScenarioElapsed(IReadOnlyCollection<ProjectAuditResult> results, AuditScenario scenario)
+    {
+        return results
+            .SelectMany(x => x.Scenarios)
+            .Where(x => x.Scenario == scenario)
+            .Sum(x => x.ElapsedSeconds);
+    }
+
+    private static string GetScenarioTimingDescription(string scenario)
+    {
+        return scenario switch
+        {
+            "RAG-LLM" => "Durasi panggilan Vertex AI Gemini dengan konteks retrieval GitHub GraphQL.",
+            "Zero-Shot" => "Durasi panggilan Vertex AI Gemini tanpa konteks retrieval.",
+            "CodeBERT" => "Durasi inferensi Python CodeBERT lokal atau batch.",
+            _ => "Durasi skenario."
+        };
     }
 
     private static void AppendRetrievalCoverageChart(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
@@ -3418,6 +3899,61 @@ function filter(){
         builder.AppendLine("</section>");
     }
 
+    private static void AppendSeverityDistributionChart(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var severityCounts = results
+            .SelectMany(x => x.GroundTruthLabels)
+            .Where(x => x.IsVulnerable)
+            .GroupBy(x => string.IsNullOrWhiteSpace(x.Severity) ? "Unknown" : x.Severity.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(x => new { Severity = x.Key, Count = x.Count() })
+            .OrderByDescending(x => GetSeverityRank(x.Severity))
+            .ThenByDescending(x => x.Count)
+            .ToList();
+        var total = Math.Max(1, severityCounts.Sum(x => x.Count));
+
+        builder.AppendLine("<section class=\"card\"><div class=\"section-title\"><h2>Ground-Truth Severity<span class=\"id-block\">Severity Ground Truth</span></h2><span class=\"hint\">Distribution of vulnerable package labels from live GitHub GraphQL data.<span class=\"id-block\">Distribusi label package rentan dari data GitHub GraphQL live.</span></span></div>");
+        if (severityCounts.Count == 0)
+        {
+            builder.AppendLine("<p class=\"hint\">No vulnerable ground-truth labels were found in this run.<span class=\"id-block\">Tidak ada label ground truth rentan pada run ini.</span></p></section>");
+            return;
+        }
+
+        builder.AppendLine("<div class=\"stack\">");
+        foreach (var item in severityCounts)
+        {
+            builder.AppendLine($"<span title=\"{Html(item.Severity)}: {item.Count}\" style=\"width:{CssPercent(Ratio(item.Count, total))};background:{Html(GetSeverityColor(item.Severity))}\"></span>");
+        }
+        builder.AppendLine("</div><div class=\"legend\">");
+        foreach (var item in severityCounts)
+        {
+            builder.AppendLine($"<span class=\"severity-chip\"><i style=\"background:{Html(GetSeverityColor(item.Severity))}\"></i>{Html(item.Severity)}: {item.Count} {InfoTip(GetSeverityDescription(item.Severity))}</span>");
+        }
+        builder.AppendLine("</div></section>");
+    }
+
+    private static void AppendScenarioStatusChart(StringBuilder builder, IReadOnlyCollection<ProjectAuditResult> results)
+    {
+        var statusCounts = results
+            .SelectMany(x => x.Scenarios)
+            .GroupBy(x => string.IsNullOrWhiteSpace(x.Status) ? "UNKNOWN" : x.Status, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new { Status = x.Key, Count = x.Count() })
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.Status)
+            .ToList();
+        var total = Math.Max(1, statusCounts.Sum(x => x.Count));
+
+        builder.AppendLine("<section class=\"card\"><div class=\"section-title\"><h2>Scenario Status Mix<span class=\"id-block\">Komposisi Status Skenario</span></h2><span class=\"hint\">Shows execution completeness across RAG-LLM, Zero-Shot, and CodeBERT.<span class=\"id-block\">Menunjukkan kelengkapan eksekusi RAG-LLM, Zero-Shot, dan CodeBERT.</span></span></div>");
+        foreach (var item in statusCounts)
+        {
+            builder.AppendLine("<div class=\"spark-row\">");
+            builder.AppendLine($"<span>{StatusPill(item.Status)}</span>");
+            builder.AppendLine($"<div class=\"spark\"><span style=\"width:{CssPercent(Ratio(item.Count, total))};background:{Html(GetStatusColor(item.Status))}\"></span></div>");
+            builder.AppendLine($"<span class=\"hint\">{item.Count}/{total}</span>");
+            builder.AppendLine("</div>");
+        }
+        builder.AppendLine("</section>");
+    }
+
     private static string BuildDonutStyle(EvaluationMetrics metrics)
     {
         if (metrics.Total <= 0)
@@ -3575,7 +4111,7 @@ function filter(){
             "NOT_RUN" or "UNGROUNDED" => "warn",
             _ => "neutral"
         };
-        return $"<span class=\"pill {css}\">{Html(status)}</span>";
+        return $"<span class=\"pill {css}\" title=\"{Html(GetStatusDescription(status))}\">{Html(status)}</span>";
     }
 
     private static double Ratio(int numerator, int denominator)
@@ -3591,6 +4127,94 @@ function filter(){
     private static string PercentText(double ratio)
     {
         return ratio.ToString("P1", CultureInfo.InvariantCulture);
+    }
+
+    private static string InfoTip(string text)
+    {
+        return $"<span class=\"info\" title=\"{Html(text)}\">i</span>";
+    }
+
+    private static string FormatTimestamp(DateTimeOffset timestamp)
+    {
+        return timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatDuration(double seconds)
+    {
+        if (seconds < 60d)
+        {
+            return $"{seconds:0.0}s";
+        }
+
+        var time = TimeSpan.FromSeconds(Math.Max(0d, seconds));
+        return time.TotalHours >= 1d
+            ? $"{(int)time.TotalHours}h {time.Minutes}m {time.Seconds}s"
+            : $"{time.Minutes}m {time.Seconds}s";
+    }
+
+    private static string GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "SUCCESS" or "SAFE" or "GROUNDED" => "#047857",
+            "API_FAILED" or "CODEBERT_FAILED" or "False Positive" or "False Negative" or "VULNERABLE" => "#dc2626",
+            "CODEBERT_PENDING" or "NOT_RUN" or "UNGROUNDED" => "#f59e0b",
+            _ => "#64748b"
+        };
+    }
+
+    private static string GetStatusDescription(string status)
+    {
+        return status switch
+        {
+            "SUCCESS" => "Skenario berhasil dan masuk evaluasi metrik.",
+            "API_FAILED" => "Panggilan Vertex AI Gemini gagal setelah retry dan dikeluarkan dari metrik.",
+            "CODEBERT_FAILED" => "Inferensi CodeBERT gagal dan dikeluarkan dari metrik.",
+            "CODEBERT_PENDING" => "Dataset CodeBERT siap dan menunggu batch Python selesai.",
+            "SAFE" => "Package dinilai tidak rentan pada konteks tabel ini.",
+            "VULNERABLE" => "Package dinilai rentan pada konteks tabel ini.",
+            "GROUNDED" => "Temuan didukung oleh konteks retrieval.",
+            "UNGROUNDED" => "Temuan tidak didukung konteks retrieval.",
+            "False Positive" => "Prediksi rentan, tetapi ground truth aman.",
+            "False Negative" => "Prediksi aman, tetapi ground truth rentan.",
+            _ => "Status eksekusi atau evaluasi."
+        };
+    }
+
+    private static int GetSeverityRank(string severity)
+    {
+        return severity.Trim().ToLowerInvariant() switch
+        {
+            "critical" or "kritis" => 5,
+            "high" or "tinggi" => 4,
+            "moderate" or "medium" or "sedang" => 3,
+            "low" or "rendah" => 2,
+            _ => 1
+        };
+    }
+
+    private static string GetSeverityColor(string severity)
+    {
+        return severity.Trim().ToLowerInvariant() switch
+        {
+            "critical" or "kritis" => "#7f1d1d",
+            "high" or "tinggi" => "#dc2626",
+            "moderate" or "medium" or "sedang" => "#ea580c",
+            "low" or "rendah" => "#ca8a04",
+            _ => "#64748b"
+        };
+    }
+
+    private static string GetSeverityDescription(string severity)
+    {
+        return severity.Trim().ToLowerInvariant() switch
+        {
+            "critical" or "kritis" => "Risiko sangat tinggi; biasanya perlu prioritas mitigasi segera.",
+            "high" or "tinggi" => "Risiko tinggi; perlu diprioritaskan setelah critical.",
+            "moderate" or "medium" or "sedang" => "Risiko sedang; perlu ditangani sesuai konteks dampak.",
+            "low" or "rendah" => "Risiko rendah; tetap perlu dicatat dan direncanakan.",
+            _ => "Severity tidak tersedia atau tidak ditentukan oleh advisory."
+        };
     }
 
     private static string ResolveReportLogoDataUri()
@@ -3688,17 +4312,6 @@ function filter(){
             or StatusCode.ResourceExhausted
             or StatusCode.Internal
             or StatusCode.Aborted;
-    }
-
-    private static string GetScenarioTag(AuditScenario scenario)
-    {
-        return scenario switch
-        {
-            AuditScenario.RagLlm => "rag-llm",
-            AuditScenario.ZeroShot => "zero-shot",
-            AuditScenario.CodeBert => "codebert",
-            _ => "unknown"
-        };
     }
 
     private static string GetScenarioDisplayName(AuditScenario scenario)
@@ -3937,8 +4550,12 @@ function filter(){
 
     private static void SaveConsoleLogJson(string outputFilePath)
     {
-        var entries = ConsoleLogEntries
-            .OrderBy(x => x.Sequence)
+        var entries = LoadPriorConsoleLogEntries(outputFilePath)
+            .Concat(ConsoleLogEntries)
+            .GroupBy(GetConsoleLogEntryIdentity)
+            .Select(x => x.OrderBy(e => e.Sequence).First())
+            .OrderBy(x => x.TimestampUtc)
+            .ThenBy(x => x.Sequence)
             .ToList();
 
         var report = new ConsoleExecutionLogReport
@@ -3949,14 +4566,70 @@ function filter(){
             Entries = entries
         };
 
-        File.WriteAllText(outputFilePath, JsonSerializer.Serialize(report, SerializerOptions), Encoding.UTF8);
+        AtomicWriteText(outputFilePath, JsonSerializer.Serialize(report, SerializerOptions));
+    }
+
+    private static IEnumerable<ConsoleLogEntry> LoadPriorConsoleLogEntries(string outputFilePath)
+    {
+        if (!File.Exists(outputFilePath))
+        {
+            return Enumerable.Empty<ConsoleLogEntry>();
+        }
+
+        try
+        {
+            var json = File.ReadAllText(outputFilePath, Encoding.UTF8);
+            var report = JsonSerializer.Deserialize<ConsoleExecutionLogReport>(json, SerializerOptions);
+            return report?.Entries ?? Enumerable.Empty<ConsoleLogEntry>();
+        }
+        catch (Exception ex)
+        {
+            WriteLine($"[Artifacts] Ignoring unreadable prior console log '{outputFilePath}': {ex.Message}");
+            return Enumerable.Empty<ConsoleLogEntry>();
+        }
+    }
+
+    private static string GetConsoleLogEntryIdentity(ConsoleLogEntry entry)
+    {
+        return string.Join(
+            '|',
+            entry.TimestampUtc.ToString("O", CultureInfo.InvariantCulture),
+            entry.Stream,
+            entry.Message,
+            entry.EndsLine.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static void AtomicWriteText(string outputFilePath, string content)
+    {
+        var directory = Path.GetDirectoryName(outputFilePath);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var tempFilePath = $"{outputFilePath}.{Guid.NewGuid():N}.tmp";
+        File.WriteAllText(tempFilePath, content, Encoding.UTF8);
+        File.Move(tempFilePath, outputFilePath, true);
+    }
+
+    private static void AtomicSaveWorkbook(XLWorkbook workbook, string outputFilePath)
+    {
+        var directory = Path.GetDirectoryName(outputFilePath);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var tempFilePath = $"{outputFilePath}.{Guid.NewGuid():N}.tmp.xlsx";
+        workbook.SaveAs(tempFilePath);
+        File.Move(tempFilePath, outputFilePath, true);
     }
 
     private static string BuildConsoleFullText(IEnumerable<ConsoleLogEntry> entries)
     {
         var builder = new StringBuilder();
 
-        foreach (var entry in entries.OrderBy(x => x.Sequence))
+        foreach (var entry in entries.OrderBy(x => x.TimestampUtc).ThenBy(x => x.Sequence))
         {
             builder.Append(entry.Message);
 
@@ -4244,6 +4917,36 @@ function filter(){
         public DateTimeOffset GeneratedAtUtc { get; set; }
         public List<CodeBertDatasetRecord> Records { get; set; } = new();
         public List<GroundTruthLabel> GroundTruthLabels { get; set; } = new();
+    }
+
+    private sealed class CodeBertBatchInferenceInput
+    {
+        public DateTimeOffset GeneratedAtUtc { get; set; }
+        public List<CodeBertBatchProjectInput> Projects { get; set; } = new();
+    }
+
+    private sealed class CodeBertBatchProjectInput
+    {
+        public string ProjectKey { get; set; } = string.Empty;
+        public List<CodeBertDatasetRecord> Records { get; set; } = new();
+        public List<GroundTruthLabel> GroundTruthLabels { get; set; } = new();
+    }
+
+    private sealed class CodeBertBatchPredictionOutput
+    {
+        public string ModelName { get; set; } = string.Empty;
+        public string InferenceMode { get; set; } = string.Empty;
+        public DateTimeOffset GeneratedAtUtc { get; set; }
+        public List<CodeBertBatchProjectPrediction> Projects { get; set; } = new();
+    }
+
+    private sealed class CodeBertBatchProjectPrediction
+    {
+        public string ProjectKey { get; set; } = string.Empty;
+        public string ModelName { get; set; } = string.Empty;
+        public string InferenceMode { get; set; } = string.Empty;
+        public DateTimeOffset GeneratedAtUtc { get; set; }
+        public List<VulnerabilityReport> VulnerabilityReports { get; set; } = new();
     }
 
     private sealed class CapturingConsoleWriter : TextWriter
