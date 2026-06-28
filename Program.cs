@@ -3,17 +3,17 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ClosedXML.Excel;
+using Google.Cloud.AIPlatform.V1;
+using Grpc.Core;
 
 namespace GeminiNuGetAuditor;
 
 public class Program
 {
-    private const string GeminiApiKeyEnvironmentVariableName = "GEMINI_API_KEY";
     private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
     private const string CodeBertPythonEnvironmentVariableName = "CODEBERT_PYTHON";
     private const string CodeBertModelEnvironmentVariableName = "CODEBERT_MODEL_PATH";
@@ -53,9 +53,8 @@ public class Program
         try
         {
             var geminiSettings = GetGeminiSettings();
-            var apiKey = GetGeminiApiKey(geminiSettings);
             var configuredModelName = GetGeminiModelName(geminiSettings);
-            var modelName = await ResolveUsableGeminiModelNameAsync(apiKey, configuredModelName, geminiSettings);
+            var modelName = await ResolveUsableGeminiModelNameAsync(configuredModelName, geminiSettings);
             var rootFolder = PromptForAuditFolder();
             var csprojFiles = FindCsprojFiles(rootFolder);
 
@@ -161,7 +160,6 @@ public class Program
 
                     var result = await ProcessProjectAsync(
                         csprojPath,
-                        apiKey,
                         modelName,
                         geminiSettings,
                         outputDirectory,
@@ -230,13 +228,11 @@ public class Program
         var scenario = string.IsNullOrWhiteSpace(securityContext) || securityContext.Trim() == "[]"
             ? AuditScenario.ZeroShot
             : AuditScenario.RagLlm;
-        var apiKey = GetGeminiApiKey(geminiSettings);
-        var modelName = ResolveUsableGeminiModelNameAsync(apiKey, GetGeminiModelName(geminiSettings), geminiSettings)
+        var modelName = ResolveUsableGeminiModelNameAsync(GetGeminiModelName(geminiSettings), geminiSettings)
             .GetAwaiter()
             .GetResult();
 
         return AnalyzeWithGeminiWithBatching(
-            apiKey,
             modelName,
             packageReferences,
             securityContext,
@@ -245,135 +241,25 @@ public class Program
             CancellationToken.None);
     }
 
-    public static string GetGeminiApiKey()
-    {
-        return GetGeminiApiKey(GetGeminiSettings());
-    }
-
     public static string GetGeminiModelName()
     {
         return GetGeminiModelName(GetGeminiSettings());
     }
 
     private static async Task<string> ResolveUsableGeminiModelNameAsync(
-        string apiKey,
         string configuredModelName,
         GeminiSettings settings)
     {
+        ArgumentNullException.ThrowIfNull(settings);
         var configured = NormalizeModelName(configuredModelName);
-        var generateCapableModels = await TryListGeminiGenerateContentModelsAsync(apiKey, settings);
 
-        if (generateCapableModels.Count == 0)
+        if (string.IsNullOrWhiteSpace(configured))
         {
-            WriteLine($"[Gemini] Could not list available models. Using configured model: {configured}");
-            return configured;
+            throw new GeminiConfigurationException("Konfigurasi model Gemini tidak valid. Isi 'Gemini:Model'.");
         }
 
-        if (generateCapableModels.Contains(configured))
-        {
-            return configured;
-        }
-
-        var preferredModels = new[]
-        {
-            "gemini-2.5-pro",
-            "gemini-3.5-flash",
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
-            "gemini-flash-latest",
-            "gemini-pro-latest"
-        };
-
-        var selected = preferredModels.FirstOrDefault(generateCapableModels.Contains)
-            ?? generateCapableModels.First();
-
-        WriteLine($"[Gemini] Configured model '{configured}' is not available for generateContent. Using '{selected}' instead.");
-        return selected;
-    }
-
-    private static async Task<HashSet<string>> TryListGeminiGenerateContentModelsAsync(
-        string apiKey,
-        GeminiSettings settings)
-    {
-        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        try
-        {
-            using var httpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(Math.Max(10, settings.RequestTimeoutSeconds))
-            };
-            httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            httpClient.DefaultRequestHeaders.Add("X-Goog-Api-Key", apiKey);
-
-            var modelsEndpoint = BuildGeminiModelsEndpoint(settings.GenerateContentEndpointTemplate);
-            using var response = await httpClient.GetAsync(modelsEndpoint);
-            var responseContent = await response.Content.ReadAsStringAsync();
-            AddGeminiApiDiagnostic(new GeminiApiDiagnostic
-            {
-                TimestampUtc = DateTimeOffset.UtcNow,
-                Operation = "ListModels",
-                Endpoint = modelsEndpoint,
-                ModelName = string.Empty,
-                Scenario = string.Empty,
-                PackageCount = 0,
-                HttpStatusCode = (int)response.StatusCode,
-                HttpStatusDescription = response.StatusCode.ToString(),
-                Success = response.IsSuccessStatusCode,
-                ResponseHeaders = CollectHeaders(response),
-                RateLimitHeaders = CollectRateLimitHeaders(response),
-                ResponsePreview = TruncateForDisplay(responseContent, 1000)
-            });
-
-            if (!response.IsSuccessStatusCode)
-            {
-                WriteLine($"[Gemini] ListModels failed: HTTP {(int)response.StatusCode} ({response.StatusCode}).");
-                return result;
-            }
-
-            var payload = JsonSerializer.Deserialize<GeminiModelListResponse>(responseContent, SerializerOptions);
-
-            foreach (var model in payload?.Models ?? new List<GeminiModelMetadata>())
-            {
-                if (model.SupportedGenerationMethods.Any(x => string.Equals(x, "generateContent", StringComparison.OrdinalIgnoreCase)))
-                {
-                    var normalized = NormalizeModelName(model.Name);
-                    if (!string.IsNullOrWhiteSpace(normalized))
-                    {
-                        result.Add(normalized);
-                    }
-                }
-            }
-
-            WriteLine($"[Gemini] generateContent-capable models discovered: {result.Count}.");
-        }
-        catch (Exception ex)
-        {
-            AddGeminiApiDiagnostic(new GeminiApiDiagnostic
-            {
-                TimestampUtc = DateTimeOffset.UtcNow,
-                Operation = "ListModels",
-                Endpoint = BuildGeminiModelsEndpoint(settings.GenerateContentEndpointTemplate),
-                Success = false,
-                ErrorMessage = ex.Message
-            });
-            WriteLine($"[Gemini] ListModels skipped because it failed: {ex.Message}");
-        }
-
-        return result;
-    }
-
-    private static string BuildGeminiModelsEndpoint(string generateContentEndpointTemplate)
-    {
-        var marker = "/models/{0}:generateContent";
-        var markerIndex = generateContentEndpointTemplate.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-
-        if (markerIndex > 0)
-        {
-            return generateContentEndpointTemplate[..markerIndex] + "/models";
-        }
-
-        return "https://generativelanguage.googleapis.com/v1/models";
+        WriteLine($"[Gemini] Using Vertex AI project '{settings.ProjectId}' in location '{settings.Location}'.");
+        return await Task.FromResult(configured);
     }
 
     private static string NormalizeModelName(string modelName)
@@ -384,6 +270,11 @@ public class Program
         }
 
         var trimmed = modelName.Trim();
+        if (trimmed.StartsWith("publishers/google/models/", StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmed["publishers/google/models/".Length..];
+        }
+
         return trimmed.StartsWith("models/", StringComparison.OrdinalIgnoreCase)
             ? trimmed["models/".Length..]
             : trimmed;
@@ -391,7 +282,6 @@ public class Program
 
     private static async Task<ProjectAuditResult> ProcessProjectAsync(
         string csprojPath,
-        string apiKey,
         string modelName,
         GeminiSettings geminiSettings,
         string outputDirectory,
@@ -460,7 +350,6 @@ public class Program
             var zeroShotTask = RunGeminiScenarioSafelyAsync(
                 projectKey,
                 AuditScenario.ZeroShot,
-                apiKey,
                 modelName,
                 geminiSettings,
                 packageReferences,
@@ -470,7 +359,6 @@ public class Program
             var ragTask = RunGeminiScenarioSafelyAsync(
                 projectKey,
                 AuditScenario.RagLlm,
-                apiKey,
                 modelName,
                 geminiSettings,
                 packageReferences,
@@ -573,7 +461,6 @@ public class Program
     private static async Task<ScenarioAuditResult> RunGeminiScenarioSafelyAsync(
         string projectKey,
         AuditScenario scenario,
-        string apiKey,
         string modelName,
         GeminiSettings settings,
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
@@ -591,7 +478,6 @@ public class Program
         {
             WriteLine($"[{projectKey}] [{GetScenarioDisplayName(scenario)}] Starting Gemini inference.");
             var response = await AnalyzeWithGeminiWithBatching(
-                apiKey,
                 modelName,
                 packageReferences,
                 securityContext,
@@ -1023,7 +909,6 @@ public class Program
     }
 
     private static async Task<GeminiResponse?> AnalyzeWithGeminiWithBatching(
-        string apiKey,
         string modelName,
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
         string securityContext,
@@ -1038,7 +923,6 @@ public class Program
                 : "[]";
 
             return await AnalyzeWithGeminiWithRetry(
-                apiKey,
                 modelName,
                 packageReferences,
                 scopedSecurityContext,
@@ -1061,7 +945,6 @@ public class Program
 
             WriteLine($"[Gemini] {GetScenarioDisplayName(scenario)} batch {i + 1}/{batches.Count}, packages={batch.Length}.");
             var batchResponse = await AnalyzeWithGeminiWithRetry(
-                apiKey,
                 modelName,
                 batch,
                 scopedSecurityContext,
@@ -1083,7 +966,6 @@ public class Program
     }
 
     private static async Task<GeminiResponse?> AnalyzeWithGeminiWithRetry(
-        string apiKey,
         string modelName,
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
         string securityContext,
@@ -1098,7 +980,6 @@ public class Program
             try
             {
                 var response = await AnalyzeWithGemini(
-                    apiKey,
                     modelName,
                     packageReferences,
                     securityContext,
@@ -1124,10 +1005,10 @@ public class Program
                 WriteLine($"[Gemini] Timeout attempt {attempt}/{maxAttempts}: {ex.Message}. Retrying in {delay.TotalMilliseconds:0}ms.");
                 await Task.Delay(delay, cancellationToken);
             }
-            catch (HttpRequestException ex) when (attempt < maxAttempts && IsTransientStatusCode(ex.StatusCode))
+            catch (RpcException ex) when (attempt < maxAttempts && IsTransientRpcStatusCode(ex.StatusCode))
             {
                 var delay = CalculateBackoffDelay(settings.RetryDelayMilliseconds, attempt);
-                WriteLine($"[Gemini] Transient HTTP attempt {attempt}/{maxAttempts}: {ex.StatusCode}. Retrying in {delay.TotalMilliseconds:0}ms.");
+                WriteLine($"[Gemini] Transient Vertex AI attempt {attempt}/{maxAttempts}: {ex.StatusCode}. Retrying in {delay.TotalMilliseconds:0}ms.");
                 await Task.Delay(delay, cancellationToken);
             }
             catch (JsonException ex) when (attempt < maxAttempts)
@@ -1142,7 +1023,6 @@ public class Program
     }
 
     private static async Task<GeminiResponse?> AnalyzeWithGemini(
-        string apiKey,
         string modelName,
         IReadOnlyCollection<NuGetPackageReference> packageReferences,
         string securityContext,
@@ -1150,7 +1030,6 @@ public class Program
         AuditScenario scenario,
         CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentNullException.ThrowIfNull(packageReferences);
         ArgumentException.ThrowIfNullOrWhiteSpace(securityContext);
@@ -1161,78 +1040,48 @@ public class Program
 
         await GeminiRequestGate.WaitAsync(cancellationToken);
         var requestStopwatch = Stopwatch.StartNew();
-        var endpoint = string.Format(settings.GenerateContentEndpointTemplate, modelName);
+        var clientEndpoint = BuildVertexPredictionServiceEndpoint(settings);
+        var modelResourceName = BuildVertexModelResourceName(settings, modelName);
         var diagnosticRecorded = false;
 
         try
         {
-            using var httpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(settings.RequestTimeoutSeconds)
-            };
-            httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            httpClient.DefaultRequestHeaders.Add("X-Goog-Api-Key", apiKey);
-
             var prompt = BuildGeminiPrompt(packageText, securityContext, scenario);
-            var requestBody = new
+            var contents = new[]
             {
-                contents = new[]
+                new Content
                 {
-                    new
-                    {
-                        parts = new[]
-                        {
-                            new { text = prompt }
-                        }
-                    }
+                    Role = "user",
+                    Parts = { new Part { Text = prompt } }
                 }
             };
 
-            using var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-            using var response = await httpClient.PostAsync(endpoint, content, cancellationToken);
-            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
+
+            var client = await new PredictionServiceClientBuilder
+            {
+                Endpoint = clientEndpoint
+            }.BuildAsync(timeoutCts.Token);
+
+            var response = await client.GenerateContentAsync(modelResourceName, contents, timeoutCts.Token);
             requestStopwatch.Stop();
             AddGeminiApiDiagnostic(new GeminiApiDiagnostic
             {
                 TimestampUtc = DateTimeOffset.UtcNow,
                 Operation = "GenerateContent",
-                Endpoint = endpoint,
+                Endpoint = modelResourceName,
                 ModelName = modelName,
                 Scenario = GetScenarioDisplayName(scenario),
                 PackageCount = packageReferences.Count,
-                HttpStatusCode = (int)response.StatusCode,
-                HttpStatusDescription = response.StatusCode.ToString(),
-                Success = response.IsSuccessStatusCode,
+                HttpStatusDescription = "OK",
+                Success = true,
                 ElapsedMilliseconds = requestStopwatch.Elapsed.TotalMilliseconds,
-                ResponseHeaders = CollectHeaders(response),
-                RateLimitHeaders = CollectRateLimitHeaders(response),
-                ResponsePreview = TruncateForDisplay(responseContent, 1000)
+                ResponsePreview = TruncateForDisplay(response.ToString(), 1000)
             });
             diagnosticRecorded = true;
 
-            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-            {
-                throw new GeminiConfigurationException("API key Gemini tidak valid atau tidak memiliki akses ke model yang dipakai.");
-            }
-
-            if (response.StatusCode == HttpStatusCode.NotFound)
-            {
-                throw new GeminiConfigurationException(
-                    $"Model Gemini '{modelName}' tidak ditemukan. Response: {TruncateForDisplay(responseContent)}");
-            }
-
-            if (response.StatusCode == HttpStatusCode.TooManyRequests || (int)response.StatusCode >= 500)
-            {
-                throw new HttpRequestException(
-                    $"Gemini transient response: {(int)response.StatusCode} ({response.StatusCode}).",
-                    null,
-                    response.StatusCode);
-            }
-
-            response.EnsureSuccessStatusCode();
-
-            var geminiApiResponse = JsonSerializer.Deserialize<GeminiApiResponse>(responseContent, SerializerOptions);
-            var json = geminiApiResponse?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text;
+            var json = ExtractVertexResponseText(response);
 
             if (string.IsNullOrWhiteSpace(json))
             {
@@ -1255,7 +1104,7 @@ public class Program
             {
                 TimestampUtc = DateTimeOffset.UtcNow,
                 Operation = "GenerateContent",
-                Endpoint = endpoint,
+                Endpoint = modelResourceName,
                 ModelName = modelName,
                 Scenario = GetScenarioDisplayName(scenario),
                 PackageCount = packageReferences.Count,
@@ -1264,6 +1113,32 @@ public class Program
                 ErrorMessage = ex.Message
             });
             throw new TimeoutException($"Permintaan ke Gemini melebihi batas waktu {settings.RequestTimeoutSeconds:0} detik.", ex);
+        }
+        catch (RpcException ex) when (ex.StatusCode is StatusCode.Unauthenticated or StatusCode.PermissionDenied)
+        {
+            requestStopwatch.Stop();
+            if (!diagnosticRecorded)
+            {
+                AddGeminiApiDiagnostic(new GeminiApiDiagnostic
+                {
+                    TimestampUtc = DateTimeOffset.UtcNow,
+                    Operation = "GenerateContent",
+                    Endpoint = modelResourceName,
+                    ModelName = modelName,
+                    Scenario = GetScenarioDisplayName(scenario),
+                    PackageCount = packageReferences.Count,
+                    HttpStatusCode = (int)ex.StatusCode,
+                    HttpStatusDescription = ex.StatusCode.ToString(),
+                    Success = false,
+                    ElapsedMilliseconds = requestStopwatch.Elapsed.TotalMilliseconds,
+                    ErrorMessage = ex.Message
+                });
+                diagnosticRecorded = true;
+            }
+
+            throw new GeminiConfigurationException(
+                "Google Cloud Application Default Credentials tidak valid atau tidak memiliki izin Vertex AI pada project yang dipakai. Jalankan 'gcloud auth application-default login' atau set GOOGLE_APPLICATION_CREDENTIALS ke service account yang memiliki role Vertex AI yang sesuai.",
+                ex);
         }
         catch (Exception ex)
         {
@@ -1274,7 +1149,7 @@ public class Program
                 {
                     TimestampUtc = DateTimeOffset.UtcNow,
                     Operation = "GenerateContent",
-                    Endpoint = endpoint,
+                    Endpoint = modelResourceName,
                     ModelName = modelName,
                     Scenario = GetScenarioDisplayName(scenario),
                     PackageCount = packageReferences.Count,
@@ -1289,6 +1164,34 @@ public class Program
         {
             GeminiRequestGate.Release();
         }
+    }
+
+    private static string BuildVertexPredictionServiceEndpoint(GeminiSettings settings)
+    {
+        return $"{settings.Location.Trim()}-aiplatform.googleapis.com";
+    }
+
+    private static string BuildVertexModelResourceName(GeminiSettings settings, string modelName)
+    {
+        var normalizedModelName = NormalizeModelName(modelName);
+        var projectId = Uri.EscapeDataString(settings.ProjectId.Trim());
+        var location = Uri.EscapeDataString(settings.Location.Trim());
+        var model = Uri.EscapeDataString(normalizedModelName);
+
+        return $"projects/{projectId}/locations/{location}/publishers/google/models/{model}";
+    }
+
+    private static string? ExtractVertexResponseText(GenerateContentResponse response)
+    {
+        var textParts = response.Candidates
+            .SelectMany(x => x.Content?.Parts ?? Enumerable.Empty<Part>())
+            .Select(x => x.Text)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
+
+        return textParts.Count == 0
+            ? null
+            : string.Join(Environment.NewLine, textParts);
     }
 
     private static string PromptForAuditFolder()
@@ -1339,24 +1242,6 @@ public class Program
             : input.Trim().Trim('"');
     }
 
-    private static string GetGeminiApiKey(GeminiSettings settings)
-    {
-        var apiKey = Environment.GetEnvironmentVariable(GeminiApiKeyEnvironmentVariableName);
-
-        if (IsUsableApiKey(apiKey))
-        {
-            return apiKey!;
-        }
-
-        if (IsUsableApiKey(settings.ApiKey))
-        {
-            return settings.ApiKey;
-        }
-
-        throw new GeminiConfigurationException(
-            $"Gemini API key tidak ditemukan. Set environment variable '{GeminiApiKeyEnvironmentVariableName}' atau isi 'Gemini:ApiKey' pada appsettings.json dengan nilai valid.");
-    }
-
     private static string GetGeminiModelName(GeminiSettings settings)
     {
         var configuredModelName = Environment.GetEnvironmentVariable(GeminiModelEnvironmentVariableName);
@@ -1394,9 +1279,9 @@ public class Program
                 continue;
             }
 
-            settings.ApiKey = ReadGeminiString(geminiSection, "ApiKey", settings.ApiKey);
+            settings.ProjectId = ReadGeminiString(geminiSection, "ProjectId", settings.ProjectId);
+            settings.Location = ReadGeminiString(geminiSection, "Location", settings.Location);
             settings.Model = ReadGeminiString(geminiSection, "Model", settings.Model);
-            settings.GenerateContentEndpointTemplate = ReadGeminiString(geminiSection, "GenerateContentEndpointTemplate", settings.GenerateContentEndpointTemplate);
             settings.RequestTimeoutSeconds = ReadGeminiInt(geminiSection, "RequestTimeoutSeconds", settings.RequestTimeoutSeconds);
             settings.MaxPackagesPerRequest = ReadGeminiInt(geminiSection, "MaxPackagesPerRequest", settings.MaxPackagesPerRequest);
             settings.MaxRetryCount = ReadGeminiInt(geminiSection, "MaxRetryCount", settings.MaxRetryCount);
@@ -1409,15 +1294,19 @@ public class Program
 
     private static void ValidateGeminiSettings(GeminiSettings settings)
     {
+        if (string.IsNullOrWhiteSpace(settings.ProjectId))
+        {
+            throw new GeminiConfigurationException("Konfigurasi 'Gemini:ProjectId' wajib diisi.");
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.Location))
+        {
+            throw new GeminiConfigurationException("Konfigurasi 'Gemini:Location' wajib diisi.");
+        }
+
         if (string.IsNullOrWhiteSpace(settings.Model))
         {
             throw new GeminiConfigurationException("Konfigurasi 'Gemini:Model' wajib diisi.");
-        }
-
-        if (string.IsNullOrWhiteSpace(settings.GenerateContentEndpointTemplate) ||
-            !settings.GenerateContentEndpointTemplate.Contains("{0}", StringComparison.Ordinal))
-        {
-            throw new GeminiConfigurationException("Konfigurasi 'Gemini:GenerateContentEndpointTemplate' wajib diisi dan harus mengandung placeholder '{0}' untuk nama model.");
         }
 
         if (settings.RequestTimeoutSeconds <= 0)
@@ -3627,14 +3516,13 @@ function filter(){
         return TimeSpan.FromMilliseconds(delay);
     }
 
-    private static bool IsTransientStatusCode(HttpStatusCode? statusCode)
+    private static bool IsTransientRpcStatusCode(StatusCode statusCode)
     {
-        if (!statusCode.HasValue)
-        {
-            return true;
-        }
-
-        return statusCode == HttpStatusCode.TooManyRequests || (int)statusCode.Value >= 500;
+        return statusCode is StatusCode.Unavailable
+            or StatusCode.DeadlineExceeded
+            or StatusCode.ResourceExhausted
+            or StatusCode.Internal
+            or StatusCode.Aborted;
     }
 
     private static string GetScenarioTag(AuditScenario scenario)
@@ -3676,12 +3564,6 @@ function filter(){
         }
 
         return Directory.GetCurrentDirectory();
-    }
-
-    private static bool IsUsableApiKey(string? apiKey)
-    {
-        return !string.IsNullOrWhiteSpace(apiKey) &&
-               !string.Equals(apiKey, "sample", StringComparison.OrdinalIgnoreCase);
     }
 
     private static Dictionary<string, VulnerabilityFieldDescription> GetVulnerabilityReportFieldDescriptions()
@@ -3922,34 +3804,6 @@ function filter(){
         return builder.ToString();
     }
 
-    private static Dictionary<string, List<string>> CollectHeaders(HttpResponseMessage response)
-    {
-        var headers = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var header in response.Headers)
-        {
-            headers[header.Key] = header.Value.ToList();
-        }
-
-        foreach (var header in response.Content.Headers)
-        {
-            headers[header.Key] = header.Value.ToList();
-        }
-
-        return headers;
-    }
-
-    private static Dictionary<string, List<string>> CollectRateLimitHeaders(HttpResponseMessage response)
-    {
-        return CollectHeaders(response)
-            .Where(x =>
-                x.Key.Contains("rate", StringComparison.OrdinalIgnoreCase) ||
-                x.Key.Contains("quota", StringComparison.OrdinalIgnoreCase) ||
-                x.Key.Contains("limit", StringComparison.OrdinalIgnoreCase) ||
-                x.Key.Contains("retry-after", StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
-    }
-
     private static void WriteLine(string message)
     {
         lock (ConsoleLock)
@@ -3966,8 +3820,17 @@ function filter(){
         }
     }
 
-    private sealed class GeminiConfigurationException(string message) : Exception(message)
+    private sealed class GeminiConfigurationException : Exception
     {
+        public GeminiConfigurationException(string message)
+            : base(message)
+        {
+        }
+
+        public GeminiConfigurationException(string message, Exception innerException)
+            : base(message, innerException)
+        {
+        }
     }
 
     private sealed class GeminiApiFailedException(string message) : Exception(message)
@@ -3976,52 +3839,13 @@ function filter(){
 
     private sealed class GeminiSettings
     {
-        public string ApiKey { get; set; } = string.Empty;
+        public string ProjectId { get; set; } = "gen-lang-client-0569088861";
+        public string Location { get; set; } = "us-central1";
         public string Model { get; set; } = "gemini-2.5-pro";
-        public string GenerateContentEndpointTemplate { get; set; } = "https://generativelanguage.googleapis.com/v1/models/{0}:generateContent";
         public int RequestTimeoutSeconds { get; set; } = 300;
         public int MaxPackagesPerRequest { get; set; } = 15;
         public int MaxRetryCount { get; set; } = 5;
         public int RetryDelayMilliseconds { get; set; } = 5000;
-    }
-
-    private sealed class GeminiApiResponse
-    {
-        [JsonPropertyName("candidates")]
-        public List<GeminiCandidate>? Candidates { get; set; }
-    }
-
-    private sealed class GeminiCandidate
-    {
-        [JsonPropertyName("content")]
-        public GeminiContent? Content { get; set; }
-    }
-
-    private sealed class GeminiContent
-    {
-        [JsonPropertyName("parts")]
-        public List<GeminiPart>? Parts { get; set; }
-    }
-
-    private sealed class GeminiPart
-    {
-        [JsonPropertyName("text")]
-        public string? Text { get; set; }
-    }
-
-    private sealed class GeminiModelListResponse
-    {
-        [JsonPropertyName("models")]
-        public List<GeminiModelMetadata>? Models { get; set; }
-    }
-
-    private sealed class GeminiModelMetadata
-    {
-        [JsonPropertyName("name")]
-        public string Name { get; set; } = string.Empty;
-
-        [JsonPropertyName("supportedGenerationMethods")]
-        public List<string> SupportedGenerationMethods { get; set; } = new();
     }
 
     private sealed class FinalArtifactSet

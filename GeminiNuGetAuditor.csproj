@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.104.2" />
+    <PackageReference Include="Google.Cloud.AIPlatform.V1" Version="3.72.0" />
   </ItemGroup>
 
   <ItemGroup>

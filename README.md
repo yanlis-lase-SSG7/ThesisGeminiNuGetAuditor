@@ -77,12 +77,19 @@ Output utama disimpan di folder run baru di dalam `audit-results`:
 
 ## Cara Menjalankan
 
-Pastikan .NET 10 SDK sudah terinstall dan konfigurasi API tersedia melalui environment variable atau `appsettings.json`.
+Pastikan .NET 10 SDK sudah terinstall dan Application Default Credentials untuk Google Cloud sudah tersedia.
 
-Environment variable yang umum digunakan:
+Autentikasi Vertex AI:
 
 ```powershell
-$env:GEMINI_API_KEY = "your-gemini-api-key"
+gcloud auth application-default login
+```
+
+Konfigurasi Gemini default di `appsettings.json` memakai Vertex AI project `gen-lang-client-0569088861`, location `us-central1`, dan model `gemini-2.5-pro`.
+
+Environment variable lain yang umum digunakan:
+
+```powershell
 $env:GITHUB_TOKEN = "your-github-token"
 ```
 

@@ -26,7 +26,7 @@ Secara konseptual, sistem terdiri atas lima tahap utama:
    Data advisory yang diperoleh dipetakan ke dependency hasil ekstraksi untuk menghasilkan label `Vulnerable` atau `Not Vulnerable`.
 
 4. **Inference and Dataset Preparation**  
-   Sistem menjalankan skenario RAG-LLM dan Zero-Shot menggunakan Gemini 2.5 Pro, serta mengekspor dataset dan menjalankan Python bridge untuk skenario CodeBERT.
+   Sistem menjalankan skenario RAG-LLM dan Zero-Shot menggunakan Gemini Pro melalui Vertex AI, serta mengekspor dataset dan menjalankan Python bridge untuk skenario CodeBERT.
 
 5. **Evaluation**  
    Hasil prediksi dibandingkan terhadap ground truth untuk menghitung TP, TN, FP, FN, Accuracy, Precision, Recall, dan F1-Score.
@@ -45,7 +45,7 @@ Penelitian menggunakan tiga skenario utama untuk memastikan perbandingan yang ad
 
 ### 4.1. Skenario RAG-LLM (Model Usulan)
 
-Skenario RAG-LLM menggunakan Gemini 2.5 Pro dengan konteks tambahan berupa data advisory live dari GitHub GraphQL API. Mekanisme retrieval dilakukan sebelum prompt dikirim ke LLM. Prompt berisi daftar dependency lokal dan security reference data yang berhasil diambil secara real-time.
+Skenario RAG-LLM menggunakan Gemini Pro melalui Vertex AI dengan konteks tambahan berupa data advisory live dari GitHub GraphQL API. Mekanisme retrieval dilakukan sebelum prompt dikirim ke LLM. Prompt berisi daftar dependency lokal dan security reference data yang berhasil diambil secara real-time.
 
 Kriteria perilaku model pada skenario ini:
 
@@ -57,7 +57,7 @@ Skenario ini dirancang untuk mengurangi halusinasi dan false positive.
 
 ### 4.2. Skenario Zero-Shot
 
-Skenario Zero-Shot menggunakan Gemini 2.5 Pro tanpa injeksi konteks retrieval. Model hanya menerima daftar package dan versi, lalu diminta melakukan audit berdasarkan pengetahuan internalnya.
+Skenario Zero-Shot menggunakan Gemini Pro melalui Vertex AI tanpa injeksi konteks retrieval. Model hanya menerima daftar package dan versi, lalu diminta melakukan audit berdasarkan pengetahuan internalnya.
 
 Skenario ini berfungsi sebagai pembanding untuk mengukur:
 

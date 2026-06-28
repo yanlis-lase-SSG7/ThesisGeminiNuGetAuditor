@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 import re
 import time
 from pathlib import Path
@@ -10,6 +9,8 @@ from google.genai import types
 
 
 OUTPUT_DIR = Path("Thesis_Dataset_1000")
+PROJECT_ID = "gen-lang-client-0569088861"
+LOCATION = "us-central1"
 DEFAULT_MODEL = "gemini-2.5-pro"
 TOTAL_BATCHES = 20
 FILES_PER_BATCH = 50
@@ -126,11 +127,7 @@ def main() -> None:
             "Script ini sengaja dikunci ke 50 file per batch agar prompt dan indexing tetap konsisten."
         )
 
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("Environment variable GEMINI_API_KEY belum diset.")
-
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
     total_saved = 0
 
     if args.start_batch < 1 or args.start_batch > args.batches:
