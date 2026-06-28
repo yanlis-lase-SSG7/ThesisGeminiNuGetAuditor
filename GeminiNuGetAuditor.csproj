@@ -22,10 +22,16 @@
     <None Remove="samples\**\*" />
     <Content Remove="samples\**\*" />
     <EmbeddedResource Remove="samples\**\*" />
-    <None Update="my-note.json">
+    <None Update="appsettings.example.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Scripts\CodeBert\codebert_inference.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Scripts\CodeBert\requirements-codebert.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
@@ -36,7 +42,10 @@
 
   <ItemGroup>
     <Folder Include="audit-results\" />
+    <Folder Include="Models\" />
     <Folder Include="samples\" />
+    <Folder Include="Scripts\" />
+    <Folder Include="Services\" />
     <Folder Include="Thesis_Dataset_1000\" />
   </ItemGroup>
 

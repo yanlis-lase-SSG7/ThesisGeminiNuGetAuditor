@@ -17,11 +17,12 @@ public class Program
     private const string GeminiModelEnvironmentVariableName = "GEMINI_MODEL";
     private const string CodeBertPythonEnvironmentVariableName = "CODEBERT_PYTHON";
     private const string CodeBertModelEnvironmentVariableName = "CODEBERT_MODEL_PATH";
-    private const string CodeBertInferenceScriptName = "codebert_inference.py";
-    private const string CodeBertRequirementsFileName = "requirements-codebert.txt";
+    private const string CodeBertInferenceScriptPath = @"Scripts\CodeBert\codebert_inference.py";
+    private const string CodeBertRequirementsFilePath = @"Scripts\CodeBert\requirements-codebert.txt";
     private const string CodeBertVirtualEnvironmentDirectoryName = ".codebert-venv";
     private const string CodeBertDependencyMarkerFileName = ".dependencies-ready";
     private const string CheckpointSchemaVersion = "2026-06-27-codebert-auto-bootstrap-v5";
+    private const string VertexAiGeminiInferenceMode = "VERTEX_AI_GEMINI";
     private const int ProjectMaxDegreeOfParallelism = 4;
     private const int GeminiGlobalConcurrencyLimit = 4;
 
@@ -622,7 +623,7 @@ public class Program
         CancellationToken cancellationToken)
     {
         var pythonExecutable = await EnsureCodeBertPythonEnvironmentAsync(cancellationToken);
-        var scriptPath = Path.Combine(GetApplicationRootDirectory(), CodeBertInferenceScriptName);
+        var scriptPath = Path.Combine(GetApplicationRootDirectory(), CodeBertInferenceScriptPath);
         if (!File.Exists(scriptPath))
         {
             throw new FileNotFoundException("CodeBERT inference script was not found.", scriptPath);
@@ -676,7 +677,7 @@ public class Program
         var modelLog = string.IsNullOrWhiteSpace(codeBertModelPath)
             ? "no fine-tuned model configured; using automatic local CodeBERT embedding classifier"
             : $"fine-tuned model \"{codeBertModelPath}\"";
-        WriteLine($"[CodeBERT] Executing local Python inference: {pythonExecutable} {CodeBertInferenceScriptName} --input \"{inputPath}\" --output \"{outputPath}\" ({modelLog})");
+        WriteLine($"[CodeBERT] Executing local Python inference: {pythonExecutable} {CodeBertInferenceScriptPath} --input \"{inputPath}\" --output \"{outputPath}\" ({modelLog})");
 
         try
         {
@@ -732,7 +733,7 @@ public class Program
             var applicationRoot = GetApplicationRootDirectory();
             var venvDirectory = Path.Combine(applicationRoot, CodeBertVirtualEnvironmentDirectoryName);
             var venvPython = Path.Combine(venvDirectory, "Scripts", "python.exe");
-            var requirementsPath = Path.Combine(applicationRoot, CodeBertRequirementsFileName);
+            var requirementsPath = Path.Combine(applicationRoot, CodeBertRequirementsFilePath);
             var markerPath = Path.Combine(venvDirectory, CodeBertDependencyMarkerFileName);
 
             if (!File.Exists(requirementsPath))
@@ -1770,7 +1771,10 @@ Security reference data:
         File.WriteAllText(artifactSet.RagJsonPath, JsonSerializer.Serialize(ragReport, SerializerOptions), Encoding.UTF8);
         File.WriteAllText(artifactSet.ZeroShotJsonPath, JsonSerializer.Serialize(zeroShotReport, SerializerOptions), Encoding.UTF8);
         File.WriteAllText(artifactSet.CodeBertJsonPath, JsonSerializer.Serialize(codeBertReport, SerializerOptions), Encoding.UTF8);
-        File.WriteAllText(artifactSet.ApiDiagnosticsJsonPath, JsonSerializer.Serialize(BuildApiDiagnosticsReport(rootFolder, modelName), SerializerOptions), Encoding.UTF8);
+        File.WriteAllText(
+            artifactSet.ApiDiagnosticsJsonPath,
+            JsonSerializer.Serialize(BuildApiDiagnosticsReport(rootFolder, modelName, artifactSet.ApiDiagnosticsJsonPath), SerializerOptions),
+            Encoding.UTF8);
         SaveComprehensiveCsvReport(artifactSet.CsvReportPath, results);
         SaveComprehensiveExcelReport(artifactSet.ExcelReportPath, rootFolder, modelName, results);
         SaveInteractiveHtmlReport(artifactSet.HtmlReportPath, rootFolder, modelName, results, artifactSet);
@@ -1962,9 +1966,15 @@ Security reference data:
         };
     }
 
-    private static ApiDiagnosticsReport BuildApiDiagnosticsReport(string rootFolder, string modelName)
+    private static ApiDiagnosticsReport BuildApiDiagnosticsReport(
+        string rootFolder,
+        string modelName,
+        string currentDiagnosticsPath)
     {
-        var diagnostics = GeminiApiDiagnostics
+        var diagnostics = LoadPriorGeminiApiDiagnostics(currentDiagnosticsPath)
+            .Concat(GeminiApiDiagnostics)
+            .GroupBy(GetGeminiApiDiagnosticIdentity)
+            .Select(x => x.OrderByDescending(d => d.TimestampUtc).First())
             .OrderBy(x => x.TimestampUtc)
             .ToList();
 
@@ -1990,6 +2000,51 @@ Security reference data:
                 .ToList(),
             Diagnostics = diagnostics
         };
+    }
+
+    private static IEnumerable<GeminiApiDiagnostic> LoadPriorGeminiApiDiagnostics(string currentDiagnosticsPath)
+    {
+        var outputDirectory = Path.GetDirectoryName(currentDiagnosticsPath);
+        if (string.IsNullOrWhiteSpace(outputDirectory) || !Directory.Exists(outputDirectory))
+        {
+            return Enumerable.Empty<GeminiApiDiagnostic>();
+        }
+
+        var diagnostics = new List<GeminiApiDiagnostic>();
+        foreach (var path in Directory.EnumerateFiles(outputDirectory, "api-diagnostics-*.json", SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                var json = File.ReadAllText(path, Encoding.UTF8);
+                var report = JsonSerializer.Deserialize<ApiDiagnosticsReport>(json, SerializerOptions);
+                if (report?.Diagnostics is { Count: > 0 })
+                {
+                    diagnostics.AddRange(report.Diagnostics);
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteLine($"[Artifacts] Ignoring unreadable prior API diagnostics '{path}': {ex.Message}");
+            }
+        }
+
+        return diagnostics;
+    }
+
+    private static string GetGeminiApiDiagnosticIdentity(GeminiApiDiagnostic diagnostic)
+    {
+        return string.Join(
+            '|',
+            diagnostic.TimestampUtc.ToString("O", CultureInfo.InvariantCulture),
+            diagnostic.Operation,
+            diagnostic.Endpoint,
+            diagnostic.ModelName,
+            diagnostic.Scenario,
+            diagnostic.PackageCount.ToString(CultureInfo.InvariantCulture),
+            diagnostic.Success.ToString(CultureInfo.InvariantCulture),
+            diagnostic.HttpStatusCode?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            diagnostic.HttpStatusDescription,
+            diagnostic.ErrorMessage);
     }
 
     private static CodeBertJsonReport BuildCodeBertJsonReport(
@@ -2043,7 +2098,7 @@ Security reference data:
             EvaluationStatus = projectReports.All(x => string.Equals(x.EvaluationStatus, "SUCCESS", StringComparison.OrdinalIgnoreCase))
                 ? "SUCCESS"
                 : "PARTIAL_OR_FAILED",
-            EvaluationNote = "CodeBERT metrics are produced when codebert_inference.py completes real local inference and writes prediction JSON. The app bootstraps a local .codebert-venv automatically; CODEBERT_MODEL_PATH is optional for a fine-tuned classifier.",
+            EvaluationNote = $"CodeBERT metrics are produced when {CodeBertInferenceScriptPath} completes real local inference and writes prediction JSON. The app bootstraps a local .codebert-venv automatically; CODEBERT_MODEL_PATH is optional for a fine-tuned classifier.",
             DatasetFieldDescriptions = GetCodeBertDatasetFieldDescriptions(),
             Projects = projectReports
         };
@@ -2103,7 +2158,7 @@ Security reference data:
                 : "PYTHON_BRIDGE";
         }
 
-        return "GEMINI_API";
+        return VertexAiGeminiInferenceMode;
     }
 
     private static bool IsSyntheticCodeBertScenario(ScenarioAuditResult? scenario)
@@ -2319,7 +2374,7 @@ Security reference data:
             ("Purpose", "Workbook ini merangkum audit dependency NuGet dari file .csproj. Tiga jalur yang dihasilkan adalah RAG-LLM, Zero-Shot, dan CodeBERT dataset export."),
             ("RAG-LLM", "LLM menerima package list plus security reference hasil retrieval. Gunakan sheet Scenario Metrics dan Finding Detail untuk membaca prediksi dan evaluasinya."),
             ("Zero-Shot", "LLM hanya menerima package list tanpa konteks advisory. Bandingkan dengan RAG-LLM untuk melihat efek retrieval."),
-            ("CodeBERT", "Dataset CodeBERT diekspor, lalu codebert_inference.py menjalankan inferensi lokal. Aplikasi membuat .codebert-venv dan menginstal requirements otomatis. Jika CODEBERT_MODEL_PATH tidak diisi, script memakai baseline embedding CodeBERT otomatis dengan leave-one-package-out."),
+            ("CodeBERT", $"Dataset CodeBERT diekspor, lalu {CodeBertInferenceScriptPath} menjalankan inferensi lokal. Aplikasi membuat .codebert-venv dan menginstal requirements otomatis. Jika CODEBERT_MODEL_PATH tidak diisi, script memakai baseline embedding CodeBERT otomatis dengan leave-one-package-out."),
             ("Ground Truth Version Range", "Package hanya dianggap vulnerable jika CurrentVersion masuk VulnerableVersionRange. Ini mencegah package patched tetap dihitung sebagai vulnerable hanya karena namanya punya advisory."),
             ("Run Summary", "Ringkasan eksekusi: model, jumlah project, jumlah sukses/gagal, concurrency, dan jumlah record."),
             ("Method Comparison", "Tabel cepat untuk melihat status tiga metode per project: RAG-LLM, Zero-Shot, dan CodeBERT."),
@@ -2904,7 +2959,7 @@ details{background:#f8fbff;border:1px solid var(--line);border-radius:8px;paddin
 <div class="two">
 <div><strong>RAG-LLM</strong><p>Gemini receives package references plus retrieved security context.<span class="id-block">Gemini menerima daftar package plus konteks keamanan hasil retrieval.</span></p></div>
 <div><strong>Zero-Shot</strong><p>Gemini receives only package references.<span class="id-block">Gemini hanya menerima daftar package tanpa konteks advisory.</span></p></div>
-<div><strong>CodeBERT</strong><p>The app exports labeled rows, executes codebert_inference.py, and evaluates predictions with the same confusion matrix only when local CodeBERT inference succeeds.<span class="id-block">Aplikasi mengekspor dataset berlabel, menjalankan codebert_inference.py, lalu mengevaluasi prediksi dengan confusion matrix yang sama hanya ketika inferensi CodeBERT lokal berhasil.</span></p></div>
+<div><strong>CodeBERT</strong><p>The app exports labeled rows, executes the local CodeBERT Python bridge, and evaluates predictions with the same confusion matrix only when local CodeBERT inference succeeds.<span class="id-block">Aplikasi mengekspor dataset berlabel, menjalankan bridge Python CodeBERT lokal, lalu mengevaluasi prediksi dengan confusion matrix yang sama hanya ketika inferensi CodeBERT lokal berhasil.</span></p></div>
 <div><strong>Ground Truth<span class="id-block">Label Acuan</span></strong><p>Labels come exclusively from live GitHub GraphQL advisory retrieval and version-range evaluation.<span class="id-block">Label berasal secara eksklusif dari retrieval advisory GitHub GraphQL real-time dan evaluasi rentang versi sebagai dasar TP/TN/FP/FN.</span></p></div>
 </div>
 </section>
@@ -3839,8 +3894,8 @@ function filter(){
 
     private sealed class GeminiSettings
     {
-        public string ProjectId { get; set; } = "gen-lang-client-0569088861";
-        public string Location { get; set; } = "us-central1";
+        public string ProjectId { get; set; } = string.Empty;
+        public string Location { get; set; } = string.Empty;
         public string Model { get; set; } = "gemini-2.5-pro";
         public int RequestTimeoutSeconds { get; set; } = 300;
         public int MaxPackagesPerRequest { get; set; } = 15;

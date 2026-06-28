@@ -12,7 +12,7 @@ Project ini dibuat untuk:
 - menjalankan evaluasi RAG-LLM dengan Gemini dan konteks advisory;
 - menjalankan evaluasi Zero-Shot dengan Gemini tanpa konteks advisory;
 - menyiapkan dataset CodeBERT bridge melalui augmentasi dan split data;
-- menjalankan inferensi CodeBERT lokal melalui `codebert_inference.py`, baik dengan model fine-tuned lokal maupun baseline embedding CodeBERT otomatis;
+- menjalankan inferensi CodeBERT lokal melalui `Scripts/CodeBert/codebert_inference.py`, baik dengan model fine-tuned lokal maupun baseline embedding CodeBERT otomatis;
 - menghitung metrik TP, TN, FP, FN, Accuracy, Precision, Recall, F1-Score, dan False Positive Ratio;
 - menghasilkan artefak JSON, HTML, CSV, dan Excel untuk analisis tesis.
 
@@ -85,7 +85,7 @@ Autentikasi Vertex AI:
 gcloud auth application-default login
 ```
 
-Konfigurasi Gemini default di `appsettings.json` memakai Vertex AI project `gen-lang-client-0569088861`, location `us-central1`, dan model `gemini-2.5-pro`.
+Salin `appsettings.example.json` menjadi `appsettings.json`, lalu isi `Gemini:ProjectId`, `Gemini:Location`, `Gemini:Model`, dan token GitHub lokal Anda. File `appsettings.json` sengaja di-ignore agar secret lokal tidak ikut commit.
 
 Environment variable lain yang umum digunakan:
 
@@ -116,13 +116,13 @@ Aplikasi akan mencari semua file `.csproj` di folder tersebut secara rekursif, l
 ## Komponen Utama
 
 - `Program.cs`: orkestrasi interactive directory scan, parallel processing, checkpointing, Gemini inference, evaluasi, dan penyimpanan report.
-- `CsprojPackageExtractor.cs`: parsing `.csproj` dan ekstraksi `PackageReference`.
-- `SecurityReferenceProvider.cs`: retrieval GitHub GraphQL API sebagai satu-satunya sumber ground truth real-time.
-- `GroundTruthProvider.cs`: pembentukan label ground truth dari advisory context.
-- `CodeBertDatasetExporter.cs`: augmentasi dan ekspor dataset CodeBERT.
-- `codebert_inference.py`: bridge inferensi CodeBERT lokal berbasis HuggingFace `transformers`.
-- `ModelEvaluator.cs`: perhitungan confusion matrix dan metrik evaluasi.
-- `VulnerabilityModels.cs`: model data audit, dataset, ground truth, dan evaluasi.
+- `Services/Parsing/CsprojPackageExtractor.cs`: parsing `.csproj` dan ekstraksi `PackageReference`.
+- `Services/Security/SecurityReferenceProvider.cs`: retrieval GitHub GraphQL API sebagai satu-satunya sumber ground truth real-time.
+- `Services/Evaluation/GroundTruthProvider.cs`: pembentukan label ground truth dari advisory context.
+- `Services/CodeBert/CodeBertDatasetExporter.cs`: augmentasi dan ekspor dataset CodeBERT.
+- `Scripts/CodeBert/codebert_inference.py`: bridge inferensi CodeBERT lokal berbasis HuggingFace `transformers`.
+- `Services/Evaluation/ModelEvaluator.cs`: perhitungan confusion matrix dan metrik evaluasi.
+- `Models/VulnerabilityModels.cs`: model data audit, dataset, ground truth, dan evaluasi.
 
 ## Ringkasan Cepat
 

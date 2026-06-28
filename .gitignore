@@ -6,6 +6,9 @@
 # Local CodeBERT runtime bootstrap
 .codebert-venv/
 
+# Generated experiment outputs
+audit-results/
+
 # User-specific files
 *.rsuser
 *.suo

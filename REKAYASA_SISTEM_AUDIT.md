@@ -70,7 +70,7 @@ Pada skenario ini, `IsGroundedInReference` harus bernilai `false` karena tidak a
 
 ### 4.3. Skenario CodeBERT (Deep Learning Baseline)
 
-Skenario CodeBERT digunakan sebagai Python inference bridge untuk memvalidasi pipeline ekspor dataset, eksekusi lokal, pembacaan prediksi, dan perhitungan metrik terpadu. Implementasi saat ini bersifat real-only: `codebert_inference.py` tidak menghasilkan prediksi sintetis. Jika tersedia model sequence-classification fine-tuned lokal melalui `CODEBERT_MODEL_PATH` atau argumen `--model`, sistem memakai model tersebut. Jika tidak, sistem menjalankan baseline lokal `LOCAL_CODEBERT_EMBEDDING_LOGREG`, yaitu encoder CodeBERT untuk ekstraksi embedding dan Logistic Regression dengan mekanisme leave-one-package-out agar classifier tidak dilatih dari package yang sedang diprediksi.
+Skenario CodeBERT digunakan sebagai Python inference bridge untuk memvalidasi pipeline ekspor dataset, eksekusi lokal, pembacaan prediksi, dan perhitungan metrik terpadu. Implementasi saat ini bersifat real-only: `Scripts/CodeBert/codebert_inference.py` tidak menghasilkan prediksi sintetis. Jika tersedia model sequence-classification fine-tuned lokal melalui `CODEBERT_MODEL_PATH` atau argumen `--model`, sistem memakai model tersebut. Jika tidak, sistem menjalankan baseline lokal `LOCAL_CODEBERT_EMBEDDING_LOGREG`, yaitu encoder CodeBERT untuk ekstraksi embedding dan Logistic Regression dengan mekanisme leave-one-package-out agar classifier tidak dilatih dari package yang sedang diprediksi.
 
 Dataset memuat:
 
@@ -81,7 +81,7 @@ Dataset memuat:
 - metadata advisory seperti CVE, severity, dan advisory ID;
 - variasi augmentasi.
 
-Pada run pertama, aplikasi membuat virtual environment lokal `.codebert-venv` dan menginstal dependency dari `requirements-codebert.txt` secara otomatis. Jika Python tidak tersedia atau bootstrap dependency gagal, skenario CodeBERT ditandai `CODEBERT_FAILED`, dikeluarkan dari confusion matrix, dan tidak menghasilkan metrik model. Dengan demikian, eksperimen final tidak mencampurkan hasil RAG-LLM/Zero-Shot real dengan prediksi CodeBERT palsu.
+Pada run pertama, aplikasi membuat virtual environment lokal `.codebert-venv` dan menginstal dependency dari `Scripts/CodeBert/requirements-codebert.txt` secara otomatis. Jika Python tidak tersedia atau bootstrap dependency gagal, skenario CodeBERT ditandai `CODEBERT_FAILED`, dikeluarkan dari confusion matrix, dan tidak menghasilkan metrik model. Dengan demikian, eksperimen final tidak mencampurkan hasil RAG-LLM/Zero-Shot real dengan prediksi CodeBERT palsu.
 
 ## 5. Augmentasi Data dan Strategi Split
 

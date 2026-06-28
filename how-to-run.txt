@@ -7,9 +7,9 @@ Cara Menjalankan GeminiNuGetAuditor
    PowerShell:
    gcloud auth application-default login
 
-   Konfigurasi Gemini default di appsettings.json memakai:
-   - ProjectId: gen-lang-client-0569088861
-   - Location: us-central1
+   Salin appsettings.example.json menjadi appsettings.json, lalu isi:
+   - ProjectId: project Google Cloud Anda
+   - Location: lokasi Vertex AI, misalnya us-central1
    - Model: gemini-2.5-pro
 
 3. Jika ingin memakai GitHub Advisory Database real-time, siapkan GitHub token:
@@ -22,7 +22,7 @@ Cara Menjalankan GeminiNuGetAuditor
 
 4. Dependency CodeBERT tidak perlu di-install manual. Pada run pertama, aplikasi membuat
    virtual environment lokal .codebert-venv dan menjalankan pip install otomatis dari
-   requirements-codebert.txt.
+   Scripts\CodeBert\requirements-codebert.txt.
 
    Aplikasi memakai baseline real lokal
    LOCAL_CODEBERT_EMBEDDING_LOGREG berbasis encoder CodeBERT dan Logistic Regression.
