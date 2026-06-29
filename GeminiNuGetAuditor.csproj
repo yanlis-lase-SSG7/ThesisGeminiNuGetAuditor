@@ -46,6 +46,7 @@
     <Folder Include="samples\" />
     <Folder Include="Scripts\" />
     <Folder Include="Services\" />
+    <Folder Include="ThesisDoc\" />
     <Folder Include="Thesis_Dataset_1000\" />
   </ItemGroup>
 
